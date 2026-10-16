@@ -34,7 +34,7 @@ npm test
    - `DEEPSEEK_API_KEY`：DeepSeek 密钥。
    - `ARK_API_KEY`：火山方舟密钥。
    - `DEEPSEEK_MODEL`：默认 `deepseek-flash`，可换为账号支持的模型。
-   - `ARK_IMAGE_MODEL`：默认 `doubao-seedream-4-5-251128`，可换为已开通模型/接入点。
+   - `ARK_IMAGE_MODEL`：默认 `doubao-seedream-5-0-flash-260915`（本账号已真实验证），可换为已开通模型/接入点。5.0 Flash/Pro 不发送旧版组图参数。
    - `SESSION_SECRET`：随机高强度服务端加密密钥，保持稳定；轮换后旧会话失效。
    - `ALLOWED_ORIGINS`：允许连接的前端 origin，默认 `https://george351419-sys.github.io`。
 3. Vercel 部署使用仓库内 `vercel.json`，API 最大时长配置 300 秒。
