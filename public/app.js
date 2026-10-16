@@ -1,10 +1,14 @@
 import {WISH_GROUPS} from './wishes.js';
 const $=s=>document.querySelector(s),form=$('#prayer-form');
-let apiBase=(window.PRAYER_API_BASE||localStorage.getItem('prayer_api_base')||'').replace(/\/$/,''),bootstrap=null,currentJob=null,pollTimer=null,busy=false,imageObjectURL=null,run=0,cacheKey=null,profileKey=null;
+let apiBase=(window.PRAYER_API_MODE==='same-origin'?'':(window.PRAYER_API_BASE||localStorage.getItem('prayer_api_base')||'')).replace(/\/$/,''),bootstrap=null,currentJob=null,pollTimer=null,busy=false,imageObjectURL=null,run=0,cacheKey=null,profileKey=null;
 let sessionToken=sessionStorage.getItem('prayer_session_'+apiBase)||'';
 const setText=(selector,text)=>{$(selector).textContent=text||'';};
 const show=(selector,visible)=>{$(selector).hidden=!visible;};
-function apiURL(p){return apiBase+p;}
+function apiURL(p){
+ const url=new URL(apiBase+p,location.origin);
+ if(url.origin===location.origin){const preview=new URLSearchParams(location.search);for(const key of ['eo_token','eo_time'])if(preview.has(key))url.searchParams.set(key,preview.get(key));}
+ return url.href;
+}
 async function request(p,body){
  const response=await fetch(apiURL(p),{method:body?'POST':'GET',credentials:apiBase?'omit':'same-origin',headers:{...(body?{'Content-Type':'application/json','X-CSRF-Token':bootstrap?.csrf||''}:{}),...(sessionToken?{'X-Session-Token':sessionToken}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(310000)});
  let data;try{data=await response.json();}catch{throw new Error('服务地址未返回有效数据，请检查后端连接。');}if(!response.ok)throw new Error(data.error||'请求未完成，请稍后重试。');return data;

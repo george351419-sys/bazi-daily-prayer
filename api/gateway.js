@@ -3,10 +3,10 @@ import {WISH_GROUPS,RULE_VERSION,validateInput,calendarFor,buildImagePrompt,toda
 import {analyzeMapping} from '../lib/service.mjs';
 import {createSession,verifySession,csrfFor,sealJob,openJob} from '../lib/tokens.mjs';
 import {doubao,publicProviderError} from '../lib/providers.mjs';
-const config=process.env;
 const rate=new Map();
 const send=(res,status,data)=>res.status(status).json(data);
-export default async function handler(req,res){
+export default function handler(req,res){return handleRequest(req,res,process.env);}
+export async function handleRequest(req,res,config){
  const origin=req.headers.origin;
  const allowed=(config.ALLOWED_ORIGINS||'https://george351419-sys.github.io').split(',').map(x=>x.trim());
  const own='https://'+req.headers.host;
