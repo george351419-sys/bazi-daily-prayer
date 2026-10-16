@@ -9,6 +9,5 @@ dist/
 .vercel
 
 .edgeone/
-cloud-functions/
 
 .edgeone-build/
