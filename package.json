@@ -1,0 +1,17 @@
+{
+  "name": "daily-prayer-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env.local server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "build": "node scripts/build-static.mjs"
+  },
+  "dependencies": {
+    "lunar-javascript": "1.7.7"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

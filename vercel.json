@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "framework": null,
+  "buildCommand": "node scripts/build-static.mjs",
+  "outputDirectory": "dist",
+  "functions": {"api/gateway.js": {"maxDuration": 300, "includeFiles": "rules/**"}},
+  "rewrites": [{"source": "/api/:path*", "destination": "/api/gateway?route=:path*"}]
+}

@@ -1,0 +1,7 @@
+.env*
+.runtime
+node_modules
+.git
+output
+*.png
+!public/assets/*.png
