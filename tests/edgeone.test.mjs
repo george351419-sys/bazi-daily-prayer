@@ -19,3 +19,25 @@ test('EdgeOne 会话在独立调用间有效，错误请求不调用模型',asyn
  const large=await invoke('/api/analyze',{method:'POST',headers,body:JSON.stringify({text:'x'.repeat(140000)})});assert.equal(large.status,413);
  const missing=await invoke('/api/unknown',{method:'POST',headers,body:'{}'});assert.equal(missing.status,404);
 });
+
+test('EdgeOne 内部转发域名与公网域名不同时，允许真实站点来源及预检',async()=>{
+ for(const origin of ['https://playmath.cn','https://www.playmath.cn','https://george351419-sys.github.io']){
+  const request=new Request('https://internal-runtime.example/api/bootstrap',{headers:{Origin:origin}});
+  const response=await onRequest({request,env:{...env,ALLOWED_ORIGINS:'https://george351419-sys.github.io'}});
+  assert.equal(response.status,200);assert.equal(response.headers.get('access-control-allow-origin'),origin);
+  const preflight=await onRequest({request:new Request('https://internal-runtime.example/api/analyze',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST'}}),env});
+  assert.equal(preflight.status,204);assert.equal(preflight.headers.get('access-control-allow-origin'),origin);
+ }
+});
+test('公网来源 POST 通过来源和会话校验，仍正常校验业务输入',async()=>{
+ const origin='https://playmath.cn';
+ const bootstrap=await onRequest({request:new Request('https://internal-runtime.example/api/bootstrap',{headers:{Origin:origin}}),env});
+ const session=await bootstrap.json();
+ const response=await onRequest({request:new Request('https://internal-runtime.example/api/analyze',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-Session-Token':session.sessionToken,'X-CSRF-Token':session.csrf},body:'{}'}),env});
+ assert.equal(response.status,400);assert.equal(response.headers.get('access-control-allow-origin'),origin);
+ assert.notEqual((await response.json()).error,'此页面尚未获准连接后端。');
+});
+test('相似但不属于本站的来源仍拒绝，拒绝响应不缓存',async()=>{
+ const response=await invoke('/api/bootstrap',{headers:{Origin:'https://playmath.cn.attacker.example'}});
+ assert.equal(response.status,403);assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(response.headers.get('access-control-allow-origin'),null);
+});

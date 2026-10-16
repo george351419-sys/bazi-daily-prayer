@@ -8,9 +8,11 @@ const send=(res,status,data)=>res.status(status).json(data);
 export default function handler(req,res){return handleRequest(req,res,process.env);}
 export async function handleRequest(req,res,config){
  const origin=req.headers.origin;
- const allowed=(config.ALLOWED_ORIGINS||'https://george351419-sys.github.io').split(',').map(x=>x.trim());
+ // EdgeOne may reconstruct request.url with an internal host; trust our explicit public origins.
+ const allowed=new Set(['https://playmath.cn','https://www.playmath.cn','https://george351419-sys.github.io',...(config.ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean)]);
+ res.setHeader('Cache-Control','no-store');res.setHeader('Vary','Origin');
  const own='https://'+req.headers.host;
- if(origin&&origin!==own&&!allowed.includes(origin))return send(res,403,{error:'此页面尚未获准连接后端。'});
+ if(origin&&origin!==own&&!allowed.has(origin))return send(res,403,{error:'此页面尚未获准连接后端。'});
  if(origin){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');}
  res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Session-Token, X-CSRF-Token');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.method==='OPTIONS')return res.status(204).end();
