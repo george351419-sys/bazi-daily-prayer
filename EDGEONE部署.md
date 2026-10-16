@@ -15,3 +15,13 @@
 预览链接含 `eo_token` 和 `eo_time` 时，页面只将鉴权参数附加到本站 API 请求，不传给外部服务。预览链接失效时从控制台重新获取。稳定公开访问请按 EdgeOne 控制台指引绑定域名。
 
 验证：打开页面，应显示“服务已连接”；输入资料后先获得解读，再生成图片。上游调用在函数时限前中止，超时可重试；已经完成的解读会保留。
+
+## 切换 GitHub Pages 的后端
+
+当前目标域名为 `https://playmath.cn`。完成域名绑定及 HTTPS 证书部署后，运行：
+
+```sh
+node scripts/switch-edgeone-backend.mjs --apply
+```
+
+检查失败不会修改正在使用的后端地址。通过后脚本更新 GitHub 普通变量 `PRAYER_API_BASE`，并触发 Pages 部署。独立的 EdgeOne 页面不需要这一步，始终调用本站 `/api`。

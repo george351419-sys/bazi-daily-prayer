@@ -27,7 +27,13 @@ npm start
 npm test
 ```
 
-## GitHub Pages + Vercel
+## EdgeOne Pages（当前迁移目标）
+
+后端已适配 EdgeOne 云函数，项目绑定 `playmath.cn`。部署步骤见 [EDGEONE部署.md](EDGEONE部署.md)。EdgeOne 托管的页面使用本站 `/api`；GitHub Pages 的独立后端地址由仓库普通变量 `PRAYER_API_BASE` 控制。
+
+域名 HTTPS 配置完成后，运行 `node scripts/switch-edgeone-backend.mjs --apply`。脚本先验证 HTTPS、接口版本、模型配置和跨域，通过后才更新 GitHub 变量并触发页面部署。检查未通过时保留当前后端地址。
+
+## GitHub Pages + Vercel（原部署方案）
 
 1. 将项目关联到 Vercel 的 `bazi-daily-prayer`。
 2. 在 Vercel 的 Production 环境设置：
@@ -41,7 +47,7 @@ npm test
 4. GitHub 仓库设置 Pages 来源为 GitHub Actions。
 5. 设置 GitHub **普通变量** `PRAYER_API_BASE` 为已验证的 Vercel 生产 origin（不是 Key）。推送 main 自动部署。
 
-生产凭据只放 Vercel；GitHub Pages、源码、构建产物都不含 API 密钥。后端返回的会话令牌与生成记录是签名/加密令牌，不是上游密钥。生产采用无状态 API，避免依赖可能随实例消失的进程内任务表。生成记录加密并绑定会话，24小时后失效。
+生产凭据只放服务端平台的环境变量（EdgeOne 或 Vercel）；GitHub Pages、源码、构建产物都不含 API 密钥。后端返回的会话令牌与生成记录是签名/加密令牌，不是上游密钥。生产采用无状态 API，避免依赖可能随实例消失的进程内任务表。生成记录加密并绑定会话，24小时后失效。
 
 ## 行为与限制
 
