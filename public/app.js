@@ -26,7 +26,7 @@ function renderProgress(job){show('#progress',true);setText('#progress-title',jo
 async function displayImage(job){
  if(!job.image)return;
  if(job.image.startsWith('https://')){
-  $('#result-image').src=job.image;show('#result-image',true);show('#image-pending',false);$('#download').href=job.image;$('#download').target='_blank';$('#download').rel='noopener';$('#download').removeAttribute('download');show('#download',true);return;
+  $('#result-image').src=job.image;show('#result-image',true);show('#image-pending',false);$('#download').href=job.image;$('#download').target='_blank';$('#download').rel='noopener';$('#download').removeAttribute('download');$('#download').textContent='打开原图 ↗';show('#download',true);return;
  }
  const response=await fetch(apiURL(job.image),{headers:sessionToken?{'X-Session-Token':sessionToken}:{},credentials:apiBase?'omit':'same-origin'});if(!response.ok)throw new Error('画作已生成，但图片加载未完成。请稍后重新提交相同信息以恢复。');
  const blob=await response.blob();if(imageObjectURL)URL.revokeObjectURL(imageObjectURL);imageObjectURL=URL.createObjectURL(blob);$('#result-image').src=imageObjectURL;show('#result-image',true);show('#image-pending',false);$('#download').href=imageObjectURL;$('#download').download='今日祈福-'+job.date+'.'+(blob.type==='image/jpeg'?'jpg':blob.type==='image/webp'?'webp':'png');show('#download',true);
