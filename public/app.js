@@ -1,6 +1,8 @@
 import {WISH_GROUPS} from './wishes.js';
+import {resolveBackend,isLegacyBackend,EDGEONE_BACKEND} from './backend-routing.js?v=20261016-edgeone-routing';
 const $=s=>document.querySelector(s),form=$('#prayer-form');
-let apiBase=(window.PRAYER_API_MODE==='same-origin'?'':(window.PRAYER_API_BASE||localStorage.getItem('prayer_api_base')||'')).replace(/\/$/,''),bootstrap=null,currentJob=null,pollTimer=null,busy=false,imageObjectURL=null,run=0,cacheKey=null,profileKey=null;
+if(isLegacyBackend(localStorage.getItem('prayer_api_base')))localStorage.setItem('prayer_api_base',EDGEONE_BACKEND);
+let apiBase=resolveBackend({hostname:location.hostname,mode:window.PRAYER_API_MODE,configured:window.PRAYER_API_BASE,saved:localStorage.getItem('prayer_api_base')}),bootstrap=null,currentJob=null,pollTimer=null,busy=false,imageObjectURL=null,run=0,cacheKey=null,profileKey=null;
 let sessionToken=sessionStorage.getItem('prayer_session_'+apiBase)||'';
 const setText=(selector,text)=>{$(selector).textContent=text||'';};
 const show=(selector,visible)=>{$(selector).hidden=!visible;};
@@ -17,11 +19,11 @@ function drawWishes(groups){const selected=new Set([...form.querySelectorAll('in
 function updateCount(){setText('#selected-count','已选 '+form.querySelectorAll('input[name=wish]:checked').length+' 项');}
 function status(message,connect=false){const box=$('#backend-status');box.replaceChildren(document.createTextNode(message+' '));if(connect){const button=document.createElement('button');button.type='button';button.textContent='连接后端';button.onclick=openBackend;box.append(button);}}
 async function connect(){
- try{bootstrap=await request('/api/bootstrap');sessionToken=bootstrap.sessionToken||sessionToken;sessionStorage.setItem('prayer_session_'+apiBase,sessionToken);setText('#today',bootstrap.date.replaceAll('-',' · '));drawWishes(bootstrap.wishGroups);form.birthDate.max=bootstrap.date;status(bootstrap.ready.text&&bootstrap.ready.image?'服务已连接 · 每日心愿，专属呈现':'服务已连接 · API 密钥尚待服务端配置',true);}
+ try{bootstrap=await request('/api/bootstrap');sessionToken=bootstrap.sessionToken||sessionToken;sessionStorage.setItem('prayer_session_'+apiBase,sessionToken);setText('#today',bootstrap.date.replaceAll('-',' · '));drawWishes(bootstrap.wishGroups);form.birthDate.max=bootstrap.date;status(bootstrap.ready.text&&bootstrap.ready.image?'服务已连接 · '+new URL(apiBase||location.origin).hostname:'服务已连接 · API 密钥尚待服务端配置',true);}
  catch(e){bootstrap=null;status('暂未连接祈愿服务。',true);if(location.hostname.endsWith('github.io')&&!apiBase)status('页面已就绪，请先连接独立后端。',true);}
 }
-function openBackend(){$('#backend-url').value=apiBase;$('#backend-dialog').showModal();}
-$('#backend-dialog').addEventListener('close',async()=>{if($('#backend-dialog').returnValue!=='save')return;let next=$('#backend-url').value.trim().replace(/\/$/,'');try{if(next){const u=new URL(next);if(u.protocol!=='https:'&&!['localhost','127.0.0.1'].includes(u.hostname))throw new Error();next=u.origin;}apiBase=next;localStorage.setItem('prayer_api_base',next);sessionToken=sessionStorage.getItem('prayer_session_'+next)||'';await connect();}catch{status('请填写 HTTPS 后端地址或本机地址。',true);}});
+function openBackend(){$('#backend-url').value=apiBase||location.origin;$('#backend-dialog').showModal();}
+$('#backend-dialog').addEventListener('close',async()=>{if($('#backend-dialog').returnValue!=='save')return;let next=$('#backend-url').value.trim().replace(/\/$/,'');try{if(next){const u=new URL(next);if(u.protocol!=='https:'&&!['localhost','127.0.0.1'].includes(u.hostname))throw new Error();next=u.origin;}apiBase=resolveBackend({hostname:location.hostname,configured:next});localStorage.setItem('prayer_api_base',apiBase);sessionToken=sessionStorage.getItem('prayer_session_'+apiBase)||'';await connect();}catch{status('请填写 HTTPS 后端地址或本机地址。',true);}});
 form.addEventListener('change',e=>{if(e.target.name==='wish')updateCount();if(e.target.name==='calendar'){show('#leap-field',form.calendar.value==='lunar');form.birthDate.type=form.calendar.value==='lunar'?'text':'date';form.birthDate.placeholder=form.calendar.value==='lunar'?'农历 YYYY-MM-DD':'';form.birthDate.max=form.calendar.value==='lunar'?'':bootstrap?.date||'';}});
 $('#example-fill').onclick=()=>{form.gender.value='female';form.birthDate.value='1992-10-17';form.birthTime.value='22:30';form.city.value='上海';form.calendar.value='solar';form.birthDate.type='date';form.leap.checked=false;show('#leap-field',false);form.querySelectorAll('input[name=wish]').forEach(x=>x.checked=x.value==='W02');updateCount();$('#create').scrollIntoView({behavior:'smooth'});};
 function input(){return {gender:form.gender.value,birthDate:form.birthDate.value,birthTime:form.birthTime.value,city:form.city.value,calendar:form.calendar.value,leap:form.leap.checked,wishes:[...form.querySelectorAll('input[name=wish]:checked')].map(x=>x.value)};}

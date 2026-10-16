@@ -56,7 +56,7 @@ export const server=http.createServer(async(req,res)=>{
   const imageMatch=url.pathname.match(/^\/api\/image\/([a-f0-9]{36})$/);
   if(imageMatch){const im=images.get(imageMatch[1]);if(!im||im.owner!==s.id)return json(res,404,{error:'图片不存在或不属于当前会话。'});const bytes=await readFile(im.filename);res.writeHead(200,{'Content-Type':im.type,'Cache-Control':'private, max-age=86400',...(url.searchParams.has('download')?{'Content-Disposition':'attachment; filename="daily-prayer.'+im.filename.split('.').pop()+'"'}:{})});return res.end(bytes);}
   if(url.pathname.startsWith('/api/'))return json(res,404,{error:'接口不存在。'});
-  const allowed={'/':'index.html','/backend-config.js':'backend-config.js','/wishes.js':'wishes.js','/app.js':'app.js','/style.css':'style.css','/assets/prayer-example.png':'assets/prayer-example.png'};
+  const allowed={'/':'index.html','/backend-config.js':'backend-config.js','/wishes.js':'wishes.js','/app.js':'app.js','/backend-routing.js':'backend-routing.js','/style.css':'style.css','/assets/prayer-example.png':'assets/prayer-example.png'};
   const filename=allowed[url.pathname];if(!filename)return json(res,404,{error:'页面不存在。'});
   const bytes=await readFile(path.join(ROOT,'public',filename));res.writeHead(200,{'Content-Type':types[path.extname(filename)]||'application/octet-stream','Cache-Control':'no-cache'});res.end(bytes);
  }catch(e){json(res,400,{error:e.service?publicProviderError(e):String(e.message).slice(0,180)});}
