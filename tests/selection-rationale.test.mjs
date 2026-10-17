@@ -14,7 +14,7 @@ test('用户列出的三类免责声明，在整体、要素与专业取用解�
  }
 });
 test('五类专业卡片由已核验依据生成，未选要素不编造，内部依据不返回',()=>{
- const m=valid(fresh());assert.equal(m.reading.sections.length,5);assert.ok(m.professional.includes('橙红（火，主色）'));assert.ok(m.professional.includes('陈九公'));assert.ok(m.professional.includes('不再额外叠加生肖'));assert.equal(m.rationale,undefined);
+ const raw=fresh();raw.rationale.deity.reason+='冷启动无历史展示，不涉及轮换让位，按主喜用优先选用。';const m=valid(raw);assert.ok(!m.professional.includes('冷启动'));assert.ok(!m.professional.includes('展示，'));assert.equal(m.reading.sections.length,5);assert.ok(m.professional.includes('橙红（火，主色）'));assert.ok(m.professional.includes('陈九公'));assert.ok(m.professional.includes('不再额外叠加生肖'));assert.equal(m.rationale,undefined);
  assert.ok(!m.professional.includes('natal.'));
 });
 test('日主月令、主辅五行、色板与主尊方位必须逐项相符',()=>{
