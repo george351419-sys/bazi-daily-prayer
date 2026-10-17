@@ -66,6 +66,7 @@ test('有历史时主尊必须对应真实记录，并同时说明今日适配�
  const first=fresh();first.rationale.deity.history_refs=['history.0'];assert.throws(()=>valid(first),/历史引用/);
  const invalid=[...history,history[0],{date:'2026-10-18',deity:'萧升',wish:'W02'},{date:'2026-09-31',deity:'萧升',wish:'W02'},{date:'2026-99-99',deity:'萧升',wish:'W02'},{date:'2026-10-14',deity:'不存在主尊',wish:'W02'}];
  assert.deepEqual(selectionHistory(invalid,input.today),recent);
+ assert.equal(selectionHistory([...history,{date:input.today,deity:'曹宝',wish:'W02'}],input.today).length,3);
 });
 test('不加生肖须有全盘地支与真实关系分析，不能只以画面简洁作答',()=>{
  const context=evidenceContext(calendar,STEM_PARTNER);
