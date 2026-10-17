@@ -14,7 +14,7 @@ test('用户列出的三类免责声明，在整体、要素与专业取用解�
  }
 });
 test('五类专业卡片由已核验依据生成，未选要素不编造，内部依据不返回',()=>{
- const raw=fresh();raw.rationale.deity.reason+='冷启动无历史展示，不涉及轮换让位，按主喜用优先选用。';const m=valid(raw);assert.ok(!m.professional.includes('冷启动'));assert.ok(!m.professional.includes('展示，'));assert.equal(m.reading.sections.length,5);assert.ok(m.professional.includes('橙红（火，主色）'));assert.ok(m.professional.includes('陈九公'));assert.ok(m.professional.includes('不再额外叠加生肖'));assert.equal(m.rationale,undefined);
+ const raw=fresh();raw.rationale.deity.reason+='冷启动无历史展示，不涉及轮换让位，按主喜用优先选用。';const m=valid(raw);assert.ok(!m.professional.includes('冷启动'));assert.ok(!m.professional.includes('展示，'));assert.equal(m.reading.sections.length,5);assert.ok(m.professional.includes('橙红（火，主色）'));assert.ok(m.professional.includes('陈九公'));assert.ok(m.professional.includes('不另加生肖的依据'));assert.equal(m.rationale,undefined);
  assert.ok(!m.professional.includes('natal.'));
 });
 test('日主月令、主辅五行、色板与主尊方位必须逐项相符',()=>{
@@ -49,4 +49,27 @@ test('程序给出解冲方向与日主生克根气，纠错一次覆盖多个�
  assert.ok(context.natal_hidden_stems.find(x=>x.id==='natal.day').same_element_roots.includes('丙'));
  const m=addClashStem(fresh(),calendar);m.rationale.stems.items[0].stem='乙';m.rationale.stems.items[0].purpose='解冲兼调候';m.rationale.stems.items[0].clash_targets=[{natal_id:'natal.month',incoming_id:'transit.day'}];
  const hints=repairHints(m,calendar,STEM_PARTNER);assert.equal(hints.length,2);assert.ok(hints.some(x=>x.includes('取己合甲')));
+});
+
+
+test('有历史时主尊必须对应真实记录，并同时说明今日适配与多样性取舍',async()=>{
+ const {selectionHistory}=await import('../lib/domain.mjs');
+ const history=[{date:'2026-10-15',deity:'陈九公',wish:'W02'},{date:'2026-10-16',deity:'萧升',wish:'W02'}];
+ const recent=selectionHistory(history,input.today),m=fresh();
+ assert.throws(()=>validateMapping(m,input,calendar,history),/历史引用/);
+ m.rationale.deity.history_refs=recent.map(x=>x.id);
+ assert.throws(()=>validateMapping(m,input,calendar,history),/多样性/);
+ m.rationale.deity.diversity_reason='前两次分别采用陈九公和萧升，今日回到南方陈九公，延续火的主喜用并保持与昨日主尊的变化。';
+ const result=validateMapping(m,input,calendar,history);
+ assert.ok(result.professional.includes('2026-10-16 萧升'));assert.ok(result.professional.includes('今日适配：'));assert.ok(result.professional.includes('多样性取舍：'));
+ m.rationale.deity.history_refs=['history.99'];assert.throws(()=>validateMapping(m,input,calendar,history),/历史引用/);
+ const first=fresh();first.rationale.deity.history_refs=['history.0'];assert.throws(()=>valid(first),/历史引用/);
+ const invalid=[...history,history[0],{date:'2026-10-18',deity:'萧升',wish:'W02'},{date:'2026-09-31',deity:'萧升',wish:'W02'},{date:'2026-99-99',deity:'萧升',wish:'W02'},{date:'2026-10-14',deity:'不存在主尊',wish:'W02'}];
+ assert.deepEqual(selectionHistory(invalid,input.today),recent);
+});
+test('不加生肖须有全盘地支与真实关系分析，不能只以画面简洁作答',()=>{
+ const context=evidenceContext(calendar,STEM_PARTNER);
+ assert.ok(context.branch_relations.some(x=>x.type==='三合'&&x.branches.includes('寅')&&x.branches.includes('午')&&x.branches.includes('戌')));
+ for(const mutate of [m=>m.rationale.zodiac.existing_branch_ids.pop(),m=>m.rationale.zodiac.existing_relations=[],m=>m.rationale.zodiac.existing_relations[0].target_ids=['natal.year','natal.month'],m=>m.rationale.zodiac.reason_if_empty='保持画面简洁并突出主尊。']){const m=fresh();mutate(m);assert.throws(()=>valid(m),/地支|合冲刑害|配对|生肖/);}
+ const result=valid(fresh());assert.ok(result.professional.includes('原局年支申'));assert.ok(!result.professional.includes('history.'));
 });
