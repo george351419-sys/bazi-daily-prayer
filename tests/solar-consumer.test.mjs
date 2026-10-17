@@ -1,3 +1,4 @@
+import {makeMapping} from './fixtures/selection-mapping.mjs';
 import {test} from 'node:test';
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
@@ -44,12 +45,13 @@ test('农历先转公历再校正，与同一公历出生时刻完全一致',()=
  const a=calendar({city:'上海'}),b=calendar({city:'上海',calendar:'lunar',birthDate:'1992-9-22'});
  assert.deepEqual(b.natal,a.natal);assert.deepEqual(b.timeCorrection,a.timeCorrection);
 });
-function mapping(){return {wish_id:'W02',title:'暖光纳福',deity:'陈九公',primary_element:'火',secondary_element:'土',rotation_reason:'',overview:'温暖的光与丰足的意象回应你的财源广进心愿。',blessing:'愿你所行顺遂，财源渐广。',professional:'旧版内部调试 natal.day JSON',image_prompt:'温暖手绘财神画。',elements:[{name:'陈九公',meaning:'迎福纳财。'},{name:'橙红',meaning:'寓意蓬勃。'},{name:'暖光',meaning:'寓意顺遂。'}],colors:[{name:'橙红',hex:'#FA6240'},{name:'土黄',hex:'#D9B35A'}],zodiac:[],stem_symbols:[],reading:{intro:'从你的生辰与今日心愿出发，这幅画把温暖与丰足放在一起，寄托迎福纳财的祝愿。',sections:[{title:'生辰里的温暖取向',body:'五行取象中，这次以火的温暖与明亮作为设计参考。'},{title:'今日心愿如何入画',body:'陈九公回应你财源广进的心愿。'},{title:'色彩与意象的心意',body:'橙红色带来蓬勃的视觉感受，暖光寄托向好的祝愿。'}]}};}
+function mapping(){return makeMapping(profile);}
+
 test('用户解读和导出不包含内部过程，真实时间信息由历法生成',()=>{
  const raw=mapping();raw.internal_analysis='后台记录';const m=validateMapping(raw,validateInput(profile));assert.equal(m.internal_analysis,undefined);m.birth_summary=birthSummary(calendar({city:'上海'}));
  assert.ok(!m.professional.includes('natal.day'));assert.ok(!m.professional.includes('JSON'));
- const text=consumerReadingMarkdown(m);assert.ok(text.includes('1992-10-17 22:50:39'));assert.ok(text.includes('生辰里的温暖取向'));assert.ok(!text.includes('natal.day'));
- const bad=mapping();bad.reading.sections[0].body='内部校验：natal.day 与 transit.year';assert.throws(()=>validateMapping(bad,validateInput(profile)),/面向普通用户/);
+ const text=consumerReadingMarkdown(m);assert.ok(text.includes('1992-10-17 22:50:39'));assert.ok(text.includes('喜用配色'));assert.ok(!text.includes('natal.day'));
+ const bad=mapping();bad.rationale.foundation.reason='内部校验：natal.day 与 transit.year';assert.throws(()=>validateMapping(bad,validateInput(profile)),/内部编号/);
 });
 
 test('浏览器日期 pattern 兼容 Unicode v 模式并允许单数字月日',async()=>{

@@ -1,0 +1,9 @@
+import {calendarFor,validateInput,STEM_PARTNER} from '../../lib/domain.mjs';
+import {evidenceContext} from '../../lib/selection-rationale.mjs';
+export function makeMapping(profile,calendar=calendarFor(validateInput(profile))){
+ return {wish_id:'W02',title:'暖光纳福',deity:'陈九公',primary_element:'火',secondary_element:'木',rotation_reason:'',overview:'橙红暖光与青绿枝叶共同回应财源广进的心愿。',blessing:'愿你行事顺遂，财源渐广。',professional:'旧版内部调试 natal.day JSON',image_prompt:'陈九公，橙红与青绿，方形温暖手绘。',elements:[{name:'陈九公',meaning:'迎福纳财。'},{name:'橙红',meaning:'寓意蓬勃。'},{name:'青绿',meaning:'寓意生发。'}],colors:[{name:'橙红',hex:'#FA6240'},{name:'青绿',hex:'#36845A'}],zodiac:[],stem_symbols:[],rationale:{intro:'这幅画以火为主、木为辅，让喜用取向与财源广进的主题相互呼应。',foundation:{day_master:calendar.dayMaster,month_branch:calendar.natal[1][1],primary_element:'火',secondary_element:'木',reason:'丙火生于戌月，日坐寅木有根；木可生火，火可扶身，因此采用火为主、木为辅的取用层次。',tiaohou_required_stems:['甲','壬'],tiaohou_reason:'戌月燥气渐深，结合原局甲木根气与壬水透出的情况安排，不再机械重复加入同类意象。'},colors:[{name:'橙红',element:'火',role:'主色',reason:'以火扶身的取用对应橙红主色。',effect:'突出温暖明亮的主调，承接主喜用的表达。'},{name:'青绿',element:'木',role:'辅色',reason:'以木生火的辅助取用对应青绿。',effect:'用少量青绿衬托橙红，形成木火相生的层次。'}],deity:{name:'陈九公',wish_id:'W02',direction:'南方',reason:'财源广进选取招财使者陈九公；本项目五路方位版本中居南，与本次火的主喜用相合。',effect:'以招财使者居于画心，统领迎财纳福的主题。'},zodiac:{items:[],reason_if_empty:'本次先以主尊与喜用色系展开主题，现有地支关系不再额外叠加生肖，以免重复用支。'},stems:{items:[],reason_if_empty:'本次不另添天干意象，保留原有主次喜用，使调候表达与整体画面保持协调。'}}};
+}
+export function addClashStem(m,calendar){
+ m.stem_symbols=[{stem:'辛',motif:'晶莹珠饰'}];
+ m.rationale.stems={reason_if_empty:'',items:[{stem:'辛',motif:'晶莹珠饰',purpose:'解冲',match_ids:evidenceContext(calendar,STEM_PARTNER).stem_match_ids['辛'],clash_targets:[{natal_id:'natal.year',incoming_id:'transit.year'}],reason:'原局年干壬遇流年丙的冲动，选择辛意象对应丙辛五合。',effect:'以精细珠饰表达五合相联，缓和本次所关注的丙壬冲动。',compatibility:'同一辛意象也对应原局日干和大运丙，按新增干无限份处理各处匹配，保持火主木辅的配色主次。'}]};return m;
+}
