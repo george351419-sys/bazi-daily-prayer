@@ -3,7 +3,7 @@ import {WISH_GROUPS,RULE_VERSION,validateInput,calendarFor,buildImagePrompt,toda
 import {analyzeMapping} from '../lib/service.mjs';
 import {createSession,verifySession,csrfFor,sealJob,openJob} from '../lib/tokens.mjs';
 import {doubao,publicProviderError} from '../lib/providers.mjs';
-import {accountsEnabled,AccountError,accountCookie,register,login,recover,logout,currentAccount,requireAccount,getProfile,saveProfile,newArtworkId,saveArtwork,getArtwork,listArtworks,accountHistory,profileSignature,persistImage,privateImage} from '../lib/accounts.mjs';
+import {accountsEnabled,AccountError,mailReady,requestEmailCode,bindEmail,userView,accountCookie,register,login,recover,logout,currentAccount,requireAccount,getProfile,saveProfile,newArtworkId,saveArtwork,getArtwork,listArtworks,accountHistory,profileSignature,persistImage,privateImage} from '../lib/accounts.mjs';
 const rate=new Map();
 const accountJob=(c,account,record)=>({id:record.id,status:record.status==='complete'?'complete':'mapped',phase:record.status==='complete'?'已从画册载入':'解读已归档，待绘制画面',date:record.date,createdAt:record.createdAt,input:record.input,calendar:record.calendar,mapping:record.mapping,image:record.image?'/api/account/artworks/'+record.id+'/image':null,token:sealJob(c,{id:record.id,owner:'account:'+account.id,accountId:account.id,mapping:record.mapping,expires:Date.now()+86400000}),error:null,archived:true});
 
@@ -23,7 +23,7 @@ export async function handleRequest(req,res,config){
  let session=verifySession(config,req.headers['x-session-token']);
  try{
   if(route==='bootstrap'&&req.method==='GET'){
-   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,accounts:{enabled:accountsEnabled(config)}});
+   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,accounts:{enabled:accountsEnabled(config),emailEnabled:mailReady(config)}});
   }
   if(!session)return send(res,403,{error:'页面会话已更新，请刷新重试。'});
   if(req.method==='POST'&&req.headers['x-csrf-token']!==csrfFor(config,session))return send(res,403,{error:'页面会话校验失败，请刷新重试。'});
@@ -33,11 +33,13 @@ export async function handleRequest(req,res,config){
   if(route.startsWith('account/')){
    if(!accountMode)throw new AccountError(503,'账户服务尚未开启。');
    const client=String(req.headers['eo-connecting-ip']||req.headers['x-real-ip']||req.headers['x-forwarded-for']||'unknown').split(',')[0].trim().slice(0,80);
+   if(route==='account/email-code'&&req.method==='POST')return send(res,200,await requestEmailCode(config,body,client,body.purpose==='bind'?await requireAccount(config,req):null));
+   if(route==='account/bind-email'&&req.method==='POST'){const result=await bindEmail(config,await requireAccount(config,req),body);res.setHeader('Set-Cookie',accountCookie(config,result.token));return send(res,200,{user:result.user,profile:result.profile});}
    if(['account/register','account/login','account/recover'].includes(route)&&req.method==='POST'){
     const result=await ({'account/register':register,'account/login':login,'account/recover':recover}[route])(config,body,client);
-    res.setHeader('Set-Cookie',accountCookie(config,result.token));return send(res,200,{user:result.user,profile:result.profile,...(result.recoveryCode?{recoveryCode:result.recoveryCode}:{})});
+    res.setHeader('Set-Cookie',accountCookie(config,result.token));return send(res,200,{user:result.user,profile:result.profile});
    }
-   if(route==='account/me'&&req.method==='GET'){const account=await currentAccount(config,req);return send(res,200,{user:account?{id:account.id,username:account.username,nickname:account.nickname,createdAt:account.createdAt}:null,profile:account?await getProfile(config,account):null});}
+   if(route==='account/me'&&req.method==='GET'){const account=await currentAccount(config,req);return send(res,200,{user:account?userView(account):null,profile:account?await getProfile(config,account):null});}
    if(route==='account/logout'&&req.method==='POST'){await logout(config,await currentAccount(config,req));res.setHeader('Set-Cookie',accountCookie(config,'',true));return send(res,200,{ok:true});}
    const account=await requireAccount(config,req);
    if(route==='account/profile'&&req.method==='POST')return send(res,200,{profile:await saveProfile(config,account,body)});

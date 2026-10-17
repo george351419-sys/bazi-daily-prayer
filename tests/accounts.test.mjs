@@ -5,18 +5,22 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import onRequest from '../edgeone/handler.mjs';
-import {register,login,accountCookie,currentAccount,accountHistory,saveArtwork,profileSignature,newArtworkId,saveProfile} from '../lib/accounts.mjs';
+import {register,login,requestEmailCode,accountCookie,currentAccount,accountHistory,saveArtwork,profileSignature,newArtworkId,saveProfile} from '../lib/accounts.mjs';
 import {validateInput,calendarFor} from '../lib/domain.mjs';
+import {accountRepository} from '../lib/account-store.mjs';
 import {makeMapping} from './fixtures/selection-mapping.mjs';
 const secret='private-account-test-secret-0123456789',password='Test-only-strong-password!';
 const profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02','W06']};
-async function context(t){const dir=await mkdtemp(path.join(os.tmpdir(),'prayer-account-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));return {ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:secret,DEEPSEEK_API_KEY:'test-only',ARK_API_KEY:'test-only'};}
-test('并发注册同名账号只有一份成功，密码加盐且账户资料密文持久化',async t=>{
- const c=await context(t),body={username:'atomic_user',nickname:'私密昵称',password};
- const results=await Promise.allSettled([register(c,body,'test-client-1'),register(c,body,'test-client-2')]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(results.find(x=>x.status==='rejected').reason.status,409);
- const data=results.find(x=>x.status==='fulfilled').value;assert.ok(data.recoveryCode);assert.ok(!JSON.stringify(data.user).includes('Hash'));
- const bytes=await readFile(path.join(c.ACCOUNT_DATA_DIR,'credentials',createHash('sha256').update(body.username).digest('hex')));assert.ok(!bytes.includes(Buffer.from(password)));assert.ok(!bytes.includes(Buffer.from('私密昵称')));
- const again=await login({...c},body,'new-device');assert.equal(again.user.id,data.user.id);assert.equal(again.recoveryCode,undefined);
+async function context(t){const dir=await mkdtemp(path.join(os.tmpdir(),'prayer-account-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));const mailbox=[];return {ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:secret,DEEPSEEK_API_KEY:'test-only',ARK_API_KEY:'test-only',TEST_MAILBOX:mailbox,MAIL_TRANSPORT:async message=>{mailbox.push(message);}};}
+const emailDigest=email=>createHash('sha256').update(email).digest('hex');
+async function clearCooldown(c,email){const repo=accountRepository(c),minute=Math.floor(Date.now()/60000);await repo.delete('mail-cooldown/'+emailDigest(email)+'/'+minute);await repo.delete('mail-cooldown/'+emailDigest(email)+'/'+(minute-1));}
+async function registrationBody(c,email,nickname='私密昵称'){await clearCooldown(c,email);const challenge=await requestEmailCode(c,{email,purpose:'register'},'prepare-test');return {email,nickname,password,challengeId:challenge.challengeId,code:c.TEST_MAILBOX.at(-1).code};}
+test('并发注册同一邮箱只有一份成功，密码加盐且账户资料密文持久化',async t=>{
+ const c=await context(t),one=await registrationBody(c,'atomic@example.com'),two=await registrationBody(c,'atomic@example.com');
+ const results=await Promise.allSettled([register(c,one,'test-client-1'),register(c,two,'test-client-2')]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(results.find(x=>x.status==='rejected').reason.status,409);
+ const data=results.find(x=>x.status==='fulfilled').value;assert.equal(data.recoveryCode,undefined);assert.ok(data.user.emailVerified);assert.ok(!JSON.stringify(data.user).includes('Hash'));
+ const bytes=await readFile(path.join(c.ACCOUNT_DATA_DIR,'credentials',emailDigest(data.user.username)));assert.ok(!bytes.includes(Buffer.from(password)));assert.ok(!bytes.includes(Buffer.from('私密昵称')));
+ const again=await login({...c},{email:'ATOMIC@example.com',password},'new-device');assert.equal(again.user.id,data.user.id);assert.equal(again.recoveryCode,undefined);
  assert.match(accountCookie({...c,ACCOUNT_STORAGE:'blob'},data.token),/HttpOnly; SameSite=Lax; Path=\/; Max-Age=2592000; Secure/);
 });
 test('账户接口完成注册、归档、跨设备重登、私有图片读取与账户隔离',async t=>{
@@ -31,20 +35,23 @@ test('账户接口完成注册、归档、跨设备重登、私有图片读取�
  async function device(){const bootstrap=await onRequest({request:new Request(origin+'/api/bootstrap'),env:c});const b=await bootstrap.json();return {session:b.sessionToken,csrf:b.csrf,cookie:''};}
  async function request(d,route,body){calls++;const headers={Origin:origin,'X-Session-Token':d.session,'X-CSRF-Token':d.csrf,...(d.cookie?{Cookie:d.cookie}:{})};const response=await onRequest({request:new Request(origin+'/api/'+route,{method:body?'POST':'GET',headers,body:body?JSON.stringify(body):undefined}),env:c});const cookie=response.headers.get('set-cookie');if(cookie)d.cookie=cookie.split(';')[0];return response;}
  const a=await device(),anon=await request(a,'analyze',profile);assert.equal(anon.status,401);assert.equal(providerCalls,0);
- const registered=await request(a,'account/register',{username:'account_a',nickname:'小愿',password});assert.equal(registered.status,200);const registration=await registered.json();const uid=registration.user.id;
+ const registered=await request(a,'account/register',await registrationBody(c,'account-a@example.com','小愿'));assert.equal(registered.status,200);const registration=await registered.json();const uid=registration.user.id;
  const mappedResponse=await request(a,'analyze',profile);assert.equal(mappedResponse.status,200);const job=await mappedResponse.json();assert.equal(job.status,'mapped');assert.ok(job.archived);assert.deepEqual(receivedHistory,[]);
  const complete=await(await request(a,'jobs/'+job.id+'/image',{jobToken:job.token})).json();assert.equal(complete.status,'complete');assert.match(complete.image,/^\/api\/account\/artworks\//);assert.ok(!JSON.stringify(complete).includes('temp-one'));
  imageAvailable=false;
  const image=await request(a,'account/artworks/'+job.id+'/image');assert.equal(image.status,200);assert.equal(image.headers.get('content-type'),'image/jpeg');assert.deepEqual([...new Uint8Array(await image.arrayBuffer())],[255,216,255,224,1,2,3]);assert.match(image.headers.get('cache-control'),/private/);
  const list=await(await request(a,'account/artworks')).json();assert.equal(list.items[0].id,job.id);assert.equal(list.items[0].wishLabel,'财源广进');
- const b=await device();await request(b,'account/register',{username:'account_b',password});assert.equal((await request(b,'account/artworks/'+job.id)).status,404);assert.equal((await request(b,'account/artworks/'+job.id+'/image')).status,404);const before=providerCalls;assert.equal((await request(b,'jobs/'+job.id+'/image',{jobToken:job.token})).status,400);assert.equal(providerCalls,before);
+ const b=await device();await request(b,'account/register',await registrationBody(c,'account-b@example.com'));assert.equal((await request(b,'account/artworks/'+job.id)).status,404);assert.equal((await request(b,'account/artworks/'+job.id+'/image')).status,404);const before=providerCalls;assert.equal((await request(b,'jobs/'+job.id+'/image',{jobToken:job.token})).status,400);assert.equal(providerCalls,before);
  await request(a,'account/profile',{...profile,gender:'male',birthDate:'1990-1-1'});const snapshot=await(await request(a,'account/artworks/'+job.id)).json();assert.equal(snapshot.input.gender,'female');assert.equal(snapshot.input.birthDate,'1992-10-17');
- const third=await device();await request(third,'account/login',{username:'account_a',password});const me=await(await request(third,'account/me')).json();assert.equal(me.user.id,uid);assert.equal(me.profile.gender,'male');assert.ok(!JSON.stringify(me).includes('Hash'));
+ const third=await device();await request(third,'account/login',{email:'account-a@example.com',password});const me=await(await request(third,'account/me')).json();assert.equal(me.user.id,uid);assert.equal(me.profile.gender,'male');assert.ok(!JSON.stringify(me).includes('Hash'));
  const fresh=await(await request(third,'account/artworks/'+job.id)).json();assert.equal(fresh.mapping.title,job.mapping.title);assert.equal((await request(third,'jobs/'+job.id+'/image',{jobToken:fresh.token})).status,200);assert.equal(providerCalls,before);
  const historyInput=validateInput(profile),history=await accountHistory(c,{id:uid},historyInput);assert.equal(history.length,1);assert.equal(history[0].deity,'陈九公');assert.deepEqual(await accountHistory(c,{id:uid},validateInput({...profile,gender:'male'})),[]);
  const remapped=await request(third,'analyze',{...profile,history:[{date:'2026-10-01',deity:'伪造历史',wish:'W02'}]});assert.equal(remapped.status,200);assert.equal(receivedHistory.length,1);assert.equal(receivedHistory[0].deity,'陈九公');
- const recoverResponse=await request(a,'account/recover',{username:'account_a',password:'Updated-only-test-password!',recoveryCode:registration.recoveryCode});assert.equal(recoverResponse.status,200);const recovered=await recoverResponse.json();assert.notEqual(recovered.recoveryCode,registration.recoveryCode);assert.equal((await(await request(third,'account/me')).json()).user,null);
- assert.equal((await request(a,'account/recover',{username:'account_a',password:'New-test-strong-password!',recoveryCode:registration.recoveryCode})).status,401);
+ await clearCooldown(c,'account-a@example.com');
+ const reset=await(await request(a,'account/email-code',{email:'account-a@example.com',purpose:'reset'})).json();
+ const resetBody={email:'account-a@example.com',password:'Updated-only-test-password!',challengeId:reset.challengeId,code:c.TEST_MAILBOX.at(-1).code};
+ const recoverResponse=await request(a,'account/recover',resetBody);assert.equal(recoverResponse.status,200);const recovered=await recoverResponse.json();assert.equal(recovered.recoveryCode,undefined);assert.equal((await(await request(third,'account/me')).json()).user,null);
+ assert.equal((await request(a,'account/recover',resetBody)).status,400);
  await request(a,'account/logout',{});assert.equal((await(await request(a,'account/me')).json()).user,null);
  assert.ok(calls>15);
 });

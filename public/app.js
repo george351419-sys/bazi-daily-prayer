@@ -1,4 +1,4 @@
-import {setupAccounts} from './account-ui.js?v=20261017-accounts-v1';
+import {setupAccounts} from './account-ui.js?v=20261018-email-v1';
 import {WISH_GROUPS} from './wishes.js';
 import {normalizeBirthDate} from './date-input.js?v=20261017-solar';
 import {setupBirthInputs} from './birth-picker.js?v=20261017-solar';
