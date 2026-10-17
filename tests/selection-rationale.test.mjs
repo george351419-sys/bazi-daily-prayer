@@ -39,3 +39,14 @@ test('调候意象必须是所需的具体干，不能只因同五行而替换',
  const m=addClashStem(fresh(),calendar);const s=m.rationale.stems.items[0];s.purpose='调候';s.clash_targets=[];
  assert.throws(()=>valid(m),/明确所需的具体天干/);
 });
+
+test('程序给出解冲方向与日主生克根气，纠错一次覆盖多个矛盾',async()=>{
+ const {repairHints}=await import('../lib/selection-rationale.mjs');
+ const context=evidenceContext(calendar,STEM_PARTNER);
+ const option=context.clash_response_options.find(x=>x.natal_id==='natal.month'&&x.incoming_id==='transit.day');assert.equal(option.incoming_stem,'甲');assert.equal(option.response_stem,'己');
+ assert.match(context.natal_stem_roles.find(x=>x.id==='natal.month').relation,/财星.*耗身/);
+ assert.match(context.natal_stem_roles.find(x=>x.id==='natal.hour').relation,/食伤.*泄身/);
+ assert.ok(context.natal_hidden_stems.find(x=>x.id==='natal.day').same_element_roots.includes('丙'));
+ const m=addClashStem(fresh(),calendar);m.rationale.stems.items[0].stem='乙';m.rationale.stems.items[0].purpose='解冲兼调候';m.rationale.stems.items[0].clash_targets=[{natal_id:'natal.month',incoming_id:'transit.day'}];
+ const hints=repairHints(m,calendar,STEM_PARTNER);assert.equal(hints.length,2);assert.ok(hints.some(x=>x.includes('取己合甲')));
+});
