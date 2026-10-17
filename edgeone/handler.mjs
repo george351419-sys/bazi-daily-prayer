@@ -1,7 +1,7 @@
 import {handleRequest} from '../api/gateway.js';
 // EdgeOne Node functions receive a Web Request and environment per invocation.
 export default async function onRequest({request,env={}}){
- const config={...process.env,...env,DEEPSEEK_TIMEOUT_MS:'100000',ARK_TIMEOUT_MS:'105000',ANALYSIS_BUDGET_MS:'108000'};
+ const config={...process.env,...env,ACCOUNT_STORAGE:env.ACCOUNT_STORAGE||process.env.ACCOUNT_STORAGE||'blob',DEEPSEEK_TIMEOUT_MS:'100000',ARK_TIMEOUT_MS:'105000',ANALYSIS_BUDGET_MS:'108000'};
  const url=new URL(request.url),headers=Object.fromEntries(request.headers);
  headers.host=url.host;
  let body;
@@ -12,7 +12,7 @@ export default async function onRequest({request,env={}}){
  }
  const req={method:request.method,url:request.url,headers,body,query:{route:url.pathname.replace(/^\/api\//,'')}};
  const outputHeaders=new Headers();let status=200,result;
- const res={setHeader(k,v){outputHeaders.set(k,v);},status(code){status=code;return this;},json(data){outputHeaders.set('Content-Type','application/json; charset=utf-8');result=JSON.stringify(data);},end(){result=null;}};
+ const res={setHeader(k,v){outputHeaders.set(k,v);},status(code){status=code;return this;},json(data){outputHeaders.set('Content-Type','application/json; charset=utf-8');result=JSON.stringify(data);},end(bytes){result=bytes??null;}};
  await handleRequest(req,res,config);
  return new Response(result,{status,headers:outputHeaders});
 }

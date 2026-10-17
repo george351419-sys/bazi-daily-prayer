@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import onRequest from '../edgeone/handler.mjs';
 const origin='https://example.edgeone.cool';
-const env={SESSION_SECRET:'test-session-secret-edgeone',DEEPSEEK_API_KEY:'test-private-key',ARK_API_KEY:'test-private-image-key'};
+const env={ACCOUNT_STORAGE:'disabled',SESSION_SECRET:'test-session-secret-edgeone',DEEPSEEK_API_KEY:'test-private-key',ARK_API_KEY:'test-private-image-key'};
 const invoke=(path,options={},settings=env)=>onRequest({request:new Request(origin+path,options),env:settings});
 test('EdgeOne 从 context.env 读取配置，响应不泄露密钥',async()=>{
  const response=await invoke('/api/bootstrap');const text=await response.text(),data=JSON.parse(text);
