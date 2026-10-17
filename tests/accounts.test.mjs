@@ -44,7 +44,7 @@ test('账户接口完成注册、归档、跨设备重登、私有图片读取�
  const historyInput=validateInput(profile),history=await accountHistory(c,{id:uid},historyInput);assert.equal(history.length,1);assert.equal(history[0].deity,'陈九公');assert.deepEqual(await accountHistory(c,{id:uid},validateInput({...profile,gender:'male'})),[]);
  const remapped=await request(third,'analyze',{...profile,history:[{date:'2026-10-01',deity:'伪造历史',wish:'W02'}]});assert.equal(remapped.status,200);assert.equal(receivedHistory.length,1);assert.equal(receivedHistory[0].deity,'陈九公');
  const recoverResponse=await request(a,'account/recover',{username:'account_a',password:'Updated-only-test-password!',recoveryCode:registration.recoveryCode});assert.equal(recoverResponse.status,200);const recovered=await recoverResponse.json();assert.notEqual(recovered.recoveryCode,registration.recoveryCode);assert.equal((await(await request(third,'account/me')).json()).user,null);
- assert.equal((await request(a,'account/recover',{username:'account_a',password,password:'New-test-strong-password!',recoveryCode:registration.recoveryCode})).status,401);
+ assert.equal((await request(a,'account/recover',{username:'account_a',password:'New-test-strong-password!',recoveryCode:registration.recoveryCode})).status,401);
  await request(a,'account/logout',{});assert.equal((await(await request(a,'account/me')).json()).user,null);
  assert.ok(calls>15);
 });

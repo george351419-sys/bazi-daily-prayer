@@ -10,7 +10,7 @@ const accountJob=(c,account,record)=>({id:record.id,status:record.status==='comp
 const send=(res,status,data)=>res.status(status).json(data);
 export default function handler(req,res){return handleRequest(req,res,process.env);}
 export async function handleRequest(req,res,config){
- const origin=req.headers.origin;
+ const startedAt=Date.now(),origin=req.headers.origin;
  // EdgeOne may reconstruct request.url with an internal host; trust our explicit public origins.
  const allowed=new Set(['https://playmath.cn','https://www.playmath.cn','https://george351419-sys.github.io',...(config.ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean)]);
  res.setHeader('Cache-Control','no-store');res.setHeader('Vary','Origin');
@@ -56,7 +56,8 @@ export async function handleRequest(req,res,config){
    const rateId=createHash('sha256').update(session).digest('hex');if(Date.now()-(rate.get(rateId)||0)<3000)return send(res,429,{error:'请稍候再提交。'});rate.set(rateId,Date.now());
    if(account)await saveProfile(config,account,input);
    const calendar=calendarFor(input),history=account?await accountHistory(config,account,input):Array.isArray(body.history)?body.history.slice(-14).map(x=>({date:String(x.date).slice(0,10),deity:String(x.deity).slice(0,40),wish:String(x.wish).slice(0,3)})):[];
-   const mapping=await analyzeMapping(config,input,calendar,history);
+   const analysisConfig=account?{...config,ANALYSIS_BUDGET_MS:Math.max(1000,(Number(config.ANALYSIS_BUDGET_MS)||108000)-(Date.now()-startedAt)-5000)}:config;
+   const mapping=await analyzeMapping(analysisConfig,input,calendar,history);
    if(account){const record={id,userId:account.id,date:input.today,createdAt:new Date().toISOString(),input,calendar,mapping,profileSignature:profileSignature(input),status:'mapped',image:null};await saveArtwork(config,account,record);return send(res,200,accountJob(config,account,record));}
    const job={id,owner:session,date:input.today,mapping,expires:Date.now()+86400000};
    return send(res,200,{id,status:'mapped',phase:'解读已完成',date:input.today,calendar,mapping,token:sealJob(config,job),error:null,image:null});
