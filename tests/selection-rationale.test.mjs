@@ -71,6 +71,6 @@ test('有历史时主尊必须对应真实记录，并同时说明今日适配�
 test('不加生肖须有全盘地支与真实关系分析，不能只以画面简洁作答',()=>{
  const context=evidenceContext(calendar,STEM_PARTNER);
  assert.ok(context.branch_relations.some(x=>x.type==='三合'&&x.branches.includes('寅')&&x.branches.includes('午')&&x.branches.includes('戌')));
- for(const mutate of [m=>m.rationale.zodiac.existing_branch_ids.pop(),m=>m.rationale.zodiac.existing_relations=[],m=>m.rationale.zodiac.existing_relations[0].target_ids=['natal.year','natal.month'],m=>m.rationale.zodiac.reason_if_empty='保持画面简洁并突出主尊。']){const m=fresh();mutate(m);assert.throws(()=>valid(m),/地支|合冲刑害|配对|生肖/);}
+ for(const mutate of [m=>m.rationale.zodiac.existing_branch_ids.pop(),m=>m.rationale.zodiac.existing_relations=[],m=>m.rationale.zodiac.existing_relations[0].target_ids=['natal.year','natal.month'],m=>m.rationale.zodiac.reason_if_empty='保持画面简洁并突出主尊。',m=>m.rationale.zodiac.reason_if_empty='原局寅申冲，本次以天干珠玉与田园意象作象征性回应，不另加生肖。']){const m=fresh();mutate(m);assert.throws(()=>valid(m),/地支|合冲刑害|配对|生肖/);}
  const result=valid(fresh());assert.ok(result.professional.includes('原局年支申'));assert.ok(!result.professional.includes('history.'));
 });
