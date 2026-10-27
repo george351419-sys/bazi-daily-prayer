@@ -12,7 +12,7 @@ async function upload(body){
  const raw=JSON.stringify(body),exp=String(Math.floor(Date.now()/1000)+240);
  const url=new URL('/api/ark/provision',origin);for(const [k,v]of origin.searchParams)url.searchParams.set(k,v);
  const response=await fetch(url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json','X-Ark-Expires':exp,'X-Ark-Signature':provisionSignature(process.env.SESSION_SECRET,exp,raw)},body:raw,signal:AbortSignal.timeout(45000)});
- if(!response.ok)throw new Error('Import rejected with HTTP '+response.status);
+ if(!response.ok){const error=await response.json().catch(()=>({}));throw new Error('Import rejected with HTTP '+response.status+(error.code?' ('+error.code+(error.phase?' at '+error.phase:'')+')':''));}
 }
 for(const asset of config.playlist){const bytes=await readFile(path.join(dir,asset.sha256+'.film'));await upload({type:'asset',sha256:asset.sha256,base64:bytes.toString('base64')});}
 await upload({type:'device',config});
