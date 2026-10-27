@@ -8,7 +8,7 @@
 
 - `GET /api/ark/health`：接口健康状态，不含设备数据或凭据。
 - `GET /api/v1/device/heartbeat`：必须携带设备Bearer令牌；查询参数token不能代替鉴权。
-- `GET /api/ark/assets/today.film`：15分钟有效的设备/资产绑定签名链接，仍检查设备是否启用。
+- `GET /api/ark/assets/today`：无扩展名接口；固件保存为today.film。15分钟有效的设备/资产绑定签名链接，仍检查设备是否启用。
 - `GET /api/ark/status`：需设备Bearer令牌，只读目标设置和最近保存SHA。
 - `POST /api/ark/provision`：管理员HMAC签名的资产导入、首次设备预置及模式切换。签名覆盖正文哈希及最多5分钟的有效期；重复导入不能覆盖设备凭据。
 
