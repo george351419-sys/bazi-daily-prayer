@@ -14,3 +14,10 @@ await writeFile('cloud-functions/api/account/artworks/[id]/image.js',`import han
 await import('./build-static.mjs');
 await writeFile('dist/backend-config.js',"window.PRAYER_API_BASE = '';\nwindow.PRAYER_API_MODE = 'same-origin';\n");
 console.log('EdgeOne Node functions ready; API uses this site’s origin.');
+
+// Device endpoints use device credentials, independently from browser sessions/CSRF.
+await build({entryPoints:['edgeone/ark-handler.mjs'],outfile:'.edgeone-build/ark-handler.mjs',bundle:true,platform:'node',target:'node20',format:'esm'});
+for(const [file,relative] of [['v1/device/heartbeat.js','../../../../.edgeone-build/ark-handler.mjs'],['ark/health.js','../../../.edgeone-build/ark-handler.mjs'],['ark/status.js','../../../.edgeone-build/ark-handler.mjs'],['ark/provision.js','../../../.edgeone-build/ark-handler.mjs'],['ark/assets/today.film.js','../../../../.edgeone-build/ark-handler.mjs']]){
+ await mkdir('cloud-functions/api/'+file.slice(0,file.lastIndexOf('/')),{recursive:true});
+ await writeFile('cloud-functions/api/'+file,`import handler from '${relative}';\nexport default async function onRequest(context){return handler(context); }\n`);
+}
