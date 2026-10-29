@@ -23,3 +23,14 @@ test('多个独立取用错误可在总时限内累计纠正，避免顾此失�
  });
  assert.equal(calls,3);assert.equal(result.deity,'陈九公');
 });
+test('生肖空选违反天干边界时，重试收到只修正地支层文案的定向指令',async()=>{
+ let calls=0;const mapping=makeMapping(input,calendar);
+ const result=await analyzeMapping({DEEPSEEK_API_KEY:'test-only'},input,calendar,[],async(url,init)=>{
+  calls++;const request=JSON.parse(JSON.parse(init.body).messages[1].content);
+  if(calls===2)assert.match(request.instruction,/单独重写 rationale\.zodiac/);
+  const raw=structuredClone(mapping);
+  if(calls===1)raw.rationale.zodiac.reason_if_empty='本次以天干珠玉意象回应地支层的冲害，不另加生肖。';
+  return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(raw)}}]});
+ });
+ assert.equal(calls,2);assert.equal(result.zodiac.length,0);
+});
