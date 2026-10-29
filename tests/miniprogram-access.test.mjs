@@ -5,15 +5,15 @@ test('mini program identity is denied by default, exact configured HTTPS referer
  for(const referer of ['https://servicewechat.com.evil.example/'+appid+'/0/page-frame.html','http://servicewechat.com/'+appid+'/0/page-frame.html',allowed+'?appid='+appid,'https://servicewechat.com/wxffffffffffffffff/0/page-frame.html','https://evil@servicewechat.com/'+appid+'/0/page-frame.html','https://servicewechat.com/'+appid+'/../0/page-frame.html'])assert.equal(allowedMiniProgram({headers:{referer}},config),false);
 });
 test('mini native writes still require valid session, csrf, account; browser login preserved',async t=>{
- const dir=await mkdtemp(path.join(os.tmpdir(),'prayer-mini-'));t.after(()=>rm(dir,{recursive:true,force:true}));const env={...config,ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'miniprogram-test-secret-123456789'};
+ const dir=await mkdtemp(path.join(os.tmpdir(),'prayer-mini-'));t.after(()=>rm(dir,{recursive:true,force:true}));const mail=[];const env={...config,MAIL_TRANSPORT:async m=>mail.push(m),ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'miniprogram-test-secret-123456789'};
  const headers={referer:'https://servicewechat.com/'+appid+'/devtools/page-frame.html','Content-Type':'application/json'};const request=async(route,body,extra={})=>handler({env,request:new Request('https://playmath.cn/api/'+route,{method:body?'POST':'GET',headers:{...headers,...extra},body:body?JSON.stringify(body):undefined})});
  const b=await(await request('bootstrap')).json();assert.equal(b.miniProgram.enabled,true);const secure={'X-Session-Token':b.sessionToken,'X-CSRF-Token':b.csrf};
  assert.equal((await request('account/login',{username:'mini_test',password:'Mini-test-password!'})).status,403);
  assert.equal((await request('account/register',{username:'mini_test',password:'Mini-test-password!'},{...secure,'X-CSRF-Token':'bad'})).status,403);
- const reg=await request('account/register',{username:'mini_test',password:'Mini-test-password!'},secure);assert.equal(reg.status,200);const cookie=reg.headers.get('set-cookie').split(';')[0];
+ let auth={username:'mini_test',password:'Mini-test-password!'};if(b.accounts.emailEnabled){const challenge=await(await request('account/email-code',{email:'mini_test@example.com',purpose:'register'},secure)).json();auth={...auth,email:'mini_test@example.com',challengeId:challenge.challengeId,code:mail.at(-1).code};}const reg=await request('account/register',auth,secure);assert.equal(reg.status,200);const cookie=reg.headers.get('set-cookie').split(';')[0];
  assert.equal((await request('account/ritual',null,secure)).status,401);
  assert.equal((await request('account/ritual',null,{...secure,Cookie:cookie})).status,200);
- assert.equal((await request('account/login',{username:'mini_test',password:'Mini-test-password!'},{...secure,referer:'https://servicewechat.com/wxffffffffffffffff/0/page-frame.html'})).status,403);
- assert.equal((await request('account/login',{username:'mini_test',password:'Mini-test-password!'},{...secure,referer:'',Origin:'https://playmath.cn'})).status,200);
- assert.equal((await request('account/login',{username:'mini_test',password:'Mini-test-password!'},{...secure,Origin:'https://evil.example'})).status,403);
+ assert.equal((await request('account/login',auth,{...secure,referer:'https://servicewechat.com/wxffffffffffffffff/0/page-frame.html'})).status,403);
+ assert.equal((await request('account/login',auth,{...secure,referer:'',Origin:'https://playmath.cn'})).status,200);
+ assert.equal((await request('account/login',auth,{...secure,Origin:'https://evil.example'})).status,403);
 });

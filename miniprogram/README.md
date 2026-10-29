@@ -26,3 +26,7 @@
 8. 上传体验版 → 管理员体验验收 → 提交微信审核 → 审核通过后发布。目前没有账号，尚未执行这几个步骤。
 
 本项目没有注册微信账号、代替用户接受协议、申请付费服务或变更生产密钥。后续注册/认证与管理员扫码需用户本人完成。
+
+## 本机工具就绪情况
+
+已安装官方 Electron Nightly 2.02.2610272，腾讯签名与 Apple 公证校验通过，安装诊断 compatible=true，wechatide 入口可用。微信自带 wechatide-skill 0.3.14 已导入项目技能目录。首次 Codex 授权等待超时；后续应由用户在微信工具完成授权和登录。没有正式 AppID，不执行微信编译/上传，也不伪造已上线。新版工具请按 https://developers.weixin.qq.com/miniprogram/dev/devtools/log.html#nightly 获取，旧备用页不含新版自动化入口。
