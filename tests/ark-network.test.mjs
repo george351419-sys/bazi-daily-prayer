@@ -8,7 +8,8 @@ function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
   if(bytes[1]===0x32)ssid=[...bytes.slice(3,-1)];
   if(bytes[1]===0x33){const reply=packet(0x33,wrongSSID?new TextEncoder().encode('old-network'):ssid);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
   if(bytes[1]===0x39)online=false;if(bytes[1]===0x38)online=status;
-  if(bytes[1]===0x3a){const reply=packet(0x3a,[+online]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
+ if(bytes[1]===0x3a){const reply=packet(0x3a,[+online]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
+ if(bytes[1]===0x3d){const reply=packet(0x3d,[1,42]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  }};
  const device={name:'FRAMEFILMARK-TEST',addEventListener(){},removeEventListener(){},gatt:{connected:false,async connect(){this.connected=true;return {async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};}};},disconnect(){this.connected=false;}}};
  return {writes,device,bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILMARK');return device;}}};
@@ -31,6 +32,10 @@ test('ForFilm protocol preserves UTF-8 credentials and waits for device network 
  assert.equal(states.at(-1).connected,true);assert.equal(new TextDecoder().decode(Uint8Array.from(p.writes[3].slice(3,-1))),'家里的网');
  for(const bytes of p.writes)assert.equal(bytes.at(-1),bytes.slice(0,-1).reduce((s,n)=>(s+n)&255,0));
  client.disconnect();assert.equal(p.device.gatt.connected,false);
+});
+test('download progress is read over the existing BLE connection',async()=>{
+ const p=peripheral(),downloads=[],client=new ArkNetwork({bluetooth:p.bluetooth,onDownload:s=>downloads.push(s),delay:async()=>{}});
+ await client.connect();const state=await client.queryDownload();assert.deepEqual(state,{state:1,progress:42});assert.deepEqual(downloads,[{state:1,progress:42}]);assert.equal(p.writes.at(-1)[1],0x3d);client.disconnect();
 });
 test('write failure never reports Wi-Fi success and releases configuration lock',async()=>{
  const p=peripheral({fail:true}),states=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async()=>{}});

@@ -19,7 +19,7 @@ export function arkDeviceId(name){
  return match?match[1].toLowerCase():null;
 }
 export class ArkNetwork {
- constructor({bluetooth,onState=()=>{},delay=sleep,timeout=30000}={}){this.bluetooth=bluetooth;this.onState=onState;this.delay=delay;this.timeout=timeout;this.epoch=0;}
+ constructor({bluetooth,onState=()=>{},onDownload=()=>{},delay=sleep,timeout=30000}={}){this.bluetooth=bluetooth;this.onState=onState;this.onDownload=onDownload;this.delay=delay;this.timeout=timeout;this.epoch=0;}
  state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic,deviceName:this.device?.name||null,deviceId:this.deviceId||null});}
  async connect(){
   this.disconnect();const epoch=this.epoch;this.state('请选择名称以 FRAMEFILMARK 开头的画屏…');
@@ -41,6 +41,7 @@ export class ArkNetwork {
  receive(bytes){
   if(bytes.length!==bytes[2]+4||bytes[0]!==0x55||bytes.slice(0,-1).reduce((s,n)=>(s+n)&255,0)!==bytes.at(-1))return;
   if(bytes[1]===0x33&&this.ssidRead){const pending=this.ssidRead;this.ssidRead=null;pending.resolve(new TextDecoder().decode(bytes.slice(3,-1)).replace(/\0.*$/,''));}
+  if(bytes[1]===0x3d&&bytes[2]===2){const state=bytes[3],progress=bytes[4];this.onDownload({state,progress});if(this.downloadRead){this.downloadRead.resolve({state,progress});this.downloadRead=null;}}
   if(bytes[1]===0x3a&&bytes[2]===1){
    const connected=bytes[3]===1;
    this.lastStatus=connected;
@@ -81,6 +82,14 @@ export class ArkNetwork {
    }finally{this.waiting=null;}
   }finally{secret.fill(0);this.configuring=false;}
  }
+ async queryDownload(timeout=3000){
+  const epoch=this.epoch;
+  return new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>{if(this.downloadRead?.reject===reject)this.downloadRead=null;reject(new Error('画屏未返回下载状态。'));},timeout);
+   this.downloadRead={resolve:value=>{clearTimeout(timer);resolve(value);},reject:error=>{clearTimeout(timer);reject(error);}};
+   this.write(0x3d,[],epoch).catch(error=>{if(this.downloadRead?.reject===reject)this.downloadRead=null;clearTimeout(timer);reject(error);});
+  });
+ }
  disconnect(message='蓝牙未连接。请先唤醒画屏，再连接。'){
   this.epoch++;if(this.waiting){this.waiting.reject(new Error('蓝牙已断开'));this.waiting=null;}
   if(this.ssidRead){this.ssidRead.reject(new Error('蓝牙已断开'));this.ssidRead=null;}
@@ -100,8 +109,9 @@ export function setupNetwork(){
   const note=document.createElement('small');note.textContent='绑定后会检查今日与次日两幅祈福画；缺少次日画作时会自动补齐。网页只有收到设备上屏回报后才会展示设备实际画面。';
   binding.append(bindingState,bind,note);state.after(binding);
  }
- let busy=false,connectedDevice=null;
+ let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false;
  const password=form.elements.wifiPassword;
+ const downloadState=document.createElement('p');downloadState.className='network-state download-state';downloadState.hidden=true;downloadState.setAttribute('role','status');
  const client=new ArkNetwork({bluetooth:navigator.bluetooth,onState:status=>{
   state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;
   connectedDevice=status.deviceId?{deviceId:status.deviceId,deviceName:status.deviceName}:null;
@@ -111,7 +121,14 @@ export function setupNetwork(){
   window.dispatchEvent(new CustomEvent('prayer:ark-device',{detail:connectedDevice}));
   password.placeholder=status.connected?'••••••••（密码已保存在画屏）':'输入 Wi-Fi 密码';
   form.classList.toggle('network-connected',status.connected);
+  if(status.connected&&!downloadTimer){void pollDownload();downloadTimer=setInterval(pollDownload,2000);}
+  else if(!status.connected&&downloadTimer){clearInterval(downloadTimer);downloadTimer=null;}
+ },onDownload:next=>{
+  const labels=['尚未开始下载','正在下载','内容已保存','下载失败'];
+  downloadState.hidden=false;downloadState.textContent='内容下载：'+(labels[next.state]||'状态未知')+(next.state===1?' '+next.progress+'%':'');
  }});
+ state.after(downloadState);
+ async function pollDownload(){if(!client.characteristic||downloadBusy)return;downloadBusy=true;try{await client.queryDownload();}catch{if(!downloadState.hidden)downloadState.textContent='内容下载：暂时无法读取设备进度。';}finally{downloadBusy=false;}}
  if(!window.isSecureContext||!navigator.bluetooth){
   connect.disabled=true;state.textContent='此浏览器暂不支持蓝牙配网。请用电脑 Chrome / Edge 或 Android Chrome，在 HTTPS 页面打开；iPhone 请先用支持蓝牙的电脑完成配网。';return;
  }

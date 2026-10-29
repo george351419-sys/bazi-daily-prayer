@@ -30,7 +30,7 @@ test('a newly saved plan never relabels the previous package render report',asyn
  const requested=(await configureRitual(c,account,{mode:'test',artworkIds:ids.slice(2)})).plan;
  const result=await ritualStatus(c,account,now);
  assert.equal(result.plan.revision,requested.revision);assert.equal(result.artwork.id,ids[1]);assert.equal(result.displaySource,'device_report');assert.equal(result.pendingUpdate,true);assert.equal(result.answer.id,'OB001');assert.match(result.action.text,/^包内动作/);
- assert.equal(result.scheduledPosition.actionIndex,1,'schedule uses the device installation clock');assert.deepEqual(result.plannedDays.map(d=>d.artworkId),ids.slice(2));
+ assert.equal(result.scheduledPosition.actionIndex,2,'schedule uses the device installation clock');assert.deepEqual(result.plannedDays.map(d=>d.artworkId),ids.slice(2));
  assert.deepEqual(result.planDays.map(d=>d.artworkId),ids.slice(2),'website preview follows the requested plan, not the old device report');
 });
 test('a previous package remains identifiable while a new package is downloading',async t=>{
