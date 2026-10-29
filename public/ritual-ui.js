@@ -91,7 +91,7 @@ export function setupRitual({request,fetchImage,getUser}){
   shell.mode.value=result.plan?.mode||'test';
  }
  function updateContent(result){
-  const key=JSON.stringify([result.artwork,result.action,result.answer,result.displaySource,result.pendingUpdate,result.displayPlan?.contentMode,result.displayPlan?.showActions]);
+  const key=JSON.stringify([result.artwork,result.action,result.answer,result.displaySource,result.pendingUpdate,result.displayPlan?.contentMode,result.displayPlan?.showActions,result.days?.map(day=>[day.artworkId,day.image,day.title])]);
   if(key===renderedKey)return;renderedKey=key;
   const mappingOpen=!!shell.current.querySelector('[data-prayer-reading][open]');shell.current.replaceChildren();
   if(!result.artwork){shell.current.append(node('p',result.position?.expired?'两天内容已用完，等待新画作。':'准备好两幅画作后，可以开始两天体验。'));return;}
@@ -103,7 +103,12 @@ export function setupRitual({request,fetchImage,getUser}){
   const explain=node('div');explain.append(node('h5',result.artwork.title));
   if(result.action)explain.append(node('p',result.action.detail),node('small',result.action.number_basis?'动作仍待审 · 次数或时长按'+result.action.number_basis.element+'的河图数取'+result.action.number_basis.number:'测试候选 · 通用待评估，未完成个性化命理判断'));
   if(result.answer){const answer=node('details');answer.open=true;answer.append(node('summary',result.answer.id+' · '+result.answer.text),node('p',result.answer.phone_detail));explain.append(answer);}
-  const mapping=node('details');mapping.dataset.prayerReading='';mapping.open=mappingOpen;mapping.append(node('summary',photo?'查看照片说明':'查看祈福画面解读'));const reading=node('div');renderConsumerReading(reading,result.artwork.mapping);mapping.append(reading);explain.append(mapping);row.append(explain);shell.current.append(row);
+  const mapping=node('details');mapping.dataset.prayerReading='';mapping.open=mappingOpen;mapping.append(node('summary',photo?'查看照片说明':'查看祈福画面解读'));const reading=node('div');renderConsumerReading(reading,result.artwork.mapping);mapping.append(reading);explain.append(mapping);row.append(explain);
+  const previews=node('section');previews.className='ritual-day-previews';
+  for(const [index,day] of (result.days||[]).slice(0,2).entries()){
+   const figure=node('figure');figure.className='ritual-day-preview';const thumb=node('img');thumb.alt=(index===0?'今日':'明日')+'祈福画面：'+day.title;thumb.loading='lazy';thumb.src=day.image;const caption=node('figcaption');caption.append(node('strong',(index===0?'今日':'明日')+'祈福画面'),node('span',day.date+' · '+day.title));figure.append(thumb,caption);previews.append(figure);
+  }
+  if(previews.children.length)shell.current.append(row,previews);else shell.current.append(row);
   if(!result.answer&&!image.src){const life=lifecycle,path=result.artwork.image;void fetchImage(path).then(next=>{
    if(!alive(life)||!image.isConnected){URL.revokeObjectURL(next);return;}if(url)URL.revokeObjectURL(url);url=next;imagePath=path;image.src=next;
   }).catch(()=>{if(alive(life)&&image.isConnected){image.alt='画作预览暂不可用';renderedKey=null;}});}
@@ -112,6 +117,14 @@ export function setupRitual({request,fetchImage,getUser}){
   const list=shell.actionList;list.replaceChildren();
   const days=result.days?.length?result.days:[{title:'通用参考',actions:result.actionGuide||[]}];
   if(!days[0].actions?.length){list.append(node('p','微行动建议正在准备中。'));return;}
+  const currentDay=days[result.position?.dayIndex],currentAction=currentDay?.actions?.[result.position?.actionIndex];
+  if(currentAction){
+   const current=node('article');current.className='ritual-action-card current ritual-current-action';
+   const hour=Number(currentAction.hour),range=Number.isFinite(hour)?String(hour).padStart(2,'0')+':00–'+String(hour+2).padStart(2,'0')+':00':'';
+   current.append(node('strong','当前时辰 · '+currentAction.branch+'时 · '+range+' · '+currentAction.title),node('p',currentAction.text),node('small',String(currentAction.detail||'').replace('当前未确认喜用数字','动作重复次数尚未个性化')));
+   list.append(current);
+  }else list.append(node('p','当前时段没有新增动作建议，夜间请好好休息。'));
+  const all=node('details');all.className='ritual-all-actions';all.append(node('summary','展开今日与明日全部时辰建议'));
   for(const [dayIndex,day] of days.entries()){
    const section=node('section');section.className='ritual-action-day';section.append(node('h6',(dayIndex===0?'今日':'明日')+' · '+day.title));
    for(const [index,action] of (day.actions||[]).entries()){
@@ -119,8 +132,9 @@ export function setupRitual({request,fetchImage,getUser}){
     const hour=Number(action.hour),range=Number.isFinite(hour)?String(hour).padStart(2,'0')+':00–'+String(hour+2).padStart(2,'0')+':00':'';
     item.append(node('strong',action.branch+'时 · '+range+' · '+action.title),node('p',action.text),node('small',String(action.detail||'').replace('当前未确认喜用数字','动作重复次数尚未个性化')));section.append(item);
    }
-   list.append(section);
+   all.append(section);
   }
+  list.append(all);
  }
  async function refresh(){
   if(saving||uploading)return;active=true;const turn=++epoch,life=lifecycle;clearTimeout(timer);if(!getUser()){reset();return;}
@@ -135,7 +149,7 @@ export function setupRitual({request,fetchImage,getUser}){
    if(result.plan&&result.syncConfigured===false)progress=' 内容已保存；尚未绑定画屏，绑定后才会编译并下发。';
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
    const generated=latestGenerated?.status==='complete'&&latestGenerated.date===today&&result.displaySource!=='device_report'?latestGenerated:null;
-   const effective=generated?{...result,artwork:{id:generated.id,title:generated.mapping.title,date:generated.date,source:generated.source||'generated',image:generated.image,mapping:generated.mapping},days:(result.days||[]).map((day,index)=>index===0?{...day,title:generated.mapping.title,artworkId:generated.id,actions:personalizeActions(day.actions||[],generated.mapping,0)}:day),position:{...result.position,dayIndex:0}}:result;
+   const effective=generated?{...result,artwork:{id:generated.id,title:generated.mapping.title,date:generated.date,source:generated.source||'generated',image:generated.image,mapping:generated.mapping},days:(result.days||[]).map((day,index)=>index===0?{...day,title:generated.mapping.title,artworkId:generated.id,image:generated.image,actions:personalizeActions(day.actions||[],generated.mapping,0)}:day),position:{...result.position,dayIndex:0}}:result;
    shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+progress+(generated&&result.plan?.artworkIds?.[0]!==generated.id?' 下方已显示刚完成的今日画；旧的两日画屏计划尚未替换。':'');
    shell.report.textContent=r?'设备最近联网：'+new Date(r.lastSeen).toLocaleString('zh-CN')+(r.stale?'（回报较早，设备可能离线）':'')+'；'+(r.renderReport?'最近上屏请求：第 '+(r.renderReport.day+1)+' 天'+(r.answerId?' · '+r.answerId:r.renderReport.action>=0?' · 第 '+(r.renderReport.action+1)+' 条动作':' · 祈福图')+(r.showingPrevious?'（新内容仍在同步）':''):'尚未收到当前内容的上屏回报')+'。实屏效果待验收。':'';
    updateContent(effective);updateActions(effective);schedule(effective);
