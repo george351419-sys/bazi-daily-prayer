@@ -82,9 +82,10 @@ test('one completed artwork creates one idempotent next-day mapping before image
  const input=validateInput(profile,'2026-10-29'),id=newArtworkId(),oldId=newArtworkId();
  await saveArtwork(c,account,{id:oldId,userId:account.id,date:'2026-10-28',createdAt:new Date().toISOString(),profileSignature:profileSignature(input),status:'complete',image:{key:'test/'+oldId},mapping:{title:'昨日祈福画'}});
  await saveArtwork(c,account,{id,userId:account.id,date:'2026-10-29',createdAt:new Date().toISOString(),profileSignature:profileSignature(input),status:'complete',image:{key:'test/'+id},mapping:{title:'今日祈福画'}});
+ await configureRitual(c,account,{mode:'daily',artworkIds:[oldId,id]});
  let calls=0;const analyze=async(value,nextInput,calendar)=>{calls++;return makeMapping(nextInput,calendar);},now=Date.parse('2026-10-29T12:00:00+08:00');
  const first=await prepareRitualPair(c,account,{mode:'daily',now,analyze});assert.equal(first.status,'mapped');assert.equal(first.record.date,'2026-10-30');assert.ok(first.jobToken);
  const second=await prepareRitualPair(c,account,{mode:'daily',now,analyze});assert.equal(second.record.id,first.record.id);assert.equal(calls,1);
  const repo=accountRepository(c),record=await repo.get('artworks/'+account.id+'/'+first.record.id);await saveArtwork(c,account,{...record,status:'complete',image:{key:'test/'+record.id}});
- const ready=await prepareRitualPair(c,account,{mode:'daily',now,analyze});assert.equal(ready.status,'ready');assert.equal(calls,1);assert.equal((await ritualStatus(c,account)).plan.artworkIds.length,2);
+ const ready=await prepareRitualPair(c,account,{mode:'daily',now,analyze});assert.equal(ready.status,'ready');assert.equal(calls,1);assert.deepEqual((await ritualStatus(c,account)).plan.artworkIds,[id,first.record.id]);
 });

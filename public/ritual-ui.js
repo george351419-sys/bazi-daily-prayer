@@ -135,6 +135,10 @@ export function setupRitual({request,fetchImage,getUser}){
   let status;try{status=await request('/api/account/ritual');}catch{return false;}
   if(!status.syncConfigured)return false;
   ensureShell();host.hidden=false;preparing=true;shell.status.textContent='正在检查两日画作；缺少次日画作时会为你补齐。';
+  if(status.plan?.contentMode==='photo'){
+   shell.status.textContent='当前使用你的照片计划，不会自动替换为次日祈福画。需要祈福模式时请在上方手动切换。';
+   preparing=false;return false;
+  }
   try{
    let prepared=await request('/api/account/ritual/prepare',{mode:shell.mode.value||status.plan?.mode||'daily'});
    if(prepared.job){
