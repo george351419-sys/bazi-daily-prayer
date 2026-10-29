@@ -7,10 +7,11 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {setTimeout as delay} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
-import {answers,actionPlans} from '../content/ritual-content.mjs';
+import {answers} from '../content/ritual-content.mjs';
 import {ritualArtworkReady,ritualPublication} from '../lib/ritual.mjs';
 import {publishRitualPackage} from '../lib/ritual-upload.mjs';
 import {ritualWorkerSignature} from '../lib/ritual-worker-bridge.mjs';
+import {personalizeActionPlans} from '../lib/action-personalization.mjs';
 
 const c={...process.env},origin=c.RITUAL_PUBLIC_ORIGIN||c.ARK_PUBLIC_ORIGIN,exec=promisify(execFile),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 if(origin!=='https://playmath.cn'||!c.SESSION_SECRET||typeof c.SESSION_SECRET!=='string'||c.SESSION_SECRET.length<20)throw new Error('Configure RITUAL_PUBLIC_ORIGIN=https://playmath.cn and the production SESSION_SECRET');
@@ -45,7 +46,8 @@ async function processAccount(accountId,deviceId){
   if(pair.every(Boolean)){records=pair;startsAt=previous+'T01:00:00+08:00';}
  }
  if(plan.mode==='daily'&&plan.contentMode==='photo')startsAt=new Date(Date.now()+7*3600000).toISOString().slice(0,10)+'T01:00:00+08:00';
- const manifest={...plan,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-v2':'scroll-v2',artworkIds:records.map(record=>record.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((record,index)=>({date:record.date,artworkId:record.id,actions:actionPlans[index]}))};
+ const actionDays=personalizeActionPlans(records[0].mapping);
+ const manifest={...plan,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-v2':'scroll-v2',artworkIds:records.map(record=>record.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((record,index)=>({date:record.date,artworkId:record.id,actions:actionDays[index]}))};
  const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex');
  if(ritualPublication(prior)?.signature===signature){if(prior.status!=='published')await saveBuild(accountId,{...prior,status:'published',nextAttemptAt:null});return;}
  try{

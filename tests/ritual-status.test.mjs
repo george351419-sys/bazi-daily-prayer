@@ -70,10 +70,11 @@ test('two completed prayer artworks create the plan automatically without genera
  const account={id:'3'.repeat(32)},profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']},c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-pair-test-secret-123456'};
  await saveProfile(c,account,profile);
  const input=validateInput(profile,'2026-10-29'),signature=profileSignature(input),ids=[newArtworkId(),newArtworkId()];
- for(const [i,id] of ids.entries())await saveArtwork(c,account,{id,userId:account.id,date:'2026-10-'+(29+i),createdAt:new Date().toISOString(),profileSignature:signature,status:'complete',image:{key:'test/'+id},mapping:{title:'祈福画 '+i}});
+ const mappings=[{title:'今日祈福画',primary_element:'火',secondary_element:'木'},{title:'明日祈福画',primary_element:'火',secondary_element:'木'}];
+ for(const [i,id] of ids.entries())await saveArtwork(c,account,{id,userId:account.id,date:'2026-10-'+(29+i),createdAt:new Date().toISOString(),profileSignature:signature,status:'complete',image:{key:'test/'+id},mapping:mappings[i]});
  const result=await prepareRitualPair(c,account,{mode:'daily',now:Date.parse('2026-10-29T12:00:00+08:00')});
  assert.equal(result.status,'ready');assert.deepEqual(result.artworkIds,ids);
- assert.equal((await ritualStatus(c,account)).plan.mode,'daily');
+ const status=await ritualStatus(c,account);assert.equal(status.plan.mode,'daily');assert.equal(status.days[0].actions[0].number_basis.element,'火');assert.equal(status.days[1].actions[0].number_basis.element,'木');
 });
 test('one completed artwork creates one idempotent next-day mapping before image generation',async t=>{
  const dir=await mkdtemp(path.join(os.tmpdir(),'ritual-next-'));t.after(()=>rm(dir,{recursive:true,force:true}));

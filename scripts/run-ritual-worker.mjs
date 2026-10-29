@@ -10,9 +10,10 @@ import {fileURLToPath} from 'node:url';
 import {accountRepository,accountsEnabled} from '../lib/account-store.mjs';
 import {getArtwork,privateImage} from '../lib/accounts.mjs';
 import {configureRitual,ritualArtworkReady,ritualPublication} from '../lib/ritual.mjs';
-import {actionPlans,answers} from '../content/ritual-content.mjs';
+import {answers} from '../content/ritual-content.mjs';
 import {publishRitualPackage} from '../lib/ritual-upload.mjs';
 import {listRitualDeviceLinks} from '../lib/ritual-device.mjs';
+import {personalizeActionPlans} from '../lib/action-personalization.mjs';
 const c={...process.env},repo=accountRepository(c),exec=promisify(execFile),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 if(!accountsEnabled(c))throw new Error('Configure ACCOUNT_STORAGE in the private worker environment');
 let stop=false;const abort=new AbortController();for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{stop=true;abort.abort();});
@@ -40,7 +41,8 @@ do{
     if(pair.every(Boolean)){records=pair;startsAt=previous+'T01:00:00+08:00';}
    }
    if(plan.mode==='daily'&&plan.contentMode==='photo')startsAt=new Date(Date.now()+7*3600000).toISOString().slice(0,10)+'T01:00:00+08:00';
-   const manifest={...plan,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-v2':'scroll-v2',artworkIds:records.map(r=>r.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((r,i)=>({date:r.date,artworkId:r.id,actions:actionPlans[i]}))};
+   const personalized=personalizeActionPlans(records[0].mapping);
+   const manifest={...plan,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-v2':'scroll-v2',artworkIds:records.map(r=>r.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((r,i)=>({date:r.date,artworkId:r.id,actions:personalized[i]}))};
    const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),state=await repo.get('ritual-build/'+id);
    if(ritualPublication(state)?.signature===signature){if(state.status!=='published')await repo.put('ritual-build/'+id,{...state,status:'published',nextAttemptAt:null});continue;}
    tmp=await mkdtemp(path.join(os.tmpdir(),'ritual-compile-'));

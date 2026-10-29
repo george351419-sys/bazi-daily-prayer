@@ -1,5 +1,5 @@
 import {setupNetwork} from './ark-network.js?v=20261029-ritual-pair-v4';
-import {setupAccounts} from './account-ui.js?v=20261029-ritual-sync-v7';
+import {setupAccounts} from './account-ui.js?v=20261029-ritual-sync-v8';
 import {WISH_GROUPS} from './wishes.js';
 import {normalizeBirthDate} from './date-input.js?v=20261017-solar';
 import {setupBirthInputs} from './birth-picker.js?v=20261017-solar';
@@ -34,7 +34,7 @@ $('#backend-dialog').addEventListener('close',async()=>{if($('#backend-dialog').
 form.addEventListener('change',e=>{if(e.target.name==='wish')updateCount();if(e.target.name==='calendar'){show('#leap-field',form.calendar.value==='lunar');form.birthDate.placeholder=form.calendar.value==='lunar'?'农历，如 1990-1-1':'1990-1-1';}});
 $('#example-fill').onclick=()=>{form.gender.value='female';form.birthDate.value='1992-10-17';form.birthTime.value='22:30';form.city.value='上海';form.calendar.value='solar';form.birthDate.type='text';form.leap.checked=false;show('#leap-field',false);form.city.dispatchEvent(new Event('input',{bubbles:true}));form.querySelectorAll('input[name=wish]').forEach(x=>x.checked=x.value==='W02');updateCount();$('#create').scrollIntoView({behavior:'smooth'});};
 function input(){return {gender:form.gender.value,birthDate:normalizeBirthDate(form.birthDate.value),birthTime:form.birthTime.value,city:form.city.value,calendar:form.calendar.value,leap:form.leap.checked,wishes:[...form.querySelectorAll('input[name=wish]:checked')].map(x=>x.value)};}
-function lock(value){busy=value;$('#submit-button').disabled=value;$('#retry-image').disabled=value;$('#submit-button').firstChild.textContent=value?'正在为你准备…':'绘制今日祈福画 ';}
+function lock(value){busy=value;$('#submit-button').disabled=value;$('#retry-image').disabled=value;$('#submit-button').firstChild.textContent=value?'正在为你准备…':'绘制祈福画面 ';}
 function renderProgress(job){show('#progress',true);setText('#progress-title',job.phase);const phase=job.status==='analyzing'?1:job.status==='generating'?2:0;$('#progress-steps').querySelectorAll('li').forEach((li,i)=>li.classList.toggle('active',i===phase));}
 async function displayImage(job){
  if(!job.image)return;

@@ -1,4 +1,4 @@
-import {setupRitual} from './ritual-ui.js?v=20261029-ritual-sync-v7';
+import {setupRitual} from './ritual-ui.js?v=20261029-ritual-sync-v8';
 import {setupDevices} from './device-ui.js';
 export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUserChange,onOpenArtwork,isBusy}){
  const $=s=>document.querySelector(s),auth=$('#auth-dialog'),panel=$('#account-dialog');let enabled=false,user=null,profile=null,mode='login',afterLogin=null,cursor=null,urls=[],pairedDevice=null,bindingDevice=false;
