@@ -57,3 +57,12 @@ test('连续出现不同校验错误时，后续修复指令保留所有定向�
  });
  assert.equal(calls,3);assert.equal(result.title,mapping.title);
 });
+test('首次模型请求超时后仍保留后续重试预算',async()=>{
+ let calls=0;const mapping=makeMapping(input,calendar);
+ const result=await analyzeMapping({DEEPSEEK_API_KEY:'test-only',ANALYSIS_BUDGET_MS:900},input,calendar,[],async(url,init)=>{
+  calls++;
+  if(calls===1)return await new Promise((resolve,reject)=>init.signal.addEventListener('abort',()=>reject(new Error('timeout')),{once:true}));
+  return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(mapping)}}]});
+ });
+ assert.equal(calls,2);assert.equal(result.title,mapping.title);
+});
