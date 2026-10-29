@@ -28,6 +28,8 @@ export class ArkNetwork {
    // Must remain directly in the click handler before any await (Web Bluetooth gesture).
    device=await this.bluetooth.requestDevice({filters:[{namePrefix:'FRAMEFILMARK'}],optionalServices:[SERVICE]});
    if(epoch!==this.epoch)return;
+   // Another tab (for example ForFilm) may still own the GATT session.
+   if(device.gatt.connected)device.gatt.disconnect();
    this.device=device;this.deviceId=arkDeviceId(device.name);device.addEventListener('gattserverdisconnected',this.lost=()=>{if(epoch===this.epoch)this.disconnect('蓝牙已断开。画屏休眠时会断开，可唤醒后重新连接。');});
    const server=await device.gatt.connect(),service=await server.getPrimaryService(SERVICE),characteristic=await service.getCharacteristic(CHARACTERISTIC);
    if(epoch!==this.epoch){device.gatt.disconnect();return;}
@@ -187,7 +189,7 @@ export function setupNetwork(){
  if(!window.isSecureContext||!navigator.bluetooth){
   connect.disabled=true;state.textContent='此浏览器暂不支持蓝牙配网。请用电脑 Chrome / Edge 或 Android Chrome，在 HTTPS 页面打开；iPhone 请先用支持蓝牙的电脑完成配网。';return;
  }
- connect.onclick=async()=>{connect.disabled=true;try{await client.connect();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':e.message;}finally{connect.disabled=false;}};
+ connect.onclick=async()=>{connect.disabled=true;try{await client.connect();}catch(e){const busy=/GATT operation already in progress|NetworkError/i.test(e.message||'');state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':busy?'画屏蓝牙正被另一个页面占用。请关闭其他已连接画屏的网页，再刷新本页重试。':e.message;}finally{connect.disabled=false;}};
  disconnect.onclick=()=>client.disconnect();
  bind.onclick=()=>window.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
  form.onsubmit=async event=>{event.preventDefault();busy=true;send.disabled=true;connect.disabled=true;
