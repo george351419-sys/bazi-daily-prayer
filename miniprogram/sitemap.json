@@ -1,0 +1,1 @@
+{"desc":"账户、生辰、照片与设备页面不参与搜索收录","rules":[{"action":"disallow","page":"*"}]}

@@ -1,0 +1,1 @@
+Component({data:{selected:0,list:[{path:'/pages/today/index',text:'今日'},{path:'/pages/screen/index',text:'画屏'},{path:'/pages/answers/index',text:'答案'},{path:'/pages/mine/index',text:'我的'}]},methods:{change(e){const index=Number(e.currentTarget.dataset.index);if(index!==this.data.selected)wx.switchTab({url:this.data.list[index].path});}}});

@@ -1,3 +1,4 @@
+import {allowedMiniProgram} from '../lib/miniprogram-access.mjs';
 import {uploadPhoto} from '../lib/photos.mjs';
 import {ritualStatus,configureRitual,searchAnswers} from '../lib/ritual.mjs';
 import {findReusableImage,reuseArchivedImage,indexArtworkImage} from '../lib/image-reuse.mjs';
@@ -15,12 +16,12 @@ const accountJob=(c,account,record)=>({id:record.id,source:record.source||'gener
 const send=(res,status,data)=>res.status(status).json(data);
 export default function handler(req,res){return handleRequest(req,res,process.env);}
 export async function handleRequest(req,res,config){
- const startedAt=Date.now(),origin=req.headers.origin;
+ const startedAt=Date.now(),origin=req.headers.origin,miniProgram=allowedMiniProgram(req,config);
  // EdgeOne may reconstruct request.url with an internal host; trust our explicit public origins.
  const allowed=new Set(['https://playmath.cn','https://www.playmath.cn','https://george351419-sys.github.io',...(config.ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean)]);
  res.setHeader('Cache-Control','no-store');res.setHeader('Vary','Origin');
  const own=(/^(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(req.headers.host||'')?'http://':'https://')+req.headers.host;
- if(origin&&origin!==own&&!allowed.has(origin))return send(res,403,{error:'此页面尚未获准连接后端。'});
+ if(origin&&origin!==own&&!allowed.has(origin)&&!(miniProgram&&origin==='https://servicewechat.com'))return send(res,403,{error:'此页面尚未获准连接后端。'});
  if(origin){res.setHeader('Access-Control-Allow-Credentials','true');res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');}
  res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Session-Token, X-CSRF-Token');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.method==='OPTIONS')return res.status(204).end();
@@ -28,13 +29,13 @@ export async function handleRequest(req,res,config){
  let session=verifySession(config,req.headers['x-session-token']);
  try{
   if(route==='bootstrap'&&req.method==='GET'){
-   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)}});
+   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)},miniProgram:{enabled:miniProgram}});
   }
   if(!session)return send(res,403,{error:'页面会话已更新，请刷新重试。'});
   if(req.method==='POST'&&req.headers['x-csrf-token']!==csrfFor(config,session))return send(res,403,{error:'页面会话校验失败，请刷新重试。'});
   const body=typeof req.body==='string'?JSON.parse(req.body):req.body||{};
   const accountMode=accountsEnabled(config);
-  if(accountMode&&req.method==='POST'&&!origin)return send(res,403,{error:'请从祈福网站提交账户请求。'});
+  if(accountMode&&req.method==='POST'&&!origin&&!miniProgram)return send(res,403,{error:'请从祈福网站提交账户请求。'});
   if(route.startsWith('account/')){
    if(!accountMode)throw new AccountError(503,'账户服务尚未开启。');
    const client=String(req.headers['eo-connecting-ip']||req.headers['x-real-ip']||req.headers['x-forwarded-for']||'unknown').split(',')[0].trim().slice(0,80);

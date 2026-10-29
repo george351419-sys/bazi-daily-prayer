@@ -1,0 +1,42 @@
+{
+  "pages": [
+    "pages/today/index",
+    "pages/screen/index",
+    "pages/answers/index",
+    "pages/mine/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "今日祈愿",
+    "navigationBarBackgroundColor": "#F6F1E7",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F6F1E7"
+  },
+  "tabBar": {
+    "custom": true,
+    "list": [
+      {
+        "pagePath": "pages/today/index",
+        "text": "今日"
+      },
+      {
+        "pagePath": "pages/screen/index",
+        "text": "画屏"
+      },
+      {
+        "pagePath": "pages/answers/index",
+        "text": "答案"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "networkTimeout": {
+    "request": 120000,
+    "downloadFile": 30000
+  },
+  "__usePrivacyCheck__": true,
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json"
+}

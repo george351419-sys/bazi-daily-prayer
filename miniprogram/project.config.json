@@ -1,0 +1,42 @@
+{
+  "description": "今日祈愿 · 墨水屏伴侣",
+  "appid": "touristappid",
+  "projectname": "daily-prayer-mini",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "./",
+  "libVersion": "3.7.0",
+  "setting": {
+    "es6": true,
+    "enhance": true,
+    "minified": true,
+    "urlCheck": true
+  },
+  "packOptions": {
+    "ignore": [
+      {
+        "type": "folder",
+        "value": "tests"
+      },
+      {
+        "type": "folder",
+        "value": "scripts"
+      },
+      {
+        "type": "folder",
+        "value": "docs"
+      },
+      {
+        "type": "file",
+        "value": "package.json"
+      },
+      {
+        "type": "folder",
+        "value": "review"
+      },
+      {
+        "type": "file",
+        "value": "README.md"
+      }
+    ]
+  }
+}
