@@ -10,6 +10,10 @@ function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
   if(bytes[1]===0x39)online=false;if(bytes[1]===0x38)online=status;
  if(bytes[1]===0x3a){const reply=packet(0x3a,[+online]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  if(bytes[1]===0x3d){const reply=packet(0x3d,[1,42]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
+ if(bytes[1]===0x35){const reply=packet(0x35,new TextEncoder().encode('test-password'));listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
+ if(bytes[1]===0x56){const info=new Uint8Array(37+16);info[0]=1;info.set(new TextEncoder().encode('3.2.5-ritual.3\0'),37);const reply=packet(0x56,info);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
+ if(bytes[1]===0x51){const status=packet(0x51,[7,100,0,0,0,0,10,0,0,0,10]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(status.buffer)}});}
+ if(bytes[1]===0x57||bytes[1]===0x58){const reply=packet(bytes[1],[0]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  }};
  const device={name:'FRAMEFILMARK-TEST',addEventListener(){},removeEventListener(){},gatt:{connected:false,async connect(){this.connected=true;return {async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};}};},disconnect(){this.connected=false;}}};
  return {writes,device,bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILMARK');return device;}}};
@@ -36,6 +40,14 @@ test('ForFilm protocol preserves UTF-8 credentials and waits for device network 
 test('download progress is read over the existing BLE connection',async()=>{
  const p=peripheral(),downloads=[],client=new ArkNetwork({bluetooth:p.bluetooth,onDownload:s=>downloads.push(s),delay:async()=>{}});
  await client.connect();const state=await client.queryDownload();assert.deepEqual(state,{state:1,progress:42});assert.deepEqual(downloads,[{state:1,progress:42}]);assert.equal(p.writes.at(-1)[1],0x3d);client.disconnect();
+});
+test('Wi-Fi OTA reuses the saved credentials without exposing them to the page',async()=>{
+ const p=peripheral(),updates=[],client=new ArkNetwork({bluetooth:p.bluetooth,onOta:s=>updates.push(s),delay:async()=>{}});
+ await client.connect();await client.configure('home','test-password');assert.equal((await client.readBuildInfo()).version,'3.2.5-ritual.3');
+ assert.equal(await client.startWifiOta('https://playmath.cn/firmware/frame_film_ark.bin',10,'a'.repeat(64)),true);
+ const start=p.writes.find(bytes=>bytes[1]===0x57),payload=Uint8Array.from(start.slice(3,-1));
+ assert.equal(new DataView(payload.buffer,payload.byteOffset,4).getUint32(0),10);assert.ok(new TextDecoder().decode(payload.slice(36)).includes('home\0test-password\0https://playmath.cn/firmware/frame_film_ark.bin\0'));
+ assert.ok(p.writes.some(bytes=>bytes[1]===0x58));assert.deepEqual(updates.at(-1),{state:7,progress:100,error:0,received:10,total:10});client.disconnect();
 });
 test('write failure never reports Wi-Fi success and releases configuration lock',async()=>{
  const p=peripheral({fail:true}),states=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async()=>{}});
