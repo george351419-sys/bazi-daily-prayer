@@ -46,7 +46,7 @@ async function processAccount(accountId,deviceId){
   if(pair.every(Boolean)){records=pair;startsAt=previous+'T01:00:00+08:00';}
  }
  if(plan.mode==='daily'&&plan.contentMode==='photo')startsAt=new Date(Date.now()+7*3600000).toISOString().slice(0,10)+'T01:00:00+08:00';
- const actionDays=personalizeActionPlans(records[0].mapping);
+ const actionDays=records.map((record,index)=>personalizeActionPlans(record.mapping)[index]);
  const manifest={...plan,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-v2':'scroll-v2',artworkIds:records.map(record=>record.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((record,index)=>({date:record.date,artworkId:record.id,actions:actionDays[index]}))};
  const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex');
  if(ritualPublication(prior)?.signature===signature){if(prior.status!=='published')await saveBuild(accountId,{...prior,status:'published',nextAttemptAt:null});return;}

@@ -5,6 +5,16 @@ export function setupRitual({request,fetchImage,getUser}){
  const destination=document.querySelector('#ritual-home-content');
  if(destination)destination.append(host);else document.querySelector('#artwork-grid').before(host);
  const node=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
+ const numberSets={水:[1,6],火:[2,7],木:[3,8],金:[4,9],土:[5,10]};
+ function personalizeActions(actions,mapping,dayIndex){
+  const element=dayIndex?mapping?.secondary_element||mapping?.primary_element:mapping?.primary_element;
+  const numbers=numberSets[element]||[];if(!numbers.length)return actions;
+  return actions.map((action,index)=>{
+   const number=numbers[index%numbers.length];let text=action.text;
+   for(const [pattern,unit] of [[/几次/g,'次'],[/几轮/g,'轮'],[/几回/g,'回'],[/几下/g,'下'],[/几步/g,'步'],[/几个/g,'个'],[/片刻/g,'秒']])text=text.replace(pattern,number+unit);
+   return {...action,text,detail:String(action.detail||'').replace('当前未确认喜用数字，不套用命理次数。','本次按'+element+'的河图数取'+number+'，仅作传统数字取象；动作以舒适为准。'),number_basis:{system:'河图生成数',element,number}};
+  });
+ }
  let active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null,latestGenerated=null;
  function pause(){active=false;epoch++;clearTimeout(timer);timer=null;}
  function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell=null;renderedKey=null;latestGenerated=null;host.replaceChildren();host.hidden=true;}
@@ -125,7 +135,7 @@ export function setupRitual({request,fetchImage,getUser}){
    if(result.plan&&result.syncConfigured===false)progress=' 内容已保存；尚未绑定画屏，绑定后才会编译并下发。';
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
    const generated=latestGenerated?.status==='complete'&&latestGenerated.date===today&&result.displaySource!=='device_report'?latestGenerated:null;
-   const effective=generated?{...result,artwork:{id:generated.id,title:generated.mapping.title,date:generated.date,source:generated.source||'generated',image:generated.image,mapping:generated.mapping},days:(result.days||[]).map((day,index)=>index===0?{...day,title:generated.mapping.title,artworkId:generated.id}:day),position:{...result.position,dayIndex:0}}:result;
+   const effective=generated?{...result,artwork:{id:generated.id,title:generated.mapping.title,date:generated.date,source:generated.source||'generated',image:generated.image,mapping:generated.mapping},days:(result.days||[]).map((day,index)=>index===0?{...day,title:generated.mapping.title,artworkId:generated.id,actions:personalizeActions(day.actions||[],generated.mapping,0)}:day),position:{...result.position,dayIndex:0}}:result;
    shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+progress+(generated&&result.plan?.artworkIds?.[0]!==generated.id?' 下方已显示刚完成的今日画；旧的两日画屏计划尚未替换。':'');
    shell.report.textContent=r?'设备最近联网：'+new Date(r.lastSeen).toLocaleString('zh-CN')+(r.stale?'（回报较早，设备可能离线）':'')+'；'+(r.renderReport?'最近上屏请求：第 '+(r.renderReport.day+1)+' 天'+(r.answerId?' · '+r.answerId:r.renderReport.action>=0?' · 第 '+(r.renderReport.action+1)+' 条动作':' · 祈福图')+(r.showingPrevious?'（新内容仍在同步）':''):'尚未收到当前内容的上屏回报')+'。实屏效果待验收。':'';
    updateContent(effective);updateActions(effective);schedule(effective);
