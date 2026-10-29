@@ -22,7 +22,7 @@ export function setupRitual({request,fetchImage,getUser}){
   const uploadBox=node('div');uploadBox.className='photo-upload';const fileLabel=node('label','选择自己的照片'),file=node('input');file.type='file';file.accept='image/jpeg,image/png,image/webp';file.setAttribute('aria-label','选择自己的照片');fileLabel.append(file);const photoLabel=node('label','照片名称'),photoTitle=node('input');photoTitle.maxLength=60;photoTitle.placeholder='例如：一家人的周末';photoLabel.append(photoTitle);const upload=node('button','上传到账户');upload.type='button';upload.className='secondary';const uploadState=node('p'),draft=node('img');draft.hidden=true;draft.className='photo-draft';draft.alt='上传照片预览';uploadState.setAttribute('role','status');uploadBox.append(fileLabel,photoLabel,upload,draft,uploadState,node('small','上传时保留完整构图，并移除照片位置信息。六色墨水屏会与原照片存在色彩差异。'));form.append(uploadBox);
   const more=node('button','载入更多画作与照片');more.type='button';more.className='text-button';more.hidden=true;form.append(more);
   const mode=node('select');mode.setAttribute('aria-label','播放方式');for(const [value,text] of [['test','测试：每 2 分钟换动作，两天循环'],['daily','日常：01:00 换画，每两小时换动作']]){const option=node('option',text);option.value=value;mode.append(option);}
-  const submit=node('button','保存并同步到画屏');submit.type='submit';submit.className='primary';form.append(mode,submit,node('small','设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。'));settings.append(form);
+  const submit=node('button','保存并同步到画屏');submit.type='submit';submit.className='primary';const deliveryNote=node('small','设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。');form.append(mode,submit,deliveryNote);settings.append(form);
   function populate(result){
    const photo=contentMode.value==='photo';form.classList.toggle('photo-settings',photo);uploadBox.hidden=!photo;actionLabel.hidden=!photo;
    const choices=new Map((artworks||[]).filter(a=>a.status==='complete').map(a=>[a.id,a]));
@@ -61,7 +61,7 @@ export function setupRitual({request,fetchImage,getUser}){
    for(const a of items){const item=node('details');item.dataset.answer=a.id;item.open=open.has(a.id);item.append(node('summary',a.id+' · '+a.text),node('p',a.phone_detail),node('small',a.theme+' · '+a.tendency+' · '+a.review_status));list.append(item);}
   }
   search.oninput=find;book.append(search,count,list);host.append(title,status,report,current,settings,book);
-  shell={status,report,current,settings,form,selects,mode,submit,contentMode,showActions,populate,book,search,count,find};
+  shell={status,report,current,settings,form,deliveryNote,selects,mode,submit,contentMode,showActions,populate,book,search,count,find};
  }
  function updateSettings(result){
   if(dirty||saving)return;
@@ -95,6 +95,8 @@ export function setupRitual({request,fetchImage,getUser}){
    const r=result.deviceReport;
    let progress=result.build?.status==='retrying'?' 更新暂未成功，正在重试；设备保留已下载内容。':result.build?.status==='waiting_for_artworks'?' 还需要两幅已完成的画作。':result.pendingUpdate?' 新计划等待准备。':result.build?.status==='published'?(r?.stored?' 内容已下载到设备。':' 内容已准备，等待设备联网领取。'):'';
    if(r?.firmwareUpdateRequired)progress+=' 照片模式需要更新至 3.2.5-ritual.2 固件，旧固件暂保留原画面。';
+   shell.deliveryNote.textContent=result.syncConfigured===false?'内容保存到你的账户；设备下发服务接入并绑定后才能同步到画屏。':'设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。';
+   if(result.plan&&result.syncConfigured===false)progress=' 内容已保存；设备下发服务待接入，当前不会发送到画屏。';
    shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+progress;
    shell.report.textContent=r?'设备最近联网：'+new Date(r.lastSeen).toLocaleString('zh-CN')+(r.stale?'（回报较早，设备可能离线）':'')+'；'+(r.renderReport?'最近上屏请求：第 '+(r.renderReport.day+1)+' 天'+(r.answerId?' · '+r.answerId:r.renderReport.action>=0?' · 第 '+(r.renderReport.action+1)+' 条动作':' · 祈福图')+(r.showingPrevious?'（新内容仍在同步）':''):'尚未收到当前内容的上屏回报')+'。实屏效果待验收。':'';
    updateContent(result);schedule(result);
