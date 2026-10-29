@@ -65,3 +65,9 @@ npm test
 接口依据：[DeepSeek](https://api-docs.deepseek.com/api/create-chat-completion/)、[火山方舟 Seedream](https://docs.volcengine.com/docs/ark/seedream-4-0-5-0?lang=zh)。
 
 城市坐标及许可证见 [third_party/NOTICES.md](third_party/NOTICES.md)。中心经度是城市/区县级近似值，不代表具体出生医院经度。
+
+## 画屏自动同步
+
+网站支持从蓝牙设备名取得 12 位设备编号，并由登录账户确认绑定。绑定后，今日画作完成时会检查两日内容；缺少次日画作则自动建立次日映射并单独生成图片。两幅画完成后，外置常驻 Worker 通过 HMAC 保护的内部接口拉取账户计划与私有图片，编译 `RITUAL1` 内容包并发布到 Ark 设备。
+
+EdgeOne 不执行 Python 编译。Worker 运行方式、环境变量和状态边界见 [RITUAL-DEVELOPMENT.md](RITUAL-DEVELOPMENT.md)。页面分别展示计划、发布、设备保存和驱动回报；`displayConfirmed` 只有在真实上屏验收流程完成后才应改变，当前硬件验收仍需单独完成。
