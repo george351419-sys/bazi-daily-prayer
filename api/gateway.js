@@ -49,7 +49,10 @@ export async function handleRequest(req,res,config){
    if(route==='account/photos'&&req.method==='POST')return send(res,201,await uploadPhoto(config,account,body));
    if(route==='account/ritual'&&req.method==='GET')return send(res,200,await ritualStatus(config,account));
    if(route==='account/ritual'&&req.method==='POST')return send(res,200,await configureRitual(config,account,body));
-   if(route==='account/answers'&&req.method==='GET')return send(res,200,{items:searchAnswers(new URL(req.url,'http://localhost').searchParams.get('q')||'')});
+   if(route==='account/answers'&&req.method==='GET'){
+    const query=new URL(req.url,'http://localhost').searchParams.get('q')?.trim();
+    return send(res,200,{items:query?searchAnswers(query):[]});
+   }
    if(route==='account/automation/retry'&&req.method==='POST')return send(res,200,await retryAutomation(config,account,body));
    if(route==='account/automation'&&req.method==='GET')return send(res,200,await automationStatus(config,account));
    if(route==='account/automation'&&req.method==='POST')return send(res,200,await configureAutomation(config,account,body));

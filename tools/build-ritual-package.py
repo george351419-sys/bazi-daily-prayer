@@ -48,7 +48,7 @@ def build(plan,films,answers,font):
  photo=plan.get('contentMode','prayer')=='photo';show_actions=plan.get('showActions',True)
  frames=[]
  for raw in films:
-  if photo and not show_actions:
+  if not show_actions:
    frames.append(raw);continue
   source=portrait(raw);im=Image.new('RGB',(480,720),'white')
   # One continuous scroll frame, with the full deity preserved inside it.
@@ -74,19 +74,22 @@ def build(plan,films,answers,font):
    strips.append(text_bitmap([(a['branch']+'时 · '+a['title'],20),(a['text'],30)],(480,128),font,action=True))
  answer_bits=[text_bitmap([(a['id']+' · 答案之书',18),(a['text'],32)],(480,80),font) for a in answers]
  offset1=64;offset2=offset1+2*FRAME;offset3=offset2+16*STRIP;length=offset3+len(answers)*ANSWER
- header=struct.pack('<8s8I24x',MAGIC,length,start,int(plan['mode']=='test'),len(answers),offset1,offset2,offset3,2 if photo else 1)
- header=bytearray(header);struct.pack_into('<I',header,60,(2|int(not show_actions)) if photo else 0);header[44:60]=hashlib.sha256(json.dumps(plan,sort_keys=True).encode()).digest()[:16]
+ header=struct.pack('<8s8I24x',MAGIC,length,start,int(plan['mode']=='test'),len(answers),offset1,offset2,offset3,2 if photo or not show_actions else 1)
+ header=bytearray(header);struct.pack_into('<I',header,60,(2|int(not show_actions)) if photo or not show_actions else 0);header[44:60]=hashlib.sha256(json.dumps(plan,sort_keys=True).encode()).digest()[:16]
  if plan.get('anchor','first_connection')=='first_connection' and plan['mode']=='test':
   struct.pack_into('<I',header,12,0);struct.pack_into('<I',header,40,1)
  return bytes(header)+b''.join(frames+strips+answer_bits)
 def main():
- p=argparse.ArgumentParser();p.add_argument('--plan',required=True);source=p.add_mutually_exclusive_group(required=True);source.add_argument('--films',nargs=2);source.add_argument('--images',nargs=2);p.add_argument('--answers',required=True);p.add_argument('--font',default='/System/Library/Fonts/Supplemental/Songti.ttc');p.add_argument('--out',required=True);args=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--plan',required=True);source=p.add_mutually_exclusive_group(required=True);source.add_argument('--films',nargs=2);source.add_argument('--images',nargs=2);p.add_argument('--answers',required=True);p.add_argument('--font',default='/System/Library/Fonts/Supplemental/Songti.ttc');p.add_argument('--encoder-root');p.add_argument('--out',required=True);args=p.parse_args()
  plan=json.loads(Path(args.plan).read_text());answers=json.loads(Path(args.answers).read_text());answers=answers.get('answers',answers) if isinstance(answers,dict) else answers
  if args.films:
   films=[Path(f).read_bytes() for f in args.films]
  else:
   import sys
-  sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'FrameFilm/prayer-service'))
+  candidates=[Path(args.encoder_root)] if args.encoder_root else [parent/'FrameFilm/prayer-service' for parent in Path(__file__).resolve().parents]
+  encoder_root=next((candidate for candidate in candidates if (candidate/'prayer_device/core.py').is_file()),None)
+  if encoder_root is None:raise ValueError('FrameFilm prayer-service encoder not found; pass --encoder-root')
+  sys.path.insert(0,str(encoder_root))
   from prayer_device.core import _encoder, profile_screen, ARK_PROFILE
   films=[]
   for f in args.images:

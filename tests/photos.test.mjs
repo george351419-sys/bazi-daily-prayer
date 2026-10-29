@@ -32,11 +32,11 @@ test('photo upload is private, authenticated, bounded and reusable in photo-only
  const raw=await readFile(path.join(env.ACCOUNT_DATA_DIR,'images',account.id,item.id));assert.ok(!raw.includes(jpeg));
  await request('account/logout',{});assert.equal((await request('account/photos',payload)).status,401);
 });
-test('photo mode rejects generated pictures and prayer mode rejects turning actions off',async t=>{
+test('photo mode rejects generated pictures and prayer mode permits hiding actions',async t=>{
  const {env,account}=await context(t),ids=[];
  for(let i=0;i<2;i++){const id=newArtworkId();ids.push(id);await saveArtwork(env,account,{id,userId:account.id,status:'complete',date:'2026-10-29',image:{key:'dummy'},mapping:{title:'祈福画'}});}
  await assert.rejects(configureRitual(env,account,{mode:'test',contentMode:'photo',showActions:true,artworkIds:ids}),e=>e.status===400);
- await assert.rejects(configureRitual(env,account,{mode:'test',contentMode:'prayer',showActions:false,artworkIds:ids}),e=>e.status===400);
+ const result=await configureRitual(env,account,{mode:'test',contentMode:'prayer',showActions:false,artworkIds:ids});assert.equal(result.plan.showActions,false);assert.equal(result.action,null);
  await assert.rejects(configureRitual(env,account,{mode:'test',contentMode:'photo',showActions:'false',artworkIds:ids}),e=>e.status===400);
 });
 test('upload validates JPEG dimensions and structure; the larger body limit is scoped to photos',async t=>{
