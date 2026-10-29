@@ -79,7 +79,8 @@ test('one completed artwork creates one idempotent next-day mapping before image
  const dir=await mkdtemp(path.join(os.tmpdir(),'ritual-next-'));t.after(()=>rm(dir,{recursive:true,force:true}));
  const account={id:'4'.repeat(32)},profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']},c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-next-test-secret-123456',DEEPSEEK_API_KEY:'test-only'};
  await saveProfile(c,account,profile);
- const input=validateInput(profile,'2026-10-29'),id=newArtworkId();
+ const input=validateInput(profile,'2026-10-29'),id=newArtworkId(),oldId=newArtworkId();
+ await saveArtwork(c,account,{id:oldId,userId:account.id,date:'2026-10-28',createdAt:new Date().toISOString(),profileSignature:profileSignature(input),status:'complete',image:{key:'test/'+oldId},mapping:{title:'昨日祈福画'}});
  await saveArtwork(c,account,{id,userId:account.id,date:'2026-10-29',createdAt:new Date().toISOString(),profileSignature:profileSignature(input),status:'complete',image:{key:'test/'+id},mapping:{title:'今日祈福画'}});
  let calls=0;const analyze=async(value,nextInput,calendar)=>{calls++;return makeMapping(nextInput,calendar);},now=Date.parse('2026-10-29T12:00:00+08:00');
  const first=await prepareRitualPair(c,account,{mode:'daily',now,analyze});assert.equal(first.status,'mapped');assert.equal(first.record.date,'2026-10-30');assert.ok(first.jobToken);
