@@ -12,7 +12,7 @@ import {ritualArtworkReady,ritualPublication} from '../lib/ritual.mjs';
 import {publishRitualPackage} from '../lib/ritual-upload.mjs';
 import {ritualWorkerSignature} from '../lib/ritual-worker-bridge.mjs';
 
-const c={...process.env},origin=c.RITUAL_PUBLIC_ORIGIN,exec=promisify(execFile),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const c={...process.env},origin=c.RITUAL_PUBLIC_ORIGIN||c.ARK_PUBLIC_ORIGIN,exec=promisify(execFile),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 if(origin!=='https://playmath.cn'||!c.SESSION_SECRET||typeof c.SESSION_SECRET!=='string'||c.SESSION_SECRET.length<20)throw new Error('Configure RITUAL_PUBLIC_ORIGIN=https://playmath.cn and the production SESSION_SECRET');
 
 async function call(pathname,{method='GET',body}={}){
