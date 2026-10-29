@@ -95,6 +95,7 @@ export function setupRitual({request,fetchImage,getUser}){
    const r=result.deviceReport;
    let progress=result.build?.status==='retrying'?' 更新暂未成功，正在重试；设备保留已下载内容。':result.build?.status==='waiting_for_artworks'?' 还需要两幅已完成的画作。':result.pendingUpdate?' 新计划等待准备。':result.build?.status==='published'?(r?.stored?' 内容已下载到设备。':' 内容已准备，等待设备联网领取。'):'';
    if(r?.firmwareUpdateRequired)progress+=' 照片模式需要更新至 3.2.5-ritual.2 固件，旧固件暂保留原画面。';
+   shell.submit.textContent=result.syncConfigured===false?'保存画屏设置':'保存并同步到画屏';
    shell.deliveryNote.textContent=result.syncConfigured===false?'内容保存到你的账户；设备下发服务接入并绑定后才能同步到画屏。':'设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。';
    if(result.plan&&result.syncConfigured===false)progress=' 内容已保存；设备下发服务待接入，当前不会发送到画屏。';
    shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+progress;
