@@ -107,7 +107,7 @@ export function setupRitual({request,fetchImage,getUser}){
    for(const [index,action] of (day.actions||[]).entries()){
     const item=node('article');item.className='ritual-action-card';if(dayIndex===result.position?.dayIndex&&index===result.position?.actionIndex)item.classList.add('current');
     const hour=Number(action.hour),range=Number.isFinite(hour)?String(hour).padStart(2,'0')+':00–'+String(hour+2).padStart(2,'0')+':00':'';
-    item.append(node('strong',action.branch+'时 · '+range+' · '+action.title),node('p',action.text),node('small',action.detail));section.append(item);
+    item.append(node('strong',action.branch+'时 · '+range+' · '+action.title),node('p',action.text),node('small',String(action.detail||'').replace('当前未确认喜用数字','动作重复次数尚未个性化')));section.append(item);
    }
    list.append(section);
   }
