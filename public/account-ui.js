@@ -1,19 +1,20 @@
-import {setupRitual} from './ritual-ui.js?v=20261029-ritual-pair-v4';
+import {setupRitual} from './ritual-ui.js?v=20261029-ritual-pair-v5';
 import {setupDevices} from './device-ui.js';
 export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUserChange,onOpenArtwork,isBusy}){
- const $=s=>document.querySelector(s),auth=$('#auth-dialog'),panel=$('#account-dialog');let enabled=false,user=null,profile=null,mode='login',afterLogin=null,cursor=null,urls=[],pairedDevice=null;
+ const $=s=>document.querySelector(s),auth=$('#auth-dialog'),panel=$('#account-dialog');let enabled=false,user=null,profile=null,mode='login',afterLogin=null,cursor=null,urls=[],pairedDevice=null,bindingDevice=false;
  const text=(s,v)=>{$(s).textContent=v||'';},visible=(s,v)=>{$(s).hidden=!v;};
  const devices=setupDevices({request,fetchImage,getUser:()=>user}),ritual=setupRitual({request,fetchImage,getUser:()=>user});
  document.querySelector('#ritual-login')?.addEventListener('click',()=>open('login',()=>document.querySelector('#ritual-home').scrollIntoView({behavior:'smooth'})));
- document.addEventListener('prayer:ark-device',event=>{pairedDevice=event.detail?.deviceId?event.detail:null;});
- async function bindPairedDevice(){
+ document.addEventListener('prayer:ark-device',event=>{pairedDevice=event.detail?.deviceId?event.detail:null;if(pairedDevice&&user)void bindPairedDevice(false);});
+ async function bindPairedDevice(manual=true){
   const device=pairedDevice;if(!device?.deviceId)return;
   const state=$('#network-device-state'),button=$('#bind-ark-device');
-  if(!user){open('login',bindPairedDevice);return;}
-  button.disabled=true;state.textContent='正在把这台画屏绑定到当前账户…';
+  if(!user){if(manual)open('login',bindPairedDevice);return;}
+  if(bindingDevice)return;
+  bindingDevice=true;button.disabled=true;state.textContent='已识别画屏，正在自动绑定到当前账户…';
   try{await ritual.bindDevice(device.deviceId);state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';}
   catch(e){state.textContent='绑定暂未完成：'+e.message;}
-  finally{button.disabled=false;}
+  finally{bindingDevice=false;button.disabled=false;}
  }
  document.addEventListener('prayer:ark-bind',bindPairedDevice);
  document.addEventListener('visibilitychange',()=>{if(document.hidden)ritual.pause();else if(user)void ritual.refresh();});
