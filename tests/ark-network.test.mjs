@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ArkNetwork,packet,wifiCredentials,arkDeviceId} from '../public/ark-network.js';
-function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
- const writes=[],listeners=new Map();let online=false,ssid=[];
+function peripheral({status=true,fail=false,wrongSSID=false,busyConnects=0,onWrite=()=>{}}={}){
+ const writes=[],listeners=new Map(),deviceListeners=new Map();let online=false,ssid=[],connectCalls=0;
  const characteristic={addEventListener:(key,fn)=>listeners.set(key,fn),removeEventListener:key=>listeners.delete(key),async startNotifications(){},async writeValue(bytes){
   writes.push([...bytes]);onWrite(bytes);if(fail&&bytes[1]===0x34)throw new Error('write failed');
   if(bytes[1]===0x32)ssid=[...bytes.slice(3,-1)];
@@ -15,8 +15,8 @@ function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
  if(bytes[1]===0x51){const status=packet(0x51,[7,100,0,0,0,0,10,0,0,0,10]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(status.buffer)}});}
  if(bytes[1]===0x57||bytes[1]===0x58){const reply=packet(bytes[1],[0]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  }};
- const device={name:'FRAMEFILMARK-TEST',addEventListener(){},removeEventListener(){},gatt:{connected:false,async connect(){this.connected=true;return {async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};}};},disconnect(){this.connected=false;}}};
- return {writes,device,bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILMARK');return device;}}};
+ const device={name:'FRAMEFILMARK-TEST',addEventListener:(key,fn)=>deviceListeners.set(key,fn),removeEventListener:key=>deviceListeners.delete(key),gatt:{connected:false,async connect(){connectCalls++;if(connectCalls<=busyConnects)throw new DOMException('GATT operation already in progress','NetworkError');this.connected=true;return {async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};}};},disconnect(){this.connected=false;deviceListeners.get('gattserverdisconnected')?.();}}};
+ return {writes,device,get connectCalls(){return connectCalls;},bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILMARK');return device;}}};
 }
 test('Wi-Fi UTF-8 validation rejects truncation, open passwords and control characters',()=>{
  assert.throws(()=>wifiCredentials('中'.repeat(11),'12345678'));
@@ -40,6 +40,10 @@ test('ForFilm protocol preserves UTF-8 credentials and waits for device network 
 test('a connection left by another page is released before reconnecting',async()=>{
  const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,onState:()=>{},delay:async()=>{}});p.device.gatt.connected=true;
  await client.connect();assert.equal(p.device.gatt.connected,true);assert.equal(client.characteristic!==null,true);client.disconnect();
+});
+test('a transient stale GATT operation is retried without choosing the device again',async()=>{
+ const p=peripheral({busyConnects:2}),states=[],delays=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async ms=>delays.push(ms)});
+ await client.connect();assert.equal(p.connectCalls,3);assert.equal(client.characteristic!==null,true);assert.deepEqual(delays.slice(0,2),[250,500]);assert.ok(states.some(s=>s.text==='等待画屏释放旧蓝牙连接…'));client.disconnect();
 });
 test('download progress is read over the existing BLE connection',async()=>{
  const p=peripheral(),downloads=[],client=new ArkNetwork({bluetooth:p.bluetooth,onDownload:s=>downloads.push(s),delay:async()=>{}});
