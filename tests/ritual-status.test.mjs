@@ -31,6 +31,7 @@ test('a newly saved plan never relabels the previous package render report',asyn
  const result=await ritualStatus(c,account,now);
  assert.equal(result.plan.revision,requested.revision);assert.equal(result.artwork.id,ids[1]);assert.equal(result.displaySource,'device_report');assert.equal(result.pendingUpdate,true);assert.equal(result.answer.id,'OB001');assert.match(result.action.text,/^包内动作/);
  assert.equal(result.scheduledPosition.actionIndex,1,'schedule uses the device installation clock');assert.deepEqual(result.plannedDays.map(d=>d.artworkId),ids.slice(2));
+ assert.deepEqual(result.planDays.map(d=>d.artworkId),ids.slice(2),'website preview follows the requested plan, not the old device report');
 });
 test('a previous package remains identifiable while a new package is downloading',async t=>{
  const {c,repo,account,device,ids,cloud}=await setup(t);
@@ -39,6 +40,7 @@ test('a previous package remains identifiable while a new package is downloading
  await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:fresh,sha256:'c'.repeat(64)},previousPublication:{manifest:old,sha256:'d'.repeat(64)}});
  cloud('reports/'+device,{targetSha:'c'.repeat(64),stored:false,renderSha:'d'.repeat(64),lastSeen:new Date().toISOString(),renderReport:{day:0,action:2,answer:-1}});
  const result=await ritualStatus(c,account);assert.equal(result.artwork.id,ids[0]);assert.equal(result.deviceReport.showingPrevious,true);assert.deepEqual(result.plan.artworkIds,ids.slice(2));
+ assert.deepEqual(result.planDays.map(d=>d.artworkId),ids.slice(2));
 });
 test('unknown package reports are ignored, daily preview expires, and pending auto artworks cannot be chosen',async t=>{
  const {c,repo,account,device,ids,cloud}=await setup(t);
@@ -89,4 +91,14 @@ test('one completed artwork creates one idempotent next-day mapping before image
  const second=await prepareRitualPair(c,account,{mode:'daily',now,analyze});assert.equal(second.record.id,first.record.id);assert.equal(calls,1);
  const repo=accountRepository(c),record=await repo.get('artworks/'+account.id+'/'+first.record.id);await saveArtwork(c,account,{...record,status:'complete',image:{key:'test/'+record.id}});
  const ready=await prepareRitualPair(c,account,{mode:'daily',now,analyze});assert.equal(ready.status,'ready');assert.equal(calls,1);assert.deepEqual((await ritualStatus(c,account)).plan.artworkIds,[id,first.record.id]);
+});
+test('a newer image for today replaces the same-date artwork in the existing plan',async t=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'ritual-refresh-today-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const account={id:'5'.repeat(32)},profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']},c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-refresh-test-secret-123456'};
+ await saveProfile(c,account,profile);
+ const input=validateInput(profile,'2026-10-29'),signature=profileSignature(input),oldToday=newArtworkId(),newToday=newArtworkId(),tomorrow=newArtworkId(),mapping={title:'祈福画',primary_element:'火',secondary_element:'木'};
+ for(const [id,date,createdAt] of [[oldToday,'2026-10-29','2026-10-29T01:00:00.000Z'],[tomorrow,'2026-10-30','2026-10-29T02:00:00.000Z'],[newToday,'2026-10-29','2026-10-29T03:00:00.000Z']])await saveArtwork(c,account,{id,userId:account.id,date,createdAt,profileSignature:signature,status:'complete',image:{key:'test/'+id},mapping});
+ await configureRitual(c,account,{mode:'daily',artworkIds:[oldToday,tomorrow]});
+ const ready=await prepareRitualPair(c,account,{mode:'daily',now:Date.parse('2026-10-29T12:00:00+08:00')});
+ assert.equal(ready.status,'ready');assert.deepEqual((await ritualStatus(c,account)).plan.artworkIds,[newToday,tomorrow]);
 });
