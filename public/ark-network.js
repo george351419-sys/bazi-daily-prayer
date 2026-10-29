@@ -89,7 +89,12 @@ export function setupNetwork(){
  const root=document.querySelector('#network-onboarding');if(!root)return;
  const connect=root.querySelector('[data-ble-connect]'),disconnect=root.querySelector('[data-ble-disconnect]'),form=root.querySelector('form'),state=root.querySelector('[role=status]'),send=form.querySelector('button[type=submit]');
  let busy=false;
- const client=new ArkNetwork({bluetooth:navigator.bluetooth,onState:status=>{state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;}});
+ const password=form.elements.wifiPassword;
+ const client=new ArkNetwork({bluetooth:navigator.bluetooth,onState:status=>{
+  state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;
+  password.placeholder=status.connected?'••••••••（密码已保存在画屏）':'输入 Wi-Fi 密码';
+  form.classList.toggle('network-connected',status.connected);
+ }});
  if(!window.isSecureContext||!navigator.bluetooth){
   connect.disabled=true;state.textContent='此浏览器暂不支持蓝牙配网。请用电脑 Chrome / Edge 或 Android Chrome，在 HTTPS 页面打开；iPhone 请先用支持蓝牙的电脑完成配网。';return;
  }

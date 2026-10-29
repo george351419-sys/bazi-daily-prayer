@@ -13,7 +13,8 @@ export function setupRitual({request,fetchImage,getUser}){
  function ensureShell(){
   if(shell)return;
   const title=node('h4','一日祈愿 · 此刻行动'),status=node('p'),report=node('p'),current=node('div');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
-  const settings=node('details');settings.append(node('summary','选择画屏模式 · 上传我的照片'));const form=node('form');form.className='ritual-form';
+  const shortcuts=node('nav');shortcuts.className='ritual-shortcuts';shortcuts.setAttribute('aria-label','画屏功能');
+  const settings=node('details');settings.id='ritual-settings';settings.append(node('summary','选择画屏模式 · 上传我的照片'));const form=node('form');form.className='ritual-form';
   const choicesBox=node('div');choicesBox.className='ritual-choices';form.append(choicesBox);
   const contentLabel=node('label','画屏呈现方式'),contentMode=node('select');contentMode.setAttribute('aria-label','画屏呈现方式');
   for(const [value,text] of [['prayer','祈福图 + 微行动建议'],['photo','自己的照片（微行动可选）']]){const option=node('option',text);option.value=value;contentMode.append(option);}contentLabel.append(contentMode);choicesBox.append(contentLabel);
@@ -53,15 +54,18 @@ export function setupRitual({request,fetchImage,getUser}){
    catch(error){if(alive(life)){status.textContent=error.message;schedule();}}
    finally{if(alive(life)){saving=false;for(const control of form.elements)control.disabled=false;}}
   };
-  const book=node('details');book.append(node('summary','答案之书 · 100 条回答与解读'));const search=node('input');search.type='search';search.maxLength=120;search.placeholder='搜索短句、编号、事业、关系…';search.setAttribute('aria-label','搜索答案之书');
+  const actions=node('section');actions.id='ritual-actions';actions.className='ritual-actions';actions.append(node('h5','八个时辰的微行动与解读'));const actionList=node('div');actionList.className='ritual-action-list';actions.append(actionList);
+  const book=node('details');book.id='ritual-answers';book.append(node('summary','答案之书 · 100 条回答与解读'));const search=node('input');search.type='search';search.maxLength=120;search.placeholder='搜索短句、编号、事业、关系…';search.setAttribute('aria-label','搜索答案之书');
   const count=node('p'),list=node('div');count.setAttribute('role','status');
   function find(){
    if(!answers)return;const q=search.value.normalize('NFKC').trim().toLowerCase(),items=answers.filter(a=>!q||[a.id,a.text,a.theme,a.tendency,a.phone_detail].some(v=>v.toLowerCase().includes(q)));
    const open=new Set([...list.querySelectorAll('details[open]')].map(d=>d.dataset.answer));list.replaceChildren();count.textContent=items.length+' 条回答';
    for(const a of items){const item=node('details');item.dataset.answer=a.id;item.open=open.has(a.id);item.append(node('summary',a.id+' · '+a.text),node('p',a.phone_detail),node('small',a.theme+' · '+a.tendency+' · '+a.review_status));list.append(item);}
   }
-  search.oninput=find;book.append(search,count,list);host.append(title,status,report,current,settings,book);
-  shell={status,report,current,settings,form,deliveryNote,selects,mode,submit,contentMode,showActions,populate,book,search,count,find};
+  search.oninput=find;book.append(search,count,list);
+  for(const [label,target] of [['查看八时辰建议',actions],['搜索答案之书',book],['上传照片 · 选择模式',settings]]){const button=node('button',label);button.type='button';button.className='secondary';button.onclick=()=>{if(target.tagName==='DETAILS')target.open=true;target.scrollIntoView({behavior:'smooth',block:'start'});if(target===book)search.focus();};shortcuts.append(button);}
+  host.append(title,status,report,shortcuts,current,actions,book,settings);
+  shell={status,report,current,settings,form,deliveryNote,selects,mode,submit,contentMode,showActions,populate,book,search,count,find,actionList};
  }
  function updateSettings(result){
   if(dirty||saving)return;
@@ -87,6 +91,20 @@ export function setupRitual({request,fetchImage,getUser}){
    if(!alive(life)||!image.isConnected){URL.revokeObjectURL(next);return;}if(url)URL.revokeObjectURL(url);url=next;imagePath=path;image.src=next;
   }).catch(()=>{if(alive(life)&&image.isConnected){image.alt='画作预览暂不可用';renderedKey=null;}});}
  }
+ function updateActions(result){
+  const list=shell.actionList;list.replaceChildren();
+  const days=result.days?.length?result.days:[{title:'通用参考',actions:result.actionGuide||[]}];
+  if(!days[0].actions?.length){list.append(node('p','微行动建议正在准备中。'));return;}
+  for(const [dayIndex,day] of days.entries()){
+   const section=node('section');section.className='ritual-action-day';section.append(node('h6','第 '+(dayIndex+1)+' 天 · '+day.title));
+   for(const [index,action] of (day.actions||[]).entries()){
+    const item=node('article');item.className='ritual-action-card';if(dayIndex===result.position?.dayIndex&&index===result.position?.actionIndex)item.classList.add('current');
+    const hour=Number(action.hour),range=Number.isFinite(hour)?String(hour).padStart(2,'0')+':00–'+String(hour+2).padStart(2,'0')+':00':'';
+    item.append(node('strong',action.branch+'时 · '+range+' · '+action.title),node('p',action.text),node('small',action.detail));section.append(item);
+   }
+   list.append(section);
+  }
+ }
  async function refresh(){
   if(saving||uploading)return;active=true;const turn=++epoch,life=lifecycle;clearTimeout(timer);if(!getUser()){reset();return;}
   ensureShell();host.hidden=false;
@@ -100,7 +118,7 @@ export function setupRitual({request,fetchImage,getUser}){
    if(result.plan&&result.syncConfigured===false)progress=' 内容已保存；设备下发服务待接入，当前不会发送到画屏。';
    shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+progress;
    shell.report.textContent=r?'设备最近联网：'+new Date(r.lastSeen).toLocaleString('zh-CN')+(r.stale?'（回报较早，设备可能离线）':'')+'；'+(r.renderReport?'最近上屏请求：第 '+(r.renderReport.day+1)+' 天'+(r.answerId?' · '+r.answerId:r.renderReport.action>=0?' · 第 '+(r.renderReport.action+1)+' 条动作':' · 祈福图')+(r.showingPrevious?'（新内容仍在同步）':''):'尚未收到当前内容的上屏回报')+'。实屏效果待验收。':'';
-   updateContent(result);schedule(result);
+   updateContent(result);updateActions(result);schedule(result);
    if(!artworks){const page=await request('/api/account/artworks');if(turn!==epoch||!alive(life))return;artworks=page.items;cursor=page.cursor||null;}
    updateSettings(result);
    if(!answers){const page=await request('/api/account/answers');if(turn!==epoch||!alive(life))return;answers=page.items;shell.find();}
