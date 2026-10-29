@@ -66,3 +66,8 @@ test('首次模型请求超时后仍保留后续重试预算',async()=>{
  });
  assert.equal(calls,2);assert.equal(result.title,mapping.title);
 });
+test('首轮提示词直接约束主色、五行辅色与中性审美色角色',async()=>{
+ const mapping=makeMapping(input,calendar);let system='';
+ await analyzeMapping({DEEPSEEK_API_KEY:'test-only'},input,calendar,[],async(url,init)=>{system=JSON.parse(init.body).messages[0].content;return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(mapping)}}]});});
+ assert.match(system,/恰好一种颜色标为“主色”/);assert.match(system,/element只能是primary_element或secondary_element/);assert.match(system,/element="中性"、role="点缀"/);
+});
