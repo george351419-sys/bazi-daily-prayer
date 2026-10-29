@@ -45,3 +45,15 @@ test('审美辅色标错五行时，重试会要求改为中性点缀而不是�
  });
  assert.equal(calls,2);assert.equal(result.colors.some(color=>color.name==='土黄'),false);
 });
+test('连续出现不同校验错误时，后续修复指令保留所有定向要求',async()=>{
+ let calls=0;const mapping=makeMapping(input,calendar);
+ const result=await analyzeMapping({DEEPSEEK_API_KEY:'test-only',ANALYSIS_BUDGET_MS:108000},input,calendar,[],async(url,init)=>{
+  calls++;const request=JSON.parse(JSON.parse(init.body).messages[1].content);
+  if(calls===3){assert.match(request.instruction,/element="中性" 且 role="点缀"/);assert.match(request.instruction,/单独重写 rationale\.zodiac/);}
+  const raw=structuredClone(mapping);
+  if(calls===1){raw.colors.push({name:'土黄',hex:'#D7B56D'});raw.rationale.colors.push({name:'土黄',element:'土',role:'辅色',reason:'用于台座层次。',effect:'稳定画面。'});}
+  if(calls===2)raw.rationale.zodiac.reason_if_empty='本次以天干珠玉意象回应地支层的冲害，不另加生肖。';
+  return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(raw)}}]});
+ });
+ assert.equal(calls,3);assert.equal(result.title,mapping.title);
+});
