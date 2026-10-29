@@ -38,7 +38,7 @@ test('审美辅色标错五行时，重试会要求改为中性点缀而不是�
  let calls=0;const mapping=makeMapping(input,calendar);
  const result=await analyzeMapping({DEEPSEEK_API_KEY:'test-only'},input,calendar,[],async(url,init)=>{
   calls++;const request=JSON.parse(JSON.parse(init.body).messages[1].content);
-  if(calls===2)assert.match(request.instruction,/element="中性" 且 role="点缀"/);
+  if(calls===2){assert.match(request.instruction,/element="中性" 且 role="点缀"/);assert.ok(request.repair_hints.some(hint=>hint.includes('此前把“土黄”')));}
   const raw=structuredClone(mapping);
   if(calls===1){raw.colors.push({name:'土黄',hex:'#D7B56D'});raw.rationale.colors.push({name:'土黄',element:'土',role:'辅色',reason:'用于台座层次。',effect:'稳定画面。'});}
   return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(raw)}}]});
