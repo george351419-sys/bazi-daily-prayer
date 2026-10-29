@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ArkNetwork,packet,wifiCredentials} from '../public/ark-network.js';
+import {ArkNetwork,packet,wifiCredentials,arkDeviceId} from '../public/ark-network.js';
 function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
  const writes=[],listeners=new Map();let online=false,ssid=[];
  const characteristic={addEventListener:(key,fn)=>listeners.set(key,fn),removeEventListener:key=>listeners.delete(key),async startNotifications(){},async writeValue(bytes){
@@ -17,6 +17,11 @@ test('Wi-Fi UTF-8 validation rejects truncation, open passwords and control char
  assert.throws(()=>wifiCredentials('中'.repeat(11),'12345678'));
  assert.throws(()=>wifiCredentials('home',''));assert.throws(()=>wifiCredentials('home','1234567\0'));
  assert.equal(new TextDecoder().decode(wifiCredentials('家里的网','password').name),'家里的网');
+});
+test('binding identity comes only from the normalized Ark BLE name',()=>{
+ assert.equal(arkDeviceId('FRAMEFILMARK-F0F5BD7562F4'),'f0f5bd7562f4');
+ assert.equal(arkDeviceId('FRAMEFILMARK-TEST'),null);
+ assert.equal(arkDeviceId('OTHER-F0F5BD7562F4'),null);
 });
 test('ForFilm protocol preserves UTF-8 credentials and waits for device network confirmation',async()=>{
  const p=peripheral(),states=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async()=>{}});

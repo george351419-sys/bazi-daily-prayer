@@ -130,3 +130,19 @@ python3 daily-prayer-web/scripts/build-ritual-firmware.py
 验证：107项Node测试；照片API认证/CSRF/跨账户/大小/模式约束；真实JPEG和PNG浏览器文件选择上传、两种模式互切、微行动开关；祈福、照片+行动、纯照片三个内容包经真实C合成器与Python参考像素比较。新增照片包签名发布/设备心跳下载集成测试，无真实网络或模型调用。固件已完整ESP-IDF构建、镜像校验，输出 frame_film_ark-3.2.5-ritual.2.bin，1931744字节，OTA剩余13856字节；尚未刷机或实屏验收。
 
 浏览器额外核验：上传带人工测试EXIF描述的JPEG后，通过本机账户API读取持久化结果，原EXIF描述与Exif标记均已移除。手机320px视口验证不水平溢出。
+
+## 2026-10-29 自动绑定与远端 Worker 接线
+
+- 蓝牙连接成功后会从 `FRAMEFILMARK-<12位MAC>` 读取设备编号，用户确认后写入自己的加密账户存储。绑定索引保证同一画屏只能属于一个账户；旧 `RITUAL_DEVICE_LINKS` 继续兼容。
+- 今日祈福画完成后，只有账户已绑定画屏才会检查两天内容。只有一幅时，网站为次日建立独立映射，再单独请求次日图片并自动保存两日计划；同一日期使用确定性记录标识，重复点击不会重复调用文案模型。
+- EdgeOne 继续只运行短函数。设置 `RITUAL_WORKER_REMOTE=1` 后，网站提供使用生产 `SESSION_SECRET` 派生 HMAC 的内部接口。常驻 Worker 拉取账户计划、私有图片并回写发布状态，不拿到 EdgeOne Blob 凭据。
+- 远端 Worker 运行环境需要 `RITUAL_PUBLIC_ORIGIN=https://playmath.cn`、同一个稳定 `SESSION_SECRET`、Python 3.11+、Pillow 和中文字体：
+
+```sh
+cp .env.example .env.local
+# 填入生产 SESSION_SECRET，并设置 RITUAL_WORKER_REMOTE=1
+PRAYER_TEST_PYTHON=/opt/homebrew/bin/python3 npm run worker:ritual:remote
+```
+
+- HMAC 只用于内部 Worker 接口，不接受浏览器 Cookie；请求最多有效五分钟，并绑定方法、路径、正文摘要和有效期。`npm run worker:ritual:remote -- --once` 可用于单次诊断。
+- 页面状态严格分开：计划已保存、内容包已发布、设备已保存、驱动已回报上屏。即使收到驱动返回，`displayConfirmed` 仍为 `false`，页面不会把驱动调用改写成实屏验收。

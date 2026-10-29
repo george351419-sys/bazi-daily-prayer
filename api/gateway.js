@@ -1,6 +1,9 @@
 import {allowedMiniProgram} from '../lib/miniprogram-access.mjs';
 import {uploadPhoto} from '../lib/photos.mjs';
 import {ritualStatus,configureRitual,searchAnswers} from '../lib/ritual.mjs';
+import {bindRitualDevice,unbindRitualDevice} from '../lib/ritual-device.mjs';
+import {prepareRitualPair} from '../lib/ritual-pair.mjs';
+import {handleRitualWorkerRequest} from '../lib/ritual-worker-bridge.mjs';
 import {findReusableImage,reuseArchivedImage,indexArtworkImage} from '../lib/image-reuse.mjs';
 import {automationStatus,configureAutomation,saveProfileSafely,retryAutomation} from '../lib/automation.mjs';
 import {randomBytes,createHash} from 'node:crypto';
@@ -26,6 +29,14 @@ export async function handleRequest(req,res,config){
  res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Session-Token, X-CSRF-Token');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.method==='OPTIONS')return res.status(204).end();
  const route=String(req.query.route||new URL(req.url,'http://localhost').pathname.replace(/^\/api\//,'')).replace(/^\//,'');
+  if(route.startsWith('internal/ritual-worker/')){
+   try{
+    const pathname=new URL(req.url,'http://localhost').pathname;
+    const result=await handleRitualWorkerRequest(config,{method:req.method,path:pathname,headers:req.headers,body:req.body});
+    if(result.bytes){res.setHeader('Content-Type',result.contentType||'application/octet-stream');return res.status(200).end(result.bytes);}
+    return send(res,200,result);
+   }catch(error){return send(res,error instanceof AccountError?error.status:503,{error:error instanceof AccountError?error.message:'内部 Worker 服务暂时不可用。'});}
+  }
  let session=verifySession(config,req.headers['x-session-token']);
  try{
   if(route==='bootstrap'&&req.method==='GET'){
@@ -49,6 +60,12 @@ export async function handleRequest(req,res,config){
    if(route==='account/photos'&&req.method==='POST')return send(res,201,await uploadPhoto(config,account,body));
    if(route==='account/ritual'&&req.method==='GET')return send(res,200,await ritualStatus(config,account));
    if(route==='account/ritual'&&req.method==='POST')return send(res,200,await configureRitual(config,account,body));
+   if(route==='account/ritual/device'&&req.method==='POST'){const result=await bindRitualDevice(config,account,body.deviceId);return send(res,200,{ok:true,device:{id:result.binding.deviceId,status:result.binding.status},ritual:await ritualStatus(config,account)});}
+   if(route==='account/ritual/device/unbind'&&req.method==='POST')return send(res,200,{...await unbindRitualDevice(config,account),ritual:await ritualStatus(config,account)});
+   if(route==='account/ritual/prepare'&&req.method==='POST'){
+    const prepared=await prepareRitualPair(config,account,{mode:body.mode});
+    return send(res,200,{status:prepared.status,artworkIds:prepared.artworkIds||null,job:prepared.record?accountJob(config,account,prepared.record):null});
+   }
    if(route==='account/answers'&&req.method==='GET'){
     const query=new URL(req.url,'http://localhost').searchParams.get('q')?.trim();
     return send(res,200,{items:query?searchAnswers(query):[]});

@@ -1,10 +1,21 @@
-import {setupRitual} from './ritual-ui.js?v=20261029-ritual-choice-v4';
+import {setupRitual} from './ritual-ui.js?v=20261029-ritual-pair-v1';
 import {setupDevices} from './device-ui.js';
 export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUserChange,onOpenArtwork,isBusy}){
- const $=s=>document.querySelector(s),auth=$('#auth-dialog'),panel=$('#account-dialog');let enabled=false,user=null,profile=null,mode='login',afterLogin=null,cursor=null,urls=[];
+ const $=s=>document.querySelector(s),auth=$('#auth-dialog'),panel=$('#account-dialog');let enabled=false,user=null,profile=null,mode='login',afterLogin=null,cursor=null,urls=[],pairedDevice=null;
  const text=(s,v)=>{$(s).textContent=v||'';},visible=(s,v)=>{$(s).hidden=!v;};
  const devices=setupDevices({request,fetchImage,getUser:()=>user}),ritual=setupRitual({request,fetchImage,getUser:()=>user});
  document.querySelector('#ritual-login')?.addEventListener('click',()=>open('login',()=>document.querySelector('#ritual-home').scrollIntoView({behavior:'smooth'})));
+ document.addEventListener('prayer:ark-device',event=>{pairedDevice=event.detail?.deviceId?event.detail:null;});
+ async function bindPairedDevice(){
+  const device=pairedDevice;if(!device?.deviceId)return;
+  const state=$('#network-device-state'),button=$('#bind-ark-device');
+  if(!user){open('login',bindPairedDevice);return;}
+  button.disabled=true;state.textContent='正在把这台画屏绑定到当前账户…';
+  try{await ritual.bindDevice(device.deviceId);state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';}
+  catch(e){state.textContent='绑定暂未完成：'+e.message;}
+  finally{button.disabled=false;}
+ }
+ document.addEventListener('prayer:ark-bind',bindPairedDevice);
  document.addEventListener('visibilitychange',()=>{if(document.hidden)ritual.pause();else if(user)void ritual.refresh();});
  const crossOrigin=()=>new URL(apiURL('/api/bootstrap')).origin!==location.origin;
  function setMode(next){mode=next;$('#auth-form').reset();visible('#auth-error',false);text('#auth-title',next==='register'?'留一份属于你的祈福记录':next==='recover'?'使用恢复码找回账户':'欢迎回到生辰造像馆');visible('#auth-nickname-field',next==='register');visible('#auth-recovery-field',next==='recover');$('#auth-nickname').required=next==='register';$('#auth-recovery').required=next==='recover';$('#auth-password').autocomplete=next==='login'?'current-password':'new-password';text('#auth-password-label',next==='recover'?'新密码':'密码');text('#auth-submit',next==='register'?'注册并建立我的账户':next==='recover'?'重设密码并登录':'登录我的账户');for(const tab of document.querySelectorAll('[data-auth-mode]')){tab.classList.toggle('active',tab.dataset.authMode===next);tab.setAttribute('aria-selected',String(tab.dataset.authMode===next));}}
@@ -23,5 +34,5 @@ export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUs
  async function gallery(more=false){text('#gallery-state','正在载入你的祈福画册…');$('#gallery-more').disabled=true;try{const data=await request('/api/account/artworks'+(more&&cursor?'?cursor='+encodeURIComponent(cursor):''));if(!more){for(const url of urls)URL.revokeObjectURL(url);urls=[];$('#artwork-grid').replaceChildren();}cursor=data.cursor;for(const record of data.items){const card=document.createElement('button');card.type='button';card.className='artwork-card';const visual=document.createElement('div');visual.className='artwork-thumb';visual.textContent=record.image?'正在载入…':'✧ 解读已保存';const title=document.createElement('strong');title.textContent=record.title;const meta=document.createElement('small');meta.textContent=record.date+' · '+record.wishLabel;const label=document.createElement('span');label.textContent=record.status==='complete'?'查看画作与解读 ↗':'查看解读 · 继续绘制 ↗';card.append(visual,meta,title,label);card.onclick=async()=>{if(isBusy())return;card.disabled=true;try{const job=await request('/api/account/artworks/'+record.id);panel.close();await onOpenArtwork({...job,source:record.source||job.source});}catch(e){text('#gallery-state',e.message);}finally{card.disabled=false;}};$('#artwork-grid').append(card);if(record.image)void fetchImage(record.image).then(url=>{if(!card.isConnected){URL.revokeObjectURL(url);return;}urls.push(url);const image=document.createElement('img');image.src=url;image.alt=record.title;image.loading='lazy';visual.replaceChildren(image);}).catch(()=>{visual.textContent='点击查看画作';});}text('#gallery-state',$('#artwork-grid').children.length?'画作与解读仅在你的账户中可见。':'还没有作品。填好资料，让第一份心愿在这里留下来。');visible('#gallery-more',!!cursor);}catch(e){text('#gallery-state',e.message);}finally{$('#gallery-more').disabled=false;}}
  async function openPanel(){paint();if(!panel.open)panel.showModal();await Promise.all([gallery(),devices.refresh(),ritual.refresh()]);}
  $('#gallery-more').onclick=()=>gallery(true);
- return {get user(){return user;},get enabled(){return enabled;},async initialize(bootstrap){devices.initialize(bootstrap);enabled=!!bootstrap.accounts?.enabled;visible('#account-open',enabled);paint();if(!enabled)return;try{await accept(await request('/api/account/me'));}catch(e){text('#profile-state',e.message);}},require(callback){if(user)return true;open('register',callback);return false;},refresh(){if(panel.open)void gallery();if(user)void ritual.refresh();}};
+ return {get user(){return user;},get enabled(){return enabled;},async initialize(bootstrap){devices.initialize(bootstrap);enabled=!!bootstrap.accounts?.enabled;visible('#account-open',enabled);paint();if(!enabled)return;try{await accept(await request('/api/account/me'));}catch(e){text('#profile-state',e.message);}},require(callback){if(user)return true;open('register',callback);return false;},refresh(){if(panel.open)void gallery();if(user)void ritual.refresh();},ensureRitualReady(){if(user)return ritual.prepare();return Promise.resolve(false);}};
 }

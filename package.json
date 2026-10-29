@@ -12,7 +12,8 @@
     "demo:devices": "node scripts/start-device-demo.mjs",
     "worker:daily": "node --env-file-if-exists=.env.local scripts/run-daily-worker.mjs",
     "test:daily:integration": "node scripts/check-daily-loop.mjs",
-    "worker:ritual": "node --env-file-if-exists=.env.local scripts/run-ritual-worker.mjs"
+    "worker:ritual": "node --env-file-if-exists=.env.local scripts/run-ritual-worker.mjs",
+    "worker:ritual:remote": "node --env-file-if-exists=.env.local scripts/run-ritual-worker-remote.mjs"
   },
   "dependencies": {
     "@edgeone/pages-blob": "^0.0.18",

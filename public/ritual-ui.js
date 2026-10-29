@@ -5,9 +5,9 @@ export function setupRitual({request,fetchImage,getUser}){
  const destination=document.querySelector('#ritual-home-content');
  if(destination)destination.append(host);else document.querySelector('#artwork-grid').before(host);
  const node=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
- let active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,dirty=false,saving=false,uploading=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null;
+ let active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null;
  function pause(){active=false;epoch++;clearTimeout(timer);timer=null;}
- function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;cursor=null;dirty=false;saving=false;uploading=false;failures=0;shell=null;renderedKey=null;host.replaceChildren();host.hidden=true;}
+ function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell=null;renderedKey=null;host.replaceChildren();host.hidden=true;}
  function alive(life){return life===lifecycle&&!!getUser();}
  function schedule(result){if(!active)return;clearTimeout(timer);const next=Date.parse(result?.scheduledPosition?.nextAt||result?.position?.nextAt);timer=setTimeout(refresh,Number.isFinite(next)?Math.max(1000,Math.min(30000,next-Date.now()+200)):30000);}
  function ensureShell(){
@@ -118,7 +118,7 @@ export function setupRitual({request,fetchImage,getUser}){
   try{
    const result=await request('/api/account/ritual');if(turn!==epoch||!alive(life))return;failures=0;
    const r=result.deviceReport;
-   let progress=result.build?.status==='retrying'?' 更新暂未成功，正在重试；设备保留已下载内容。':result.build?.status==='waiting_for_artworks'?' 还需要两幅已完成的画作。':result.pendingUpdate?' 新计划等待准备。':result.build?.status==='published'?(r?.stored?' 内容已下载到设备。':' 内容已准备，等待设备联网领取。'):'';
+   let progress=result.build?.status==='retrying'?' 更新暂未成功，正在重试；设备保留已下载内容。':result.build?.status==='waiting_for_artworks'?' 还需要两幅已完成的画作。':result.pendingUpdate?' 新计划等待准备。':result.build?.status==='published'?(r?.renderReport?' 设备驱动已回报上屏请求；实屏仍需验收。':r?.stored?' 内容已保存到画屏，尚未收到上屏回报。':' 内容已准备，等待设备联网领取。'):'';
    if(r?.firmwareUpdateRequired)progress+=' 照片模式需要更新至 3.2.5-ritual.2 固件，旧固件暂保留原画面。';
    shell.submit.textContent=result.syncConfigured===false?'保存画屏设置':'保存并同步到画屏';
    shell.deliveryNote.textContent=result.syncConfigured===false?'内容保存到你的账户；设备下发服务接入并绑定后才能同步到画屏。':'设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。';
@@ -130,5 +130,30 @@ export function setupRitual({request,fetchImage,getUser}){
    updateSettings(result);
   }catch(error){if(turn===epoch&&alive(life)){shell.status.textContent=error.message;timer=setTimeout(refresh,Math.min(60000,5000*2**Math.min(failures++,4)));}}
  }
- return {refresh,reset,pause};
+ async function prepare(){
+  if(preparing||!getUser())return false;
+  let status;try{status=await request('/api/account/ritual');}catch{return false;}
+  if(!status.syncConfigured)return false;
+  ensureShell();host.hidden=false;preparing=true;shell.status.textContent='正在检查两日画作；缺少次日画作时会为你补齐。';
+  try{
+   let prepared=await request('/api/account/ritual/prepare',{mode:shell.mode.value||status.plan?.mode||'daily'});
+   if(prepared.job){
+    shell.status.textContent='次日祈福画正在绘制，完成后会编译并下发两天内容。';
+    await request('/api/jobs/'+prepared.job.id+'/image',{jobToken:prepared.job.token});
+    prepared=await request('/api/account/ritual/prepare',{mode:shell.mode.value||status.plan?.mode||'daily'});
+   }
+   await refresh();
+   shell.status.textContent='两日祈福内容已提交后台；设备联网领取并回报后才能显示设备实际画面。';
+   return true;
+  }catch(error){if(shell)shell.status.textContent='两日内容准备暂未完成：'+error.message;return false;}
+  finally{preparing=false;}
+ }
+ async function bindDevice(deviceId){
+  if(!getUser())return {needsLogin:true};
+  const result=await request('/api/account/ritual/device',{deviceId});
+  await refresh();
+  await prepare();
+  return result;
+ }
+ return {refresh,reset,pause,prepare,bindDevice};
 }

@@ -11,11 +11,13 @@ import {accountRepository,accountsEnabled} from '../lib/account-store.mjs';
 import {getArtwork,privateImage} from '../lib/accounts.mjs';
 import {configureRitual,ritualArtworkReady,ritualPublication} from '../lib/ritual.mjs';
 import {actionPlans,answers} from '../content/ritual-content.mjs';
-import {publishRitualPackage,ritualDeviceLinks} from '../lib/ritual-upload.mjs';
-const c={...process.env},links=ritualDeviceLinks(c),repo=accountRepository(c),exec=promisify(execFile),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-if(!accountsEnabled(c)||!Object.keys(links).length)throw new Error('Configure ACCOUNT_STORAGE and RITUAL_DEVICE_LINKS in private server environment');
+import {publishRitualPackage} from '../lib/ritual-upload.mjs';
+import {listRitualDeviceLinks} from '../lib/ritual-device.mjs';
+const c={...process.env},repo=accountRepository(c),exec=promisify(execFile),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+if(!accountsEnabled(c))throw new Error('Configure ACCOUNT_STORAGE in the private worker environment');
 let stop=false;const abort=new AbortController();for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{stop=true;abort.abort();});
 do{
+ const links=await listRitualDeviceLinks(c);
  for(const [id,mac] of Object.entries(links)){
   let tmp,plan;try{
    plan=await repo.get('ritual/'+id);

@@ -14,9 +14,13 @@ export function wifiCredentials(ssid,password){
  if(secret.length<8||secret.length>63||/[\x00-\x1f\x7f]/.test(password))throw new Error('当前画屏支持 8–63 个 UTF-8 字节的 Wi-Fi 密码。');
  return {name,secret};
 }
+export function arkDeviceId(name){
+ const match=/^FRAMEFILMARK-([a-f0-9]{12})$/i.exec(String(name||'').trim());
+ return match?match[1].toLowerCase():null;
+}
 export class ArkNetwork {
  constructor({bluetooth,onState=()=>{},delay=sleep,timeout=30000}={}){this.bluetooth=bluetooth;this.onState=onState;this.delay=delay;this.timeout=timeout;this.epoch=0;}
- state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic});}
+ state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic,deviceName:this.device?.name||null,deviceId:this.deviceId||null});}
  async connect(){
   this.disconnect();const epoch=this.epoch;this.state('请选择名称以 FRAMEFILMARK 开头的画屏…');
   let device;
@@ -24,7 +28,7 @@ export class ArkNetwork {
    // Must remain directly in the click handler before any await (Web Bluetooth gesture).
    device=await this.bluetooth.requestDevice({filters:[{namePrefix:'FRAMEFILMARK'}],optionalServices:[SERVICE]});
    if(epoch!==this.epoch)return;
-   this.device=device;device.addEventListener('gattserverdisconnected',this.lost=()=>{if(epoch===this.epoch)this.disconnect('蓝牙已断开。画屏休眠时会断开，可唤醒后重新连接。');});
+   this.device=device;this.deviceId=arkDeviceId(device.name);device.addEventListener('gattserverdisconnected',this.lost=()=>{if(epoch===this.epoch)this.disconnect('蓝牙已断开。画屏休眠时会断开，可唤醒后重新连接。');});
    const server=await device.gatt.connect(),service=await server.getPrimaryService(SERVICE),characteristic=await service.getCharacteristic(CHARACTERISTIC);
    if(epoch!==this.epoch){device.gatt.disconnect();return;}
    this.characteristic=characteristic;this.listener=event=>{if(epoch===this.epoch&&this.characteristic===characteristic)this.receive(new Uint8Array(event.target.value.buffer,event.target.value.byteOffset,event.target.value.byteLength));};
@@ -82,16 +86,29 @@ export class ArkNetwork {
   if(this.ssidRead){this.ssidRead.reject(new Error('蓝牙已断开'));this.ssidRead=null;}
   if(this.characteristic&&this.listener)this.characteristic.removeEventListener('characteristicvaluechanged',this.listener);
   if(this.device){this.device.removeEventListener('gattserverdisconnected',this.lost);if(this.device.gatt.connected)this.device.gatt.disconnect();}
-  this.characteristic=null;this.device=null;this.state(message);
+  this.characteristic=null;this.device=null;this.deviceId=null;this.state(message);
  }
 }
 export function setupNetwork(){
  const root=document.querySelector('#network-onboarding');if(!root)return;
  const connect=root.querySelector('[data-ble-connect]'),disconnect=root.querySelector('[data-ble-disconnect]'),form=root.querySelector('form'),state=root.querySelector('[role=status]'),send=form.querySelector('button[type=submit]');
- let busy=false;
+ let binding=root.querySelector('#network-device-binding'),bind=root.querySelector('#bind-ark-device'),bindingState=root.querySelector('#network-device-state');
+ if(!binding){
+  binding=document.createElement('div');binding.id='network-device-binding';binding.className='network-device-binding';binding.hidden=true;
+  bindingState=document.createElement('p');bindingState.id='network-device-state';bindingState.setAttribute('role','status');
+  bind=document.createElement('button');bind.type='button';bind.id='bind-ark-device';bind.className='secondary';bind.textContent='绑定到当前账户并准备画屏';
+  const note=document.createElement('small');note.textContent='绑定后会检查今日与次日两幅祈福画；缺少次日画作时会自动补齐。网页只有收到设备上屏回报后才会展示设备实际画面。';
+  binding.append(bindingState,bind,note);state.after(binding);
+ }
+ let busy=false,connectedDevice=null;
  const password=form.elements.wifiPassword;
  const client=new ArkNetwork({bluetooth:navigator.bluetooth,onState:status=>{
   state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;
+  connectedDevice=status.deviceId?{deviceId:status.deviceId,deviceName:status.deviceName}:null;
+  binding.hidden=!status.deviceId;bind.disabled=!status.deviceId;
+  if(status.deviceId)bindingState.textContent='当前画屏：'+status.deviceName+' · 设备编号 '+status.deviceId;
+  else if(status.paired)bindingState.textContent='这台画屏的名称中没有可用的设备编号，暂时无法绑定。';
+  window.dispatchEvent(new CustomEvent('prayer:ark-device',{detail:connectedDevice}));
   password.placeholder=status.connected?'••••••••（密码已保存在画屏）':'输入 Wi-Fi 密码';
   form.classList.toggle('network-connected',status.connected);
  }});
@@ -100,6 +117,7 @@ export function setupNetwork(){
  }
  connect.onclick=async()=>{connect.disabled=true;try{await client.connect();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':e.message;}finally{connect.disabled=false;}};
  disconnect.onclick=()=>client.disconnect();
+ bind.onclick=()=>window.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
  form.onsubmit=async event=>{event.preventDefault();busy=true;send.disabled=true;connect.disabled=true;
   for(const control of form.elements)control.disabled=true;
   try{await client.configure(form.elements.ssid.value,form.elements.wifiPassword.value);}catch(e){state.textContent=e.message;}

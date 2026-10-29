@@ -14,6 +14,9 @@ for(const [file,relative] of [['bootstrap.js','../../.edgeone-build/handler.mjs'
 for(const file of ['photos','ritual','answers','register','login','recover','logout','me','profile','artworks','devices','automation'])await writeFile('cloud-functions/api/account/'+file+'.js',`import handler from '../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
 await writeFile('cloud-functions/api/account/artworks/[id].js',`import handler from '../../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
 await writeFile('cloud-functions/api/account/artworks/[id]/image.js',`import handler from '../../../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
+await mkdir('cloud-functions/api/account/ritual/device',{recursive:true});
+for(const file of ['device','prepare'])await writeFile('cloud-functions/api/account/ritual/'+file+'.js',`import handler from '../../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
+await writeFile('cloud-functions/api/account/ritual/device/unbind.js',`import handler from '../../../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
 for(const file of ['claim','[id]/artwork','[id]/unbind','[id]/preview']){const relative=file.includes('/')?'../../../../../.edgeone-build/handler.mjs':'../../../../.edgeone-build/handler.mjs';await writeFile('cloud-functions/api/account/devices/'+file+'.js',`import handler from '${relative}';\nexport default async function onRequest(context){return handler(context); }\n`);}
 await import('./build-static.mjs');
 await writeFile('dist/backend-config.js',"window.PRAYER_API_BASE = '';\nwindow.PRAYER_API_MODE = 'same-origin';\n");
