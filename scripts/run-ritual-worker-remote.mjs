@@ -64,7 +64,7 @@ async function processAccount(accountId,deviceId){
  }catch(error){
   const failures=prior?.attemptedRevision===(plan?.revision||plan?.updatedAt)?(prior.failures||0)+1:1;
   await saveBuild(accountId,{...prior,status:'retrying',failures,attemptedRevision:plan?.revision||plan?.updatedAt,lastAttempt:new Date().toISOString(),nextAttemptAt:new Date(Date.now()+Math.min(900000,15000*2**Math.min(failures-1,6))).toISOString(),note:'Content compiler or device publisher unavailable; previous device cache retained'}).catch(()=>{});
-  console.error('Ritual remote compilation deferred; retrying later.');
+  console.error('Ritual remote compilation deferred: '+(error?.message||String(error)));
  }finally{if(tmp)await rm(tmp,{recursive:true,force:true});}
 }
 
@@ -73,7 +73,7 @@ do{
  try{
   const {links}=await (await call('/api/internal/ritual-worker/links')).json();
   for(const [accountId,deviceId] of Object.entries(links))await processAccount(accountId,deviceId);
- }catch{console.error('Ritual worker bridge unavailable; retrying later.');}
+ }catch(error){console.error('Ritual worker bridge unavailable: '+(error?.message||String(error)));}
  if(stop||process.argv.includes('--once'))break;
  try{await delay(15000,undefined,{signal:abort.signal});}catch{}
 }while(!stop);
