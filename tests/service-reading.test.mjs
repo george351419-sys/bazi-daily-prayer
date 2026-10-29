@@ -71,3 +71,13 @@ test('首轮提示词直接约束主色、五行辅色与中性审美色角色',
  await analyzeMapping({DEEPSEEK_API_KEY:'test-only'},input,calendar,[],async(url,init)=>{system=JSON.parse(init.body).messages[0].content;return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(mapping)}}]});});
  assert.match(system,/恰好一种颜色标为“主色”/);assert.match(system,/element只能是primary_element或secondary_element/);assert.match(system,/element="中性"、role="点缀"/);
 });
+test('顶层字段缺失时重试明确指出需要补齐的字段范围',async()=>{
+ let calls=0;const mapping=makeMapping(input,calendar);
+ const result=await analyzeMapping({DEEPSEEK_API_KEY:'test-only'},input,calendar,[],async(url,init)=>{
+  calls++;const request=JSON.parse(JSON.parse(init.body).messages[1].content);
+  if(calls===2){assert.match(request.validation_error,/image_prompt/);assert.match(request.instruction,/image_prompt 500–1500字/);}
+  const raw=structuredClone(mapping);if(calls===1)raw.image_prompt='';
+  return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(raw)}}]});
+ });
+ assert.equal(calls,2);assert.ok(result.image_prompt);
+});
