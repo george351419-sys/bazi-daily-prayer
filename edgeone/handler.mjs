@@ -7,7 +7,7 @@ export default async function onRequest({request,env={}}){
  let body;
  if(request.method==='POST'){
   const text=await request.text();
-  if(Buffer.byteLength(text)>128*1024)return Response.json({error:'提交内容过长。'},{status:413});
+  if(Buffer.byteLength(text)>(url.pathname==='/api/account/photos'?1100000:128*1024))return Response.json({error:'提交内容过长。'},{status:413});
   try{body=JSON.parse(text);}catch{return Response.json({error:'提交内容格式不正确。'},{status:400});}
  }
  const req={method:request.method,url:request.url,headers,body,query:{route:url.pathname.replace(/^\/api\//,'')}};

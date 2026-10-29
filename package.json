@@ -7,7 +7,12 @@
     "start": "node --env-file-if-exists=.env.local server.mjs",
     "test": "node --test tests/*.test.mjs",
     "build": "node scripts/build-static.mjs",
-    "build:edgeone": "node scripts/build-edgeone.mjs"
+    "build:edgeone": "node scripts/build-edgeone.mjs",
+    "test:devices:integration": "node scripts/check-device-loop.mjs",
+    "demo:devices": "node scripts/start-device-demo.mjs",
+    "worker:daily": "node --env-file-if-exists=.env.local scripts/run-daily-worker.mjs",
+    "test:daily:integration": "node scripts/check-daily-loop.mjs",
+    "worker:ritual": "node --env-file-if-exists=.env.local scripts/run-ritual-worker.mjs"
   },
   "dependencies": {
     "@edgeone/pages-blob": "^0.0.18",

@@ -1,0 +1,50 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {ArkNetwork,packet,wifiCredentials} from '../public/ark-network.js';
+function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
+ const writes=[],listeners=new Map();let online=false,ssid=[];
+ const characteristic={addEventListener:(key,fn)=>listeners.set(key,fn),removeEventListener:key=>listeners.delete(key),async startNotifications(){},async writeValue(bytes){
+  writes.push([...bytes]);onWrite(bytes);if(fail&&bytes[1]===0x34)throw new Error('write failed');
+  if(bytes[1]===0x32)ssid=[...bytes.slice(3,-1)];
+  if(bytes[1]===0x33){const reply=packet(0x33,wrongSSID?new TextEncoder().encode('old-network'):ssid);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
+  if(bytes[1]===0x39)online=false;if(bytes[1]===0x38)online=status;
+  if(bytes[1]===0x3a){const reply=packet(0x3a,[+online]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
+ }};
+ const device={name:'FRAMEFILMARK-TEST',addEventListener(){},removeEventListener(){},gatt:{connected:false,async connect(){this.connected=true;return {async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};}};},disconnect(){this.connected=false;}}};
+ return {writes,device,bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILMARK');return device;}}};
+}
+test('Wi-Fi UTF-8 validation rejects truncation, open passwords and control characters',()=>{
+ assert.throws(()=>wifiCredentials('中'.repeat(11),'12345678'));
+ assert.throws(()=>wifiCredentials('home',''));assert.throws(()=>wifiCredentials('home','1234567\0'));
+ assert.equal(new TextDecoder().decode(wifiCredentials('家里的网','password').name),'家里的网');
+});
+test('ForFilm protocol preserves UTF-8 credentials and waits for device network confirmation',async()=>{
+ const p=peripheral(),states=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async()=>{}});
+ await client.connect();assert.equal(states.at(-1).connected,false);
+ await client.configure('家里的网','test-password');
+ const channels=p.writes.map(p=>p[1]);assert.deepEqual(channels,[0x3a,0x39,0x3a,0x32,0x34,0x33,0x30,0x38,0x3a]);
+ assert.equal(states.at(-1).connected,true);assert.equal(new TextDecoder().decode(Uint8Array.from(p.writes[3].slice(3,-1))),'家里的网');
+ for(const bytes of p.writes)assert.equal(bytes.at(-1),bytes.slice(0,-1).reduce((s,n)=>(s+n)&255,0));
+ client.disconnect();assert.equal(p.device.gatt.connected,false);
+});
+test('write failure never reports Wi-Fi success and releases configuration lock',async()=>{
+ const p=peripheral({fail:true}),states=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async()=>{}});
+ await client.connect();await assert.rejects(client.configure('home','test-password'),/write failed/);
+ assert.equal(client.configuring,false);assert.equal(states.some(s=>s.connected),false);client.disconnect();
+});
+test('a malformed or wrong checksum notification cannot confirm Wi-Fi',()=>{
+ const states=[],client=new ArkNetwork({onState:s=>states.push(s)}),reply=packet(0x3a,[1]);reply[4]^=1;
+ client.receive(reply);client.receive(new Uint8Array([0x55,0x3a,1]));assert.equal(states.length,0);
+});
+test('missing network confirmation times out, retaining a usable BLE connection',async()=>{
+ const p=peripheral({status:false}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{},timeout:1});await client.connect();
+ await assert.rejects(client.configure('home','test-password'),/尚未收到/);assert.equal(client.configuring,false);assert.ok(client.characteristic);client.disconnect();
+});
+test('a silently dropped SSID write cannot be treated as successful setup',async()=>{
+ const p=peripheral({wrongSSID:true}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();
+ await assert.rejects(client.configure('home','test-password'),/不一致/);assert.equal(p.writes.some(p=>p[1]===0x38),false);client.disconnect();
+});
+test('disconnect during credential transfer cancels remaining writes',async()=>{
+ let client;const p=peripheral({onWrite:bytes=>{if(bytes[1]===0x34)client.disconnect();}});client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();
+ await assert.rejects(client.configure('home','test-password'),/断开/);assert.equal(client.configuring,false);assert.equal(p.writes.some(p=>p[1]===0x38),false);
+});

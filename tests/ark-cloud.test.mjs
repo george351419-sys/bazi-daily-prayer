@@ -1,7 +1,9 @@
+import {publishRitualPackage,ritualDeviceLinks} from '../lib/ritual-upload.mjs';
+import {packageFixture} from './fixtures/ritual-package.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {handleArkCloud,selection,provisionSignature,validateFilm} from '../lib/ark-cloud.mjs';
+import {handleArkCloud,selection,provisionSignature,validateFilm,validateRitual} from '../lib/ark-cloud.mjs';
 import {encryptAccountData,decryptAccountData} from '../lib/account-store.mjs';
 const secret='ark-cloud-test-secret-'.repeat(3),token='a'.repeat(32),deviceId='f0f5bd7562f4';
 const env={SESSION_SECRET:secret,ARK_PUBLIC_ORIGIN:'https://playmath.cn'};
@@ -28,3 +30,48 @@ test('云函数Web流无需实现asyncIterator，超大流会中止',async()=>{c
  test('签名更换轮播仅修改图片列表，保留设备身份和日程，拒绝缺失资产',async()=>{const c=context(),{config}=await setup(c);const playlist=Array(3).fill({sha256:config.playlist[1].sha256});assert.equal((await provision(c,{type:'playlist',deviceId,playlist,tokenHash:'f'.repeat(64),enabled:false})).status,200);const saved=JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId)));assert.deepEqual(saved,{...config,playlist});assert.equal((await provision(c,{type:'playlist',deviceId,playlist:[]})).status,400);assert.equal((await provision(c,{type:'playlist',deviceId,playlist:Array(3).fill({sha256:'f'.repeat(64)})})).status,409);assert.deepEqual(JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId))),saved);});
 
  test('五张图每五分钟轮播，二十五分钟回到首图且保留鉴权',async()=>{const c=context(),{config}=await setup(c);const assets=[film(0),film(1),film(2),film(3),film(4)];for(const b of assets)assert.equal((await provision(c,{type:'asset',sha256:hash(b),base64:b.toString('base64')})).status,200);const playlist=assets.map(b=>({sha256:hash(b)}));assert.equal((await provision(c,{type:'playlist',deviceId,playlist})).status,200);const saved=JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId)));assert.equal(saved.tokenHash,config.tokenHash);for(let i=0;i<=5;i++){const r=await(await invoke(c,hb,{headers:{authorization}},now+i*300000)).json();assert.equal(r.data.commands[0].params.sleep_time,5);assert.equal(r.data.commands[1].params.sha256,playlist[i%5].sha256);}assert.equal((await provision(c,{type:'playlist',deviceId,playlist:[]})).status,400);assert.equal((await provision(c,{type:'playlist',deviceId,playlist:Array(6).fill(playlist[0])})).status,400);});
+
+test('ritual chunks commit atomically, old firmware keeps Film, new firmware receives signed two-day bundle and deduplicates',async()=>{
+ const c=context();await setup(c);const bytes=packageFixture(),sha256=hash(bytes),chunks=[];
+ assert.equal((await provision(c,{type:'ritual_commit',deviceId,sha256,chunks:['f'.repeat(64)]})).status,409);
+ for(let i=0;i<bytes.length;i+=65536){const chunk=bytes.subarray(i,i+65536),h=hash(chunk);assert.equal((await provision(c,{type:'ritual_chunk',sha256:h,base64:chunk.toString('base64')})).status,200);chunks.push(h);}
+ assert.equal((await provision(c,{type:'ritual_commit',deviceId,sha256,chunks})).status,200);
+ let r=await(await invoke(c,hb,{headers:{authorization}})).json();assert.equal(r.data.commands[1].cmd,'download_film');
+ r=await(await invoke(c,hb+'&ritual_v=1',{headers:{authorization}})).json();assert.equal(r.data.commands[0].cmd,'download_ritual');const url=new URL(r.data.commands[0].params.url);
+ const downloaded=await invoke(c,url.pathname+url.search);assert.equal(downloaded.status,200);assert.equal(hash(Buffer.from(await downloaded.arrayBuffer())),sha256);
+ r=await(await invoke(c,hb+'&ritual_v=1&cloud_stored_sha='+sha256,{headers:{authorization}})).json();assert.deepEqual(r.data.commands.map(c=>c.cmd),['set_config']);
+ assert.equal((await provision(c,{type:'ritual_commit',deviceId,sha256:'f'.repeat(64),chunks})).status,400);
+ assert.equal(JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId))).ritualSha,sha256);
+ assert.equal((await provision(c,{type:'ritual_disable',deviceId})).status,200);assert.equal((await invoke(c,url.pathname+url.search)).status,403);
+});
+
+test('background publisher stages chunks, stops superseded plans, signs commit and validates account/device mapping',async()=>{
+ const c=context();await setup(c);const bytes=packageFixture(),cfg={...env,RITUAL_PUBLIC_ORIGIN:'https://playmath.cn'};
+ const fetcher=(url,options)=>handleArkCloud(new Request(url,options),env,{store:c.store,now:Date.now()});
+ assert.deepEqual(await publishRitualPackage(cfg,deviceId,bytes,{fetcher,beforeCommit:async()=>false}),{superseded:true});
+ assert.equal(JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId))).ritualSha,undefined);
+ const result=await publishRitualPackage(cfg,deviceId,bytes,{fetcher});assert.equal(result.sha256,hash(bytes));assert.equal(result.bytes,948608);
+ assert.throws(()=>ritualDeviceLinks({RITUAL_DEVICE_LINKS:JSON.stringify({bad:deviceId})}));
+ assert.throws(()=>ritualDeviceLinks({RITUAL_DEVICE_LINKS:JSON.stringify({['a'.repeat(32)]:deviceId,['b'.repeat(32)]:deviceId})}));
+});
+
+test('replacement reports identify the previous package, and disabling ritual clears the device override before Film download',async()=>{
+ const c=context();await setup(c);const first=packageFixture(),second=Buffer.from(first);second[44]=1;
+ const cfg={...env,RITUAL_PUBLIC_ORIGIN:'https://playmath.cn'},fetcher=(url,options)=>handleArkCloud(new Request(url,options),env,{store:c.store,now:Date.now()});
+ await publishRitualPackage(cfg,deviceId,first,{fetcher});await publishRitualPackage(cfg,deviceId,second,{fetcher});
+ const params='&ritual_v=1&ritual_active=1&cloud_stored_sha='+hash(first)+'&ritual_render=1&ritual_day=1&ritual_action=3&ritual_answer=0&ritual_started_at='+String(Math.floor(now/1000)-10);
+ await invoke(c,hb+params,{headers:{authorization}});
+ let status=await(await invoke(c,'/api/ark/status?device_id='+deviceId,{headers:{authorization}})).json();
+ assert.equal(status.report.stored,false);assert.equal(status.report.renderSha,hash(first));assert.equal(status.report.renderReport.day,1);assert.equal(status.mode,'test');assert.equal(status.intervalMinutes,2);
+ await provision(c,{type:'ritual_disable',deviceId});
+ const result=await(await invoke(c,hb+params,{headers:{authorization}})).json();assert.equal(result.data.commands[0].cmd,'disable_ritual');assert.ok(result.data.commands.some(c=>c.cmd==='download_film'));
+ const legacy=await(await invoke(c,hb,{headers:{authorization}})).json();assert.ok(!legacy.data.commands.some(c=>c.cmd==='disable_ritual'));
+});
+
+test('v2 photo packets are delivered only to compatible firmware; old firmware retains its screen',async()=>{
+ const c=context();await setup(c);const bytes=packageFixture();bytes.writeUInt32LE(2,36);bytes.writeUInt32LE(3,60);validateRitual(bytes);
+ const bad=Buffer.from(bytes);bad.writeUInt32LE(7,60);assert.throws(()=>validateRitual(bad));
+ await publishRitualPackage({SESSION_SECRET:secret,RITUAL_PUBLIC_ORIGIN:'https://playmath.cn'},deviceId,bytes,{fetcher:(url,options)=>handleArkCloud(new Request(url,options),env,{store:c.store,now:Date.now()})});
+ const old=await(await invoke(c,hb+'&ritual_v=1&ritual_active=1',{headers:{authorization}})).json();assert.equal(old.data.firmware_update_required,true);assert.ok(!old.data.commands.some(c=>['download_film','download_ritual','disable_ritual'].includes(c.cmd)));
+ const current=await(await invoke(c,hb+'&ritual_v=2',{headers:{authorization}})).json();assert.equal(current.data.firmware_update_required,false);assert.equal(current.data.commands[0].cmd,'download_ritual');
+});

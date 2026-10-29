@@ -11,3 +11,6 @@ dist/
 .edgeone/
 
 .edgeone-build/
+
+__pycache__/
+*.pyc
