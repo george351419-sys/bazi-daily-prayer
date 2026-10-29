@@ -5,9 +5,9 @@ export function setupRitual({request,fetchImage,getUser}){
  const destination=document.querySelector('#ritual-home-content');
  if(destination)destination.append(host);else document.querySelector('#artwork-grid').before(host);
  const node=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
- let active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null;
+ let active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null,latestGenerated=null;
  function pause(){active=false;epoch++;clearTimeout(timer);timer=null;}
- function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell=null;renderedKey=null;host.replaceChildren();host.hidden=true;}
+ function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell=null;renderedKey=null;latestGenerated=null;host.replaceChildren();host.hidden=true;}
  function alive(life){return life===lifecycle&&!!getUser();}
  function schedule(result){if(!active)return;clearTimeout(timer);const next=Date.parse(result?.scheduledPosition?.nextAt||result?.position?.nextAt);timer=setTimeout(refresh,Number.isFinite(next)?Math.max(1000,Math.min(30000,next-Date.now()+200)):30000);}
  function ensureShell(){
@@ -123,9 +123,12 @@ export function setupRitual({request,fetchImage,getUser}){
    shell.submit.textContent=result.syncConfigured===false?'保存画屏设置':'保存并同步到画屏';
    shell.deliveryNote.textContent=result.syncConfigured===false?'内容保存到你的账户；请先通过蓝牙连接并绑定画屏，自动同步才会启用。':'设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。';
    if(result.plan&&result.syncConfigured===false)progress=' 内容已保存；尚未绑定画屏，绑定后才会编译并下发。';
-   shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+progress;
+   const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+   const generated=latestGenerated?.status==='complete'&&latestGenerated.date===today&&result.displaySource!=='device_report'?latestGenerated:null;
+   const effective=generated?{...result,artwork:{id:generated.id,title:generated.mapping.title,date:generated.date,source:generated.source||'generated',image:generated.image,mapping:generated.mapping},days:(result.days||[]).map((day,index)=>index===0?{...day,title:generated.mapping.title,artworkId:generated.id}:day),position:{...result.position,dayIndex:0}}:result;
+   shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+progress+(generated&&result.plan?.artworkIds?.[0]!==generated.id?' 下方已显示刚完成的今日画；旧的两日画屏计划尚未替换。':'');
    shell.report.textContent=r?'设备最近联网：'+new Date(r.lastSeen).toLocaleString('zh-CN')+(r.stale?'（回报较早，设备可能离线）':'')+'；'+(r.renderReport?'最近上屏请求：第 '+(r.renderReport.day+1)+' 天'+(r.answerId?' · '+r.answerId:r.renderReport.action>=0?' · 第 '+(r.renderReport.action+1)+' 条动作':' · 祈福图')+(r.showingPrevious?'（新内容仍在同步）':''):'尚未收到当前内容的上屏回报')+'。实屏效果待验收。':'';
-   updateContent(result);updateActions(result);schedule(result);
+   updateContent(effective);updateActions(effective);schedule(effective);
    if(!artworks){const page=await request('/api/account/artworks');if(turn!==epoch||!alive(life))return;artworks=page.items;cursor=page.cursor||null;}
    updateSettings(result);
   }catch(error){if(turn===epoch&&alive(life)){shell.status.textContent=error.message;timer=setTimeout(refresh,Math.min(60000,5000*2**Math.min(failures++,4)));}}
@@ -159,5 +162,9 @@ export function setupRitual({request,fetchImage,getUser}){
   await prepare();
   return result;
  }
- return {refresh,reset,pause,prepare,bindDevice};
+ function showGeneratedArtwork(job){
+  if(!getUser()||job?.status!=='complete'||!job.image||!job.mapping)return;
+  latestGenerated=job;renderedKey=null;if(active)void refresh();
+ }
+ return {refresh,reset,pause,prepare,bindDevice,showGeneratedArtwork};
 }
