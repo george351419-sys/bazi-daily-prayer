@@ -121,8 +121,8 @@ export function setupRitual({request,fetchImage,getUser}){
    let progress=result.build?.status==='retrying'?' 更新暂未成功，正在重试；设备保留已下载内容。':result.build?.status==='waiting_for_artworks'?' 还需要两幅已完成的画作。':result.pendingUpdate?' 新计划等待准备。':result.build?.status==='published'?(r?.renderReport?' 设备驱动已回报上屏请求；实屏仍需验收。':r?.stored?' 内容已保存到画屏，尚未收到上屏回报。':' 内容已准备，等待设备联网领取。'):'';
    if(r?.firmwareUpdateRequired)progress+=' 照片模式需要更新至 3.2.5-ritual.2 固件，旧固件暂保留原画面。';
    shell.submit.textContent=result.syncConfigured===false?'保存画屏设置':'保存并同步到画屏';
-   shell.deliveryNote.textContent=result.syncConfigured===false?'内容保存到你的账户；设备下发服务接入并绑定后才能同步到画屏。':'设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。';
-   if(result.plan&&result.syncConfigured===false)progress=' 内容已保存；设备下发服务待接入，当前不会发送到画屏。';
+   shell.deliveryNote.textContent=result.syncConfigured===false?'内容保存到你的账户；请先通过蓝牙连接并绑定画屏，自动同步才会启用。':'设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。';
+   if(result.plan&&result.syncConfigured===false)progress=' 内容已保存；尚未绑定画屏，绑定后才会编译并下发。';
    shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+progress;
    shell.report.textContent=r?'设备最近联网：'+new Date(r.lastSeen).toLocaleString('zh-CN')+(r.stale?'（回报较早，设备可能离线）':'')+'；'+(r.renderReport?'最近上屏请求：第 '+(r.renderReport.day+1)+' 天'+(r.answerId?' · '+r.answerId:r.renderReport.action>=0?' · 第 '+(r.renderReport.action+1)+' 条动作':' · 祈福图')+(r.showingPrevious?'（新内容仍在同步）':''):'尚未收到当前内容的上屏回报')+'。实屏效果待验收。':'';
    updateContent(result);updateActions(result);schedule(result);
