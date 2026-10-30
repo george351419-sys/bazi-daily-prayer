@@ -1,0 +1,83 @@
+/* Four workspaces share the existing forms and account services. */
+:root{--studio-paper:#f6f5f0;--studio-ink:#24362f;--studio-line:#dce2d8}
+html{scroll-behavior:auto}
+body{background:var(--studio-paper);font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;color:var(--studio-ink);padding-left:264px}
+.studio-sidebar{position:fixed;inset:0 auto 0 0;width:264px;padding:36px 22px;box-sizing:border-box;background:#fffef9;border-right:1px solid var(--studio-line);display:flex;flex-direction:column;z-index:20}
+.studio-logo{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--studio-ink);margin-bottom:54px}
+.studio-logo>span{display:grid;place-items:center;width:44px;height:48px;background:#174c3e;color:#fff9e7;border-radius:12px 12px 4px 12px;font:26px "Songti SC",serif}
+.studio-logo strong{font-size:19px;letter-spacing:1px}
+.studio-logo small{display:block;font-size:8px;font-weight:500;letter-spacing:1.2px;margin-top:7px}
+.studio-nav-label{font-size:11px;letter-spacing:2px;color:#747a73;padding:0 14px;margin:0 0 18px}
+.studio-menu{display:grid;gap:12px}
+.studio-menu a{display:flex;align-items:center;gap:13px;padding:17px 12px;border:1px solid transparent;border-radius:12px;text-decoration:none;color:#637168;transition:background .15s,transform .15s}
+.studio-menu a:hover{background:#f1f3eb;transform:translateX(2px)}
+.studio-menu a[aria-current]{background:#eaf0e9;border-color:#cbd7c7;color:#174c3e;box-shadow:3px 3px 0 #d6dfce}
+.studio-menu b{font-size:12px;font-weight:500;border:1px solid #d6dfce;padding:6px;border-radius:7px}
+.studio-menu span{font-size:16px;font-weight:600}
+.studio-menu small{display:block;font-size:10px;font-weight:400;margin-top:7px;letter-spacing:.2px}
+.studio-sidebar-foot{margin-top:auto;padding:24px 10px 0;font-size:11px;color:#747a73;line-height:1.8}
+.studio-sidebar-foot p{font-size:10px;margin:4px 0 0 15px}
+.studio-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#56785b;margin-right:5px}
+.site-header{height:70px;max-width:none;margin:0;padding:0 44px;border-bottom:1px solid var(--studio-line);justify-content:flex-end;background:#fffef9}
+.site-header .brand{display:none}
+.header-note{margin-right:auto;font-size:11px}
+body>main{max-width:1360px;margin:0 auto;padding:38px 44px 60px}
+.studio-heading{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:32px}
+.studio-heading .eyebrow{font-size:10px;letter-spacing:2px;color:#748174}
+.studio-heading h1{font:36px "Songti SC","Noto Serif SC",serif;letter-spacing:3px;margin:12px 0}
+.studio-heading p{font-size:13px;color:#747a73;line-height:1.8;margin:0}
+.studio-edition{font:14px/1.9 "Songti SC",serif;letter-spacing:4px;border-left:1px solid #cbd7c7;padding-left:24px;color:#788873}
+body .ritual-intro,body .closing{display:none}
+body main>#network-onboarding,body main>#create,body main>#ritual-home,body main>#custom{display:none;max-width:none;margin:0;padding:30px;background:#fffefb;border:1px solid var(--studio-line);border-radius:18px;box-shadow:5px 5px 0 #e7eadf}
+body[data-studio-view="network-onboarding"] main>#network-onboarding,body[data-studio-view="create"] main>#create,body[data-studio-view="ritual-home"] main>#ritual-home,body[data-studio-view="custom"] main>#custom{display:block}
+.section-top{align-items:flex-start;gap:24px;margin-bottom:28px}
+.section-top h2{font:25px "Songti SC","Noto Serif SC",serif;margin-top:9px}
+.section-top p{font-size:12px;line-height:1.9;color:#747a73}
+.network-grid{gap:32px}
+.network-grid>div,.network-form{padding:24px;background:#f6f7f1;border:1px solid #e0e6da;border-radius:12px}
+.network-grid h3{font-size:20px;margin:15px 0}
+.network-grid p{font-size:13px;line-height:1.9}
+.network-state{padding:16px 18px;background:#eaf0e9;border-radius:9px;font-size:13px}
+.onboarding-number{font-size:11px;letter-spacing:1px;color:#6b806d}
+body .primary{border-radius:9px;background:#174c3e;box-shadow:2px 3px 0 #b5c6af}
+body .secondary{border-radius:9px}
+body input,body select{border-radius:8px}
+body .workspace{gap:24px;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+body .input-card,body .result-card{padding:24px;border-radius:12px;box-shadow:none}
+body .card-heading h3{font-size:18px}
+body .empty-state{min-height:360px}
+.custom-intro{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:28px}
+.custom-intro article{padding:24px;background:#f1f4eb;border:1px solid #dce2d8;border-radius:12px}
+.custom-intro article:nth-child(2){background:#f8f1e5}
+.custom-intro span{font-size:11px;color:#6e7c69;letter-spacing:1px}
+.custom-intro h3{font:22px "Songti SC",serif;margin:16px 0 12px}
+.custom-intro p{font-size:12px;line-height:1.9;color:#747a73}
+#custom-signin,#ritual-signin{padding:24px;border:1px dashed #c5d0bd;border-radius:12px}
+#custom-signin p,#ritual-signin p{margin-top:0;font-size:13px}
+#custom-content details{padding:20px;border:1px solid #dce2d8;border-radius:12px}
+#custom-content summary{font-weight:600;cursor:pointer}
+#custom-content .ritual-form{margin-top:22px}
+.ritual-section{border:0;padding:0;margin:0;background:transparent}
+.ritual-section>h4{font:23px "Songti SC",serif}
+.ritual-section>p{font-size:12px;line-height:1.9}
+body>footer{max-width:none;margin:0;padding:20px 44px;border-top:1px solid var(--studio-line);font-size:11px}
+[hidden]{display:none!important}
+@media(min-width:1450px){body>main{padding-top:48px}.network-grid{margin-top:36px}.network-grid>div,.network-form{padding:32px}}
+@media(max-width:1100px){body{padding-left:224px}.studio-sidebar{width:224px;padding:28px 14px}body>main{padding:28px 24px 44px}.site-header{padding:0 24px}body .workspace{grid-template-columns:1fr}.network-grid{grid-template-columns:1fr}.section-top{display:block}.section-top p{margin-top:14px}}
+@media(max-width:700px){body{padding-left:0}.studio-sidebar{position:sticky;top:0;width:100%;height:auto;padding:12px 16px;border-right:0;border-bottom:1px solid var(--studio-line);gap:12px}.studio-logo{margin:0;gap:9px}.studio-logo>span{width:30px;height:32px;font-size:20px;border-radius:7px}.studio-logo strong{font-size:16px}.studio-logo small{font-size:7px;margin-top:3px}.studio-nav-label,.studio-sidebar-foot{display:none}.studio-menu{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.studio-menu a{padding:11px 2px;justify-content:center;border-radius:8px}.studio-menu b,.studio-menu small{display:none}.studio-menu span{font-size:13px}.site-header{height:48px;padding:0 18px}.header-note{font-size:10px}body>main{padding:24px 16px 36px}.studio-heading{margin-bottom:24px}.studio-heading h1{font-size:29px}.studio-heading p{font-size:12px}.studio-edition{display:none}body main>#network-onboarding,body main>#create,body main>#ritual-home,body main>#custom{padding:20px 16px;border-radius:12px;box-shadow:3px 3px 0 #e7eadf}.section-top h2{font-size:23px}.network-grid>div,.network-form{padding:20px 16px}.custom-intro{grid-template-columns:1fr;gap:12px}.custom-intro article{padding:20px}body .input-card,body .result-card{padding:18px 14px}body>footer{padding:20px 16px;gap:14px;flex-wrap:wrap}.studio-menu a:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){.studio-menu a{transition:none}}
+
+/* Lucide-style stroke icons; mobile uses an app-style bottom tab bar. */
+.studio-nav-icon{display:none}
+.studio-menu a:focus-visible{outline:2px solid #174c3e;outline-offset:3px}
+@media(max-width:700px){
+ body{padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+ .studio-sidebar{position:static;gap:0;padding:14px 18px;border-bottom:1px solid var(--studio-line)}
+ .studio-menu{position:fixed;inset:auto 0 0;z-index:30;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));background:#fffef9;border-top:1px solid #cbd7c7;box-shadow:0 -4px 18px #24362f08}
+ .studio-menu a{min-height:62px;box-sizing:border-box;flex-direction:column;gap:6px;padding:8px 2px;border-radius:12px}
+ .studio-menu a[aria-current]{background:#eaf0e9;border-color:#b5c6af;box-shadow:2px 2px 0 #d6dfce}
+ .studio-menu .studio-nav-icon{display:block;width:23px;height:23px;flex-shrink:0}
+ .studio-menu span{font-size:12px;line-height:1.3}
+ .studio-menu small{display:none}
+ html{scroll-padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+}
