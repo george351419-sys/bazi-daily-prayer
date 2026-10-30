@@ -2,7 +2,7 @@
 import {ArkNetwork} from './ark-network.js';
 const state=document.querySelector('#state'),detail=document.querySelector('#detail'),upgrade=document.querySelector('#upgrade'),readButton=document.querySelector('#read');
 const expected=await fetch('./firmware/ritual-5.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('固件清单不可用');return r.json();});
-let chosen,busy=false,lastInfo,forcePicker=false;
+let chosen,busy=false,lastInfo,forcePicker=false,connecting=false;
 const bluetooth={requestDevice:async options=>{
  if(chosen&&!forcePicker)return chosen;
  if(forcePicker){forcePicker=false;chosen=await navigator.bluetooth.requestDevice(options);return chosen;}
@@ -14,10 +14,26 @@ const client=new ArkNetwork({bluetooth,onState:s=>{if(!busy)state.textContent=s.
 const matches=info=>info.version===expected.version&&info.sha===expected.elfSha256;
 async function read(){lastInfo=await client.readBuildInfo();detail.textContent='设备：'+client.device.name+'\n运行版本：'+lastInfo.version+'\n编译指纹：'+lastInfo.sha+'\n目标指纹：'+expected.elfSha256;return lastInfo;}
 async function connect(){if(!navigator.bluetooth)throw Error('浏览器不支持 Web Bluetooth，请使用电脑 Chrome');await client.connect();await read();}
-document.querySelector('#connect').onclick=async()=>{try{await connect();await upgrade.onclick();}catch(e){state.textContent=e.message;}};
-document.querySelector('#rescan').onclick=async()=>{if(busy)return;client.disconnect();chosen=null;forcePicker=true;try{await connect();await upgrade.onclick();}catch(e){state.textContent=e.message;}};
+async function connectAndUpgrade(force=false){
+ if(busy||connecting)return;connecting=true;document.querySelector('#connect').disabled=true;document.querySelector('#rescan').disabled=true;
+ if(force){client.disconnect();chosen=null;forcePicker=true;}
+ try{
+  for(let attempt=0;attempt<20;attempt++){
+   try{await connect();await upgrade.onclick();return;}
+   catch(e){
+    if(/cancel|NotFoundError|拒绝|取消/i.test(e.message)||attempt===19)throw e;
+    client.disconnect();state.textContent='等待画屏唤醒并连接（'+(attempt+1)+'/20）…请按 Home 唤醒，连接后将自动升级。';
+    await new Promise(r=>setTimeout(r,3000));
+   }
+  }
+ }catch(e){state.textContent='尚未开始升级：'+e.message;}
+ finally{connecting=false;if(!busy){document.querySelector('#connect').disabled=false;document.querySelector('#rescan').disabled=false;}}
+}
+document.querySelector('#connect').onclick=()=>connectAndUpgrade(false);
+document.querySelector('#rescan').onclick=()=>connectAndUpgrade(true);
 readButton.onclick=async()=>{try{const info=await read();state.textContent=matches(info)?'已确认：当前运行 ritual.5，编译指纹一致。':'当前运行固件尚未匹配目标。';}catch(e){state.textContent=e.message;}};
 upgrade.onclick=async()=>{
+ if(busy)return;
  busy=true;document.querySelector('#rescan').disabled=true;upgrade.disabled=true;readButton.disabled=true;document.querySelector('#connect').disabled=true;state.className='';
  try{
   const before=await read();
