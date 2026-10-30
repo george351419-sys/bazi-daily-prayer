@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ArkNetwork,packet,wifiCredentials,arkDeviceId} from '../public/ark-network.js';
-function peripheral({status=true,fail=false,wrongSSID=false,busyConnects=0,onWrite=()=>{}}={}){
- const writes=[],listeners=new Map(),deviceListeners=new Map();let online=false,ssid=[],connectCalls=0;
+function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
+ const writes=[],listeners=new Map(),deviceListeners=new Map();let online=false,ssid=[],connectCalls=0,disconnectCalls=0;
  const characteristic={addEventListener:(key,fn)=>listeners.set(key,fn),removeEventListener:key=>listeners.delete(key),async startNotifications(){},async writeValue(bytes){
   writes.push([...bytes]);onWrite(bytes);if(fail&&bytes[1]===0x34)throw new Error('write failed');
   if(bytes[1]===0x32)ssid=[...bytes.slice(3,-1)];
@@ -15,8 +15,8 @@ function peripheral({status=true,fail=false,wrongSSID=false,busyConnects=0,onWri
  if(bytes[1]===0x51){const status=packet(0x51,[7,100,0,0,0,0,10,0,0,0,10]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(status.buffer)}});}
  if(bytes[1]===0x57||bytes[1]===0x58){const reply=packet(bytes[1],[0]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  }};
- const device={name:'FRAMEFILMARK-TEST',addEventListener:(key,fn)=>deviceListeners.set(key,fn),removeEventListener:key=>deviceListeners.delete(key),gatt:{connected:false,async connect(){connectCalls++;if(connectCalls<=busyConnects){this.connected=true;throw new DOMException('GATT operation already in progress','NetworkError');}this.connected=true;return this;},async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};},disconnect(){this.connected=false;deviceListeners.get('gattserverdisconnected')?.();}}};
- return {writes,device,get connectCalls(){return connectCalls;},bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILMARK');return device;}}};
+ const device={name:'FRAMEFILMARK-TEST',addEventListener:(key,fn)=>deviceListeners.set(key,fn),removeEventListener:key=>deviceListeners.delete(key),gatt:{connected:false,async connect(){connectCalls++;this.connected=true;return this;},async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};},disconnect(){disconnectCalls++;this.connected=false;deviceListeners.get('gattserverdisconnected')?.();}}};
+ return {writes,device,get connectCalls(){return connectCalls;},get disconnectCalls(){return disconnectCalls;},bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILM');return device;}}};
 }
 test('Wi-Fi UTF-8 validation rejects truncation, open passwords and control characters',()=>{
  assert.throws(()=>wifiCredentials('中'.repeat(11),'12345678'));
@@ -37,13 +37,9 @@ test('ForFilm protocol preserves UTF-8 credentials and waits for device network 
  for(const bytes of p.writes)assert.equal(bytes.at(-1),bytes.slice(0,-1).reduce((s,n)=>(s+n)&255,0));
  client.disconnect();assert.equal(p.device.gatt.connected,false);
 });
-test('a device connected during selection is reused instead of reconnecting',async()=>{
+test('an already connected device follows ForFilm disconnect then reconnect sequence',async()=>{
  const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,onState:()=>{},delay:async()=>{}});p.device.gatt.connected=true;
- await client.connect();assert.equal(p.connectCalls,0);assert.equal(p.device.gatt.connected,true);assert.equal(client.characteristic!==null,true);client.disconnect();
-});
-test('a pending system pairing is awaited without issuing another GATT connection',async()=>{
- const p=peripheral({busyConnects:2}),states=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async()=>{}});
- await client.connect();assert.equal(p.connectCalls,1);assert.equal(client.characteristic!==null,true);assert.ok(states.some(s=>s.text==='Chrome 正在完成系统蓝牙配对，等待画屏连接…'));client.disconnect();
+ await client.connect();assert.equal(p.disconnectCalls,1);assert.equal(p.connectCalls,1);assert.equal(p.device.gatt.connected,true);assert.equal(client.characteristic!==null,true);client.disconnect();
 });
 test('download progress is read over the existing BLE connection',async()=>{
  const p=peripheral(),downloads=[],client=new ArkNetwork({bluetooth:p.bluetooth,onDownload:s=>downloads.push(s),delay:async()=>{}});
