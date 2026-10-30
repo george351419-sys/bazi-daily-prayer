@@ -1,0 +1,39 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>画屏 Wi-Fi 固件升级</title><style>body{font:17px/1.7 system-ui;max-width:760px;margin:35px auto;padding:20px;color:#183329;background:#f5f5ef}button{font:inherit;padding:13px;margin:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px;border-radius:12px}.ok{color:#08713e}.bad{color:#b12a28}</style><h1>画屏 Wi-Fi 固件升级</h1><p>目标：3.2.5-ritual.5。固件由 playmath.cn 下载；蓝牙用于发起升级和核验。请保持画屏供电，并退出手机小程序的蓝牙连接。</p><button id="connect">连接已授权画屏</button><button id="read" disabled>读取运行版本</button><button id="upgrade" disabled>升级到 ritual.5 并核验</button><pre id="state">等待连接。</pre><pre id="detail">升级后需版本与编译指纹同时匹配，才显示成功。</pre><script type="module">
+import {ArkNetwork} from './ark-network.js';
+const state=document.querySelector('#state'),detail=document.querySelector('#detail'),upgrade=document.querySelector('#upgrade'),readButton=document.querySelector('#read');
+const expected=await fetch('./firmware/ritual-5.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('固件清单不可用');return r.json();});
+let chosen,busy=false,lastInfo;
+const bluetooth={requestDevice:async options=>{
+ if(chosen)return chosen;
+ const known=typeof navigator.bluetooth.getDevices==='function'?await navigator.bluetooth.getDevices():[];
+ const same=known.filter(d=>d.name==='FRAMEFILMARK-Elink');
+ chosen=same.length===1?same[0]:await navigator.bluetooth.requestDevice(options);return chosen;
+}};
+const client=new ArkNetwork({bluetooth,onState:s=>{if(!busy)state.textContent=s.text;readButton.disabled=busy||!s.paired;upgrade.disabled=busy||!s.paired;},onOta:s=>{state.textContent='Wi-Fi 下载与校验：'+s.progress+'% · 状态 '+s.state+' · '+s.received+'/'+s.total+' 字节';}});
+const matches=info=>info.version===expected.version&&info.sha===expected.elfSha256;
+async function read(){lastInfo=await client.readBuildInfo();detail.textContent='设备：'+client.device.name+'\n运行版本：'+lastInfo.version+'\n编译指纹：'+lastInfo.sha+'\n目标指纹：'+expected.elfSha256;return lastInfo;}
+async function connect(){if(!navigator.bluetooth)throw Error('浏览器不支持 Web Bluetooth，请使用电脑 Chrome');await client.connect();await read();}
+document.querySelector('#connect').onclick=async()=>{try{await connect();state.textContent=matches(lastInfo)?'已确认运行目标固件。':'已连接，可以开始 Wi-Fi 升级。';}catch(e){state.textContent=e.message;}};
+readButton.onclick=async()=>{try{const info=await read();state.textContent=matches(info)?'已确认：当前运行 ritual.5，编译指纹一致。':'当前运行固件尚未匹配目标。';}catch(e){state.textContent=e.message;}};
+upgrade.onclick=async()=>{
+ busy=true;upgrade.disabled=true;readButton.disabled=true;document.querySelector('#connect').disabled=true;state.className='';
+ try{
+  const before=await read();
+  if(matches(before)){state.className='ok';state.textContent='已确认：当前已运行目标固件，无须重复升级。';return;}
+  if(client.device.name!=='FRAMEFILMARK-Elink')throw Error('请选择本次确认的 FRAMEFILMARK-Elink 画屏');
+  if(before.version!=='3.2.5-ritual.3'||before.sha!=='f6aff2f33116c98fbdcc5a12b00bca057776f6a33b32821995f4e65497b57f92')throw Error('当前固件与已确认的升级起点不同，请重新核对');
+  chosen=client.device;state.textContent='正在通过蓝牙发起 Wi-Fi 下载…';
+  await client.startWifiOta('https://playmath.cn/firmware/'+expected.file,expected.bytes,expected.sha256);
+  state.textContent='固件已校验并申请切换，等待重启后读取运行指纹…';
+  await new Promise(r=>setTimeout(r,10000));client.disconnect();
+  let lastError;
+  for(let i=0;i<12;i++){
+   try{await client.connect();const info=await read();if(matches(info)){state.className='ok';state.textContent='升级成功并已核验：当前运行 3.2.5-ritual.5，编译指纹完全一致。';return;}lastError=Error('设备仍返回 '+info.version);client.disconnect();}
+   catch(e){lastError=e;client.disconnect();}
+   state.textContent='正在等待重启并重新核验（'+(i+1)+'/12）…';await new Promise(r=>setTimeout(r,3000));
+  }
+  throw Error('尚未确认新固件启动：'+lastError.message+'。请唤醒画屏后点击连接并读取版本。');
+ }catch(e){state.className='bad';state.textContent='尚未确认升级成功：'+e.message;}
+ finally{busy=false;document.querySelector('#connect').disabled=false;readButton.disabled=!client.characteristic;upgrade.disabled=!client.characteristic;}
+};
+</script></html>
