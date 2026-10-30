@@ -1,4 +1,5 @@
-import {allowedMiniProgram} from '../lib/miniprogram-access.mjs';
+import {miniProgramAppId} from '../lib/miniprogram-access.mjs';
+import {bindWechatIdentity,wechatLogin,wechatLoginReady} from '../lib/wechat-auth.mjs';
 import {uploadPhoto} from '../lib/photos.mjs';
 import {ritualStatus,configureRitual,searchAnswers} from '../lib/ritual.mjs';
 import {bindRitualDevice,unbindRitualDevice} from '../lib/ritual-device.mjs';
@@ -12,21 +13,21 @@ import {analyzeMapping} from '../lib/service.mjs';
 import {createSession,verifySession,csrfFor,sealJob,openJob} from '../lib/tokens.mjs';
 import {doubao,publicProviderError} from '../lib/providers.mjs';
 import {devicesEnabled,listDevices,claimDevice,selectDeviceArtwork,unbindDevice,devicePreview} from '../lib/devices.mjs';
-import {accountsEnabled,AccountError,userView,accountCookie,register,login,recover,logout,currentAccount,requireAccount,getProfile,newArtworkId,saveArtwork,getArtwork,listArtworks,accountHistory,profileSignature,persistImage,privateImage} from '../lib/accounts.mjs';
+import {accountsEnabled,AccountError,userView,accountCookie,register,login,recover,logout,currentAccount,requireAccount,getProfile,saveNickname,newArtworkId,saveArtwork,getArtwork,listArtworks,accountHistory,profileSignature,persistImage,privateImage} from '../lib/accounts.mjs';
 const rate=new Map();
 const accountJob=(c,account,record)=>({id:record.id,source:record.source||'generated',status:record.status==='complete'?'complete':'mapped',phase:record.status==='complete'?'已从画册载入':record.source==='automatic'?'每日画作正在后台准备':'解读已归档，待绘制画面',date:record.date,createdAt:record.createdAt,input:record.input,calendar:record.calendar,mapping:record.mapping,image:record.image?'/api/account/artworks/'+record.id+'/image':null,token:sealJob(c,{id:record.id,owner:'account:'+account.id,accountId:account.id,mapping:record.mapping,expires:Date.now()+86400000}),error:null,archived:true,managedAutomatically:record.source==='automatic',imageReuse:record.imageReuse?{sourceArtworkId:record.imageReuse.sourceArtworkId,sourceDate:record.imageReuse.sourceDate}:null});
 
 const send=(res,status,data)=>res.status(status).json(data);
 export default function handler(req,res){return handleRequest(req,res,process.env);}
 export async function handleRequest(req,res,config){
- const startedAt=Date.now(),origin=req.headers.origin,miniProgram=allowedMiniProgram(req,config);
+ const startedAt=Date.now(),origin=req.headers.origin,miniProgramId=miniProgramAppId(req,config),miniProgram=!!miniProgramId,wechatReady=wechatLoginReady(config);
  // EdgeOne may reconstruct request.url with an internal host; trust our explicit public origins.
  const allowed=new Set(['https://playmath.cn','https://www.playmath.cn','https://george351419-sys.github.io',...(config.ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean)]);
  res.setHeader('Cache-Control','no-store');res.setHeader('Vary','Origin');
  const own=(/^(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(req.headers.host||'')?'http://':'https://')+req.headers.host;
  if(origin&&origin!==own&&!allowed.has(origin)&&!(miniProgram&&origin==='https://servicewechat.com'))return send(res,403,{error:'此页面尚未获准连接后端。'});
  if(origin){res.setHeader('Access-Control-Allow-Credentials','true');res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');}
- res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Session-Token, X-CSRF-Token');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
+ res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Session-Token, X-CSRF-Token, X-Account-Token');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.method==='OPTIONS')return res.status(204).end();
  const route=String(req.query.route||new URL(req.url,'http://localhost').pathname.replace(/^\/api\//,'')).replace(/^\//,'');
   if(route.startsWith('internal/ritual-worker/')){
@@ -40,7 +41,7 @@ export async function handleRequest(req,res,config){
  let session=verifySession(config,req.headers['x-session-token']);
  try{
   if(route==='bootstrap'&&req.method==='GET'){
-   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)},miniProgram:{enabled:miniProgram}});
+   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)},miniProgram:{enabled:miniProgram,wechatLoginEnabled:miniProgram&&wechatReady}});
   }
   if(!session)return send(res,403,{error:'页面会话已更新，请刷新重试。'});
   if(req.method==='POST'&&req.headers['x-csrf-token']!==csrfFor(config,session))return send(res,403,{error:'页面会话校验失败，请刷新重试。'});
@@ -50,13 +51,22 @@ export async function handleRequest(req,res,config){
   if(route.startsWith('account/')){
    if(!accountMode)throw new AccountError(503,'账户服务尚未开启。');
    const client=String(req.headers['eo-connecting-ip']||req.headers['x-real-ip']||req.headers['x-forwarded-for']||'unknown').split(',')[0].trim().slice(0,80);
+   if(route==='account/wechat-login'&&req.method==='POST'){
+    if(!miniProgramId)throw new AccountError(403,'微信登录只能从已配置的小程序发起。');
+    const result=await wechatLogin(config,{appId:miniProgramId,code:body.code});res.setHeader('Set-Cookie',accountCookie(config,result.token));return send(res,200,{user:result.user,profile:result.profile,accountToken:result.token});
+   }
+   if(route==='account/wechat-bind'&&req.method==='POST'){
+    if(!miniProgramId)throw new AccountError(403,'微信绑定只能从已配置的小程序发起。');
+    return send(res,200,await bindWechatIdentity(config,await requireAccount(config,req),{appId:miniProgramId,code:body.code}));
+   }
    if(['account/register','account/login','account/recover'].includes(route)&&req.method==='POST'){
     const result=await ({'account/register':register,'account/login':login,'account/recover':recover}[route])(config,body,client);
-    res.setHeader('Set-Cookie',accountCookie(config,result.token));return send(res,200,{user:result.user,profile:result.profile,recoveryCode:result.recoveryCode});
+    res.setHeader('Set-Cookie',accountCookie(config,result.token));return send(res,200,{user:result.user,profile:result.profile,recoveryCode:result.recoveryCode,...(miniProgram?{accountToken:result.token}:{})});
    }
    if(route==='account/me'&&req.method==='GET'){const account=await currentAccount(config,req);return send(res,200,{user:account?userView(account):null,profile:account?await getProfile(config,account):null});}
    if(route==='account/logout'&&req.method==='POST'){await logout(config,await currentAccount(config,req));res.setHeader('Set-Cookie',accountCookie(config,'',true));return send(res,200,{ok:true});}
    const account=await requireAccount(config,req);
+   if(route==='account/nickname'&&req.method==='POST')return send(res,200,{user:await saveNickname(config,account,body.nickname)});
    if(route==='account/photos'&&req.method==='POST')return send(res,201,await uploadPhoto(config,account,body));
    if(route==='account/ritual'&&req.method==='GET')return send(res,200,await ritualStatus(config,account));
    if(route==='account/ritual'&&req.method==='POST')return send(res,200,await configureRitual(config,account,body));
