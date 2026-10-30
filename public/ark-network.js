@@ -35,7 +35,7 @@ export class ArkNetwork {
   let device;
   try{
    // Must remain directly in the click handler before any await (Web Bluetooth gesture).
-   device=await this.bluetooth.requestDevice({filters:[{namePrefix:'FRAMEFILM',services:[SERVICE]}],optionalServices:[SERVICE]});
+   device=await this.bluetooth.requestDevice({filters:[{services:[SERVICE]}],optionalServices:[SERVICE]});
    if(epoch!==this.epoch)return;
    this.device=device;this.deviceId=arkDeviceId(device.name);
    let opened;

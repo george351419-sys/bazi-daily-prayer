@@ -1,4 +1,4 @@
-import {setupNetwork} from './ark-network.js?v=20261030-frame-film-parity-v3';
+import {setupNetwork} from './ark-network.js?v=20261030-frame-film-parity-v4';
 import {setupAccounts} from './account-ui.js?v=20261030-ritual-sync-v14';
 import {WISH_GROUPS} from './wishes.js';
 import {normalizeBirthDate} from './date-input.js?v=20261017-solar';
