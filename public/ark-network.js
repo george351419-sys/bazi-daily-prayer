@@ -19,7 +19,7 @@ export function arkDeviceId(name){
  return match?match[1].toLowerCase():null;
 }
 export class ArkNetwork {
- constructor({bluetooth,onState=()=>{},onDownload=()=>{},onOta=()=>{},delay=sleep,timeout=30000}={}){this.bluetooth=bluetooth;this.onState=onState;this.onDownload=onDownload;this.onOta=onOta;this.delay=delay;this.timeout=timeout;this.pendingResponses=new Map();this.epoch=0;this.connecting=false;}
+ constructor({bluetooth,onState=()=>{},onDownload=()=>{},onOta=()=>{},delay=sleep,timeout=30000,connectWait=12000}={}){this.bluetooth=bluetooth;this.onState=onState;this.onDownload=onDownload;this.onOta=onOta;this.delay=delay;this.timeout=timeout;this.connectWait=connectWait;this.pendingResponses=new Map();this.epoch=0;this.connecting=false;}
  state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic,deviceName:this.device?.name||null,deviceId:this.deviceId||null});}
  busyError(error){return /GATT operation already in progress/i.test(error?.message||'');}
  async release(device,wait=1500){
@@ -32,19 +32,23 @@ export class ArkNetwork {
    try{gatt.disconnect();}catch{finish();}
   });
  }
+ async openDevice(device){
+  const server=device.gatt.connected?device.gatt:await device.gatt.connect(),service=await server.getPrimaryService(SERVICE),characteristic=await service.getCharacteristic(CHARACTERISTIC);
+  return {server,characteristic};
+ }
  async connectDevice(device,epoch){
   let lastError;
-  for(const pause of [0,500,1000,2000,3000]){
+  try{return await this.openDevice(device);}
+  catch(error){if(!this.busyError(error))throw error;lastError=error;}
+  this.state('Chrome 正在完成系统蓝牙配对，等待画屏连接…');
+  const deadline=Date.now()+this.connectWait;
+  while(Date.now()<deadline&&!device.gatt.connected){
    if(epoch!==this.epoch)throw new Error('蓝牙连接已取消。');
-   if(pause){this.state('等待画屏释放旧蓝牙连接…');await this.delay(pause);}
-   try{
-    // A paired device can already be connected as soon as the chooser returns.
-    const server=device.gatt.connected?device.gatt:await device.gatt.connect(),service=await server.getPrimaryService(SERVICE),characteristic=await service.getCharacteristic(CHARACTERISTIC);
-    return {server,characteristic};
-   }
-   catch(error){lastError=error;if(!this.busyError(error))throw error;}
+   await this.delay(250);
   }
-  throw lastError;
+  if(!device.gatt.connected)throw lastError;
+  try{return await this.openDevice(device);}
+  catch(error){throw error;}
  }
  async connect(){
   if(this.connecting)throw new Error('正在连接画屏，请稍候。');
@@ -222,7 +226,7 @@ export function setupNetwork(){
  if(!window.isSecureContext||!navigator.bluetooth){
   connect.disabled=true;state.textContent='此浏览器暂不支持蓝牙配网。请用电脑 Chrome / Edge 或 Android Chrome，在 HTTPS 页面打开；iPhone 请先用支持蓝牙的电脑完成配网。';return;
  }
- connect.onclick=async()=>{connect.disabled=true;try{await client.connect();}catch(e){const message=e.message||e.name||'未知错误',busy=/GATT operation already in progress/i.test(message);state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':busy?'画屏仍在完成配对或释放旧连接。请等待几秒后直接重试；若持续失败，请在系统蓝牙中断开画屏（必要时忽略此设备），并确认没有其他页面连接过它。':'蓝牙连接失败：'+message;}finally{connect.disabled=false;}};
+ connect.onclick=async()=>{connect.disabled=true;try{await client.connect();}catch(e){const message=e.message||e.name||'未知错误',busy=/GATT operation already in progress/i.test(message);state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':busy?'Chrome 的系统蓝牙连接没有在等待时间内完成。请先在“系统设置 → 蓝牙”中断开画屏；必要时忽略设备后重新配对，再回到本页连接。':'蓝牙连接失败：'+message;}finally{connect.disabled=false;}};
  disconnect.onclick=()=>client.disconnect();
  bind.onclick=()=>window.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
  form.onsubmit=async event=>{event.preventDefault();busy=true;send.disabled=true;connect.disabled=true;
