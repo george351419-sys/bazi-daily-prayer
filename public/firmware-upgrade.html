@@ -1,10 +1,11 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>画屏 Wi-Fi 固件升级</title><style>body{font:17px/1.7 system-ui;max-width:760px;margin:35px auto;padding:20px;color:#183329;background:#f5f5ef}button{font:inherit;padding:13px;margin:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px;border-radius:12px}.ok{color:#08713e}.bad{color:#b12a28}</style><h1>画屏 Wi-Fi 固件升级</h1><p>目标：3.2.5-ritual.5。固件由 playmath.cn 下载；蓝牙用于发起升级和核验。请保持画屏供电，并退出手机小程序的蓝牙连接。</p><button id="connect">连接已授权画屏</button><button id="read" disabled>读取运行版本</button><button id="upgrade" disabled>升级到 ritual.5 并核验</button><pre id="state">等待连接。</pre><pre id="detail">升级后需版本与编译指纹同时匹配，才显示成功。</pre><script type="module">
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>画屏 Wi-Fi 固件升级</title><style>body{font:17px/1.7 system-ui;max-width:760px;margin:35px auto;padding:20px;color:#183329;background:#f5f5ef}button{font:inherit;padding:13px;margin:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px;border-radius:12px}.ok{color:#08713e}.bad{color:#b12a28}</style><h1>画屏 Wi-Fi 固件升级</h1><p>目标：3.2.5-ritual.5。固件由 playmath.cn 下载；蓝牙用于发起升级和核验。请保持画屏供电，并退出手机小程序的蓝牙连接。</p><button id="connect">连接已授权画屏</button><button id="rescan">重新搜索画屏</button><button id="read" disabled>读取运行版本</button><button id="upgrade" disabled>升级到 ritual.5 并核验</button><pre id="state">等待连接。</pre><pre id="detail">升级后需版本与编译指纹同时匹配，才显示成功。</pre><script type="module">
 import {ArkNetwork} from './ark-network.js';
 const state=document.querySelector('#state'),detail=document.querySelector('#detail'),upgrade=document.querySelector('#upgrade'),readButton=document.querySelector('#read');
 const expected=await fetch('./firmware/ritual-5.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('固件清单不可用');return r.json();});
-let chosen,busy=false,lastInfo;
+let chosen,busy=false,lastInfo,forcePicker=false;
 const bluetooth={requestDevice:async options=>{
- if(chosen)return chosen;
+ if(chosen&&!forcePicker)return chosen;
+ if(forcePicker){forcePicker=false;chosen=await navigator.bluetooth.requestDevice(options);return chosen;}
  const known=typeof navigator.bluetooth.getDevices==='function'?await navigator.bluetooth.getDevices():[];
  const same=known.filter(d=>d.name==='FRAMEFILMARK-Elink');
  chosen=same.length===1?same[0]:await navigator.bluetooth.requestDevice(options);return chosen;
@@ -14,9 +15,10 @@ const matches=info=>info.version===expected.version&&info.sha===expected.elfSha2
 async function read(){lastInfo=await client.readBuildInfo();detail.textContent='设备：'+client.device.name+'\n运行版本：'+lastInfo.version+'\n编译指纹：'+lastInfo.sha+'\n目标指纹：'+expected.elfSha256;return lastInfo;}
 async function connect(){if(!navigator.bluetooth)throw Error('浏览器不支持 Web Bluetooth，请使用电脑 Chrome');await client.connect();await read();}
 document.querySelector('#connect').onclick=async()=>{try{await connect();state.textContent=matches(lastInfo)?'已确认运行目标固件。':'已连接，可以开始 Wi-Fi 升级。';}catch(e){state.textContent=e.message;}};
+document.querySelector('#rescan').onclick=async()=>{if(busy)return;client.disconnect();chosen=null;forcePicker=true;try{await connect();state.textContent='已重新选择并连接，可以开始升级。';}catch(e){state.textContent=e.message;}};
 readButton.onclick=async()=>{try{const info=await read();state.textContent=matches(info)?'已确认：当前运行 ritual.5，编译指纹一致。':'当前运行固件尚未匹配目标。';}catch(e){state.textContent=e.message;}};
 upgrade.onclick=async()=>{
- busy=true;upgrade.disabled=true;readButton.disabled=true;document.querySelector('#connect').disabled=true;state.className='';
+ busy=true;document.querySelector('#rescan').disabled=true;upgrade.disabled=true;readButton.disabled=true;document.querySelector('#connect').disabled=true;state.className='';
  try{
   const before=await read();
   if(matches(before)){state.className='ok';state.textContent='已确认：当前已运行目标固件，无须重复升级。';return;}
@@ -34,6 +36,6 @@ upgrade.onclick=async()=>{
   }
   throw Error('尚未确认新固件启动：'+lastError.message+'。请唤醒画屏后点击连接并读取版本。');
  }catch(e){state.className='bad';state.textContent='尚未确认升级成功：'+e.message;}
- finally{busy=false;document.querySelector('#connect').disabled=false;readButton.disabled=!client.characteristic;upgrade.disabled=!client.characteristic;}
+ finally{busy=false;document.querySelector('#rescan').disabled=false;document.querySelector('#connect').disabled=false;readButton.disabled=!client.characteristic;upgrade.disabled=!client.characteristic;}
 };
 </script></html>
