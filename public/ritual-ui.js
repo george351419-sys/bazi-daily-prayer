@@ -94,7 +94,7 @@ export function setupRitual({request,fetchImage,getUser}){
   search.oninput=find;book.append(search,count,list);
   for(const [label,target] of [['查看八时辰建议',actions],['搜索答案之书',book],['上传照片 · 选择模式',settings]]){const button=node('button',label);button.type='button';button.className='secondary';button.onclick=()=>{if(target.tagName==='DETAILS')target.open=true;if(target===settings)location.hash='custom';target.scrollIntoView({behavior:'smooth',block:'start'});if(target===book)search.focus();};shortcuts.append(button);}
   host.append(title,transfer,status,report,shortcuts,current,actions,book);
-  const custom=document.querySelector('#custom-content');if(custom){settings.open=true;custom.append(settings);}else host.append(settings);
+  host.append(settings);
   shell={transfer,status,settingsState,report,current,settings,form,deliveryNote,selects,mode,submit,contentMode,showActions,populate,book,search,count,find,actionList};
  }
  function updateSettings(result){
