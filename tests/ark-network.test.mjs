@@ -16,7 +16,7 @@ function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
  if(bytes[1]===0x57||bytes[1]===0x58){const reply=packet(bytes[1],[0]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  }};
  const device={name:'FRAMEFILMARK-TEST',addEventListener:(key,fn)=>deviceListeners.set(key,fn),removeEventListener:key=>deviceListeners.delete(key),gatt:{connected:false,async connect(){connectCalls++;this.connected=true;return this;},async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};},disconnect(){disconnectCalls++;this.connected=false;deviceListeners.get('gattserverdisconnected')?.();}}};
- return {writes,device,get connectCalls(){return connectCalls;},get disconnectCalls(){return disconnectCalls;},bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILM');return device;}}};
+ return {writes,device,get connectCalls(){return connectCalls;},get disconnectCalls(){return disconnectCalls;},bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILM');assert.deepEqual(options.filters[0].services,['00002000-0000-1000-8000-00805f9b34fb']);return device;}}};
 }
 test('Wi-Fi UTF-8 validation rejects truncation, open passwords and control characters',()=>{
  assert.throws(()=>wifiCredentials('中'.repeat(11),'12345678'));
