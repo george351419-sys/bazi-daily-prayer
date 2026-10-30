@@ -1,3 +1,100 @@
-<view class="page"><text class="kicker">A WISH OF YOUR OWN / 04</text><text class="title">愿望从你开始。</text><text class="subtitle">你的生辰、心愿和画册，都在这里。</text><view class="error" role="alert">{{error}}</view><view class="notice" wx:if="{{message}}">{{message}}</view><view class="paper" wx:if="{{!user}}"><text class="section-title">{{authMode==='login'?'使用已有账户':authMode==='register'?'开启我的画册':'找回我的账户'}}</text><text class="note">与 playmath.cn 共用账户。首版使用账号密码，微信快捷登录待正式账号接入。</text><view class="choice-row"><button class="choice {{authMode==='login'?'selected':''}}" data-mode="login" bindtap="mode">登录</button><button class="choice {{authMode==='register'?'selected':''}}" data-mode="register" bindtap="mode">注册</button><button class="choice {{authMode==='recover'?'selected':''}}" data-mode="recover" bindtap="mode">找回</button></view><text class="label">账号 · 3–24 位字母、数字或下划线</text><input class="field" value="{{username}}" data-field="username" bindinput="input" maxlength="24"/><view wx:if="{{authMode==='register'}}"><text class="label">昵称</text><input class="field" value="{{nickname}}" data-field="nickname" bindinput="input" maxlength="30"/></view><view wx:if="{{authMode==='recover'}}"><text class="label">账户恢复码</text><input class="field" value="{{recoveryCode}}" password data-field="recoveryCode" bindinput="input" maxlength="64"/></view><text class="label">{{authMode==='recover'?'新密码':'密码'}} · 10–128 位</text><input class="field" value="{{password}}" password data-field="password" bindinput="input" maxlength="128"/><button class="primary spaced wide" bindtap="auth" loading="{{busy}}" disabled="{{busy||!agreed}}">{{authMode==='login'?'登录账户':authMode==='register'?'创建账户':'恢复账户'}}</button></view>
-<view wx:else><view class="row paper"><view><text class="section-title">{{user.nickname}}</text><text class="muted">{{user.username}} · 与网页同步</text></view><button class="text-button" bindtap="logout" disabled="{{busy}}">退出</button></view><view class="notice" wx:if="{{recovery}}"><text>请单独保存恢复码。它可用于重置账户密码：</text><text class="recovery" user-select>{{recovery}}</text><text>退出当前页面后不再显示。</text></view><view class="paper"><text class="section-title">生辰信息</text><text class="label">性别</text><view class="choice-row"><button class="choice {{profile.gender==='female'?'selected':''}}" data-field="gender" data-value="female" bindtap="choose">女</button><button class="choice {{profile.gender==='male'?'selected':''}}" data-field="gender" data-value="male" bindtap="choose">男</button></view><text class="label">历法</text><view class="choice-row"><button class="choice {{profile.calendar==='solar'?'selected':''}}" data-field="calendar" data-value="solar" bindtap="choose">公历</button><button class="choice {{profile.calendar==='lunar'?'selected':''}}" data-field="calendar" data-value="lunar" bindtap="choose">农历</button></view><text class="label">出生日期{{profile.calendar==='lunar'?' · 请选择农历年月日数字':''}}</text><picker mode="date" start="1900-01-01" end="{{today}}" value="{{profile.birthDate}}" data-field="birthDate" bindchange="field"><view class="field">{{profile.birthDate||'选择出生年月日'}}</view></picker><view class="check-row" wx:if="{{profile.calendar==='lunar'}}"><text>农历闰月</text><switch color="#415B48" checked="{{profile.leap}}" bindchange="leap"/></view><text class="label">出生时间 · 北京时间</text><picker mode="time" value="{{profile.birthTime}}" data-field="birthTime" bindchange="field"><view class="field">{{profile.birthTime||'选择出生时分'}}</view></picker><text class="label">出生城市 · 选填</text><input class="field" value="{{profile.city}}" data-field="city" bindinput="field" maxlength="60" placeholder="例如：上海，用于真太阳时校正"/><text class="note">不知道具体时刻时，请先核实，避免随意填写。</text></view><view class="paper"><text class="section-title">此刻的心愿</text><view wx:for="{{groups}}" wx:key="name" class="wish-group"><text class="label">{{item.name}}</text><text wx:for="{{item.items}}" wx:for-item="wish" wx:key="id" class="pill {{wish.selected?'selected':''}}" data-id="{{wish.id}}" bindtap="wish">{{wish.label}}</text></view><button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">保存生辰与祈愿</button><text class="note">保存资料不会触发画面生成。</text><view class="rule"></view><text class="section-title">为今天，留一幅画</text><text class="note">生成会调用模型并使用服务额度，通常需要等待一至两分钟。完成后会保存到共用画册。</text><button class="secondary spaced wide" bindtap="generate" disabled="{{busy||!agreed}}" loading="{{busy}}">{{jobReady?'继续绘制已归档解读':'生成今日祈福画'}}</button><text class="note" wx:if="{{generation}}">{{generation}}</text><button class="text-button" bindtap="screen" disabled="{{busy}}">到画屏选择展示内容</button></view></view>
-<view class="privacy"><view class="row"><text>同意账户与隐私说明</text><switch color="#415B48" checked="{{agreed}}" bindchange="agree"/></view><button class="text-button" bindtap="privacy">{{privacyOpen?'收起说明':'查看数据用途与权限'}}</button><view wx:if="{{privacyOpen}}"><text class="note">生辰、城市与愿望用于保存个人资料及既有祈福服务；照片仅上传到 playmath.cn 的私有账户。选择照片前会请求相册/相机权限；Wi-Fi 密码只通过蓝牙发给你选择的设备，不上传后台，不保存到本地。登录会话保存在本机，退出后清除。无需通讯录或定位权限。小程序账号尚未注册，运营主体、隐私联系渠道及正式隐私保护指引须在提交审核前补齐。</text><button class="text-button" bindtap="openPrivacy">微信隐私保护指引</button></view></view></view>
+<view class="page">
+ <text class="kicker">A WISH OF YOUR OWN / 02</text>
+ <text class="title">许愿池</text>
+ <text class="subtitle">你的生辰、心愿和画册，都在这里。</text>
+ <view class="error" role="alert">{{error}}</view>
+ <view class="notice" wx:if="{{message}}">{{message}}</view>
+
+ <view class="paper" wx:if="{{!user}}">
+  <text class="kicker">WECHAT ACCOUNT</text>
+  <text class="section-title">让画册跟着你走</text>
+  <text class="note">点击微信登录，会自动建立账户。生辰、愿望和画面只保存在你的账户中。</text>
+  <button class="primary spaced wide" bindtap="wechatAuth" loading="{{busy}}" disabled="{{busy||!agreed||!wechatEnabled}}">微信一键登录</button>
+  <text class="note" wx:if="{{!wechatEnabled}}">服务端还需配置小程序 AppID 与 AppSecret，当前不会伪造登录成功。</text>
+  <button class="text-button" bindtap="legacy">{{authMode==='legacy'?'返回微信登录':'使用已有网页账户'}}</button>
+  <view wx:if="{{authMode==='legacy'}}">
+   <text class="label">原账号 · 3–24 位字母、数字或下划线</text>
+   <input class="field" value="{{username}}" data-field="username" bindinput="input" maxlength="24" placeholder="已有网页账号"/>
+   <text class="label">密码</text>
+   <input class="field" value="{{password}}" password data-field="password" bindinput="input" maxlength="128" placeholder="账户密码"/>
+   <button class="secondary spaced wide" bindtap="auth" loading="{{busy}}" disabled="{{busy||!agreed}}">登录已有账户</button>
+   <text class="note">邮箱验证码注册与找回仍在网页端完成。</text>
+  </view>
+ </view>
+
+ <view wx:else>
+  <view class="paper">
+   <view class="row">
+    <view>
+     <text class="section-title">{{user.nickname}}</text>
+     <text class="muted">{{user.authProvider==='wechat'?'微信账户':(user.email||'@'+user.username)}}{{user.wechatBound?' · 已绑定微信':''}}</text>
+    </view>
+    <button class="text-button" bindtap="logout" disabled="{{busy}}">退出</button>
+   </view>
+   <text class="label">账户昵称</text>
+   <view class="inline-action">
+    <input class="field" value="{{nicknameDraft}}" data-field="nicknameDraft" bindinput="input" maxlength="30"/>
+    <button class="secondary" bindtap="saveNickname" disabled="{{busy||!nicknameDraft}}">保存</button>
+   </view>
+   <button wx:if="{{!user.wechatBound}}" class="secondary spaced wide" bindtap="bindWechat" disabled="{{busy||!wechatEnabled}}">绑定微信，之后一键进入</button>
+  </view>
+
+  <view class="paper">
+   <text class="section-title">生辰信息</text>
+   <text class="label">性别</text>
+   <view class="choice-row">
+    <button class="choice {{profile.gender==='female'?'selected':''}}" data-field="gender" data-value="female" bindtap="choose">女</button>
+    <button class="choice {{profile.gender==='male'?'selected':''}}" data-field="gender" data-value="male" bindtap="choose">男</button>
+   </view>
+   <text class="label">历法</text>
+   <view class="choice-row">
+    <button class="choice {{profile.calendar==='solar'?'selected':''}}" data-field="calendar" data-value="solar" bindtap="choose">公历</button>
+    <button class="choice {{profile.calendar==='lunar'?'selected':''}}" data-field="calendar" data-value="lunar" bindtap="choose">农历</button>
+   </view>
+   <text class="label">出生日期{{profile.calendar==='lunar'?' · 请选择农历年月日数字':''}}</text>
+   <picker mode="date" start="1900-01-01" end="{{today}}" value="{{profile.birthDate}}" data-field="birthDate" bindchange="field">
+    <view class="field">{{profile.birthDate||'选择出生年月日'}}</view>
+   </picker>
+   <view class="check-row" wx:if="{{profile.calendar==='lunar'}}">
+    <text>农历闰月</text>
+    <switch color="#415B48" checked="{{profile.leap}}" bindchange="leap"/>
+   </view>
+   <text class="label">出生时间 · 北京时间</text>
+   <picker mode="time" value="{{profile.birthTime}}" data-field="birthTime" bindchange="field">
+    <view class="field">{{profile.birthTime||'选择出生时分'}}</view>
+   </picker>
+   <text class="label">出生城市 · 选填</text>
+   <input class="field" value="{{profile.city}}" data-field="city" bindinput="field" maxlength="60" placeholder="例如：上海，用于真太阳时校正"/>
+   <text class="note">不知道具体时刻时，请先核实，避免随意填写。</text>
+  </view>
+
+  <view class="paper">
+   <text class="section-title">此刻的心愿</text>
+   <view wx:for="{{groups}}" wx:key="name" class="wish-group">
+    <text class="label">{{item.name}}</text>
+    <text wx:for="{{item.items}}" wx:for-item="wish" wx:key="id" class="pill {{wish.selected?'selected':''}}" data-id="{{wish.id}}" bindtap="wish">{{wish.label}}</text>
+   </view>
+   <button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">保存生辰与祈愿</button>
+   <text class="note">保存资料不会触发画面生成。</text>
+   <view class="rule"></view>
+   <text class="section-title">为今天，留一幅画</text>
+   <text class="note">生成会调用模型并使用服务额度，通常需要等待一至两分钟。完成后会保存到账户画册。</text>
+   <button class="secondary spaced wide" bindtap="generate" disabled="{{busy||!agreed}}" loading="{{busy}}">{{jobReady?'继续绘制已归档解读':'生成今日祈福画'}}</button>
+   <text class="note" wx:if="{{generation}}">{{generation}}</text>
+   <button class="text-button" bindtap="companion" disabled="{{busy}}">到「解读陪伴」读画面、微行动与答案之数</button>
+   <button class="text-button" bindtap="screen" disabled="{{busy}}">到画屏选择展示内容</button>
+  </view>
+ </view>
+
+ <view class="privacy">
+  <view class="row">
+   <text>同意账户与隐私说明</text>
+   <switch color="#415B48" checked="{{agreed}}" bindchange="agree"/>
+  </view>
+  <button class="text-button" bindtap="privacy">{{privacyOpen?'收起说明':'查看数据用途与权限'}}</button>
+  <view wx:if="{{privacyOpen}}">
+   <text class="note">生辰、城市与愿望用于保存个人资料及祈福服务；照片仅上传到 playmath.cn 的私有账户。选择照片前会请求相册/相机权限；Wi-Fi 密码只通过蓝牙发给你选择的设备，不上传后台，不保存到本地。微信登录凭证只由服务端用于建立账户，不保存 session_key。登录会话保存在本机，退出后清除。无需通讯录或定位权限。运营主体、隐私联系渠道及正式隐私保护指引须在提交审核前核实。</text>
+   <button class="text-button" bindtap="openPrivacy">微信隐私保护指引</button>
+  </view>
+ </view>
+</view>

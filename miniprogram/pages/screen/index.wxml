@@ -1,4 +1,79 @@
-<view class="page"><text class="kicker">YOUR QUIET COMPANION / 02</text><text class="title">让画屏，更像你。</text><text class="subtitle">先连接画屏，再选择想看见的日常。</text><view class="error" role="alert">{{error}}</view><view class="notice" wx:if="{{message}}">{{message}}</view>
-<view class="paper"><text class="kicker">01 / 连接画屏</text><text class="section-title">先让它连上网络</text><text class="note">唤醒画屏，开启手机蓝牙。请选名称以 FRAMEFILMARK 开头的设备。</text><button class="secondary spaced" bindtap="scan" disabled="{{busy}}">搜索附近画屏</button><button class="device" wx:for="{{bleDevices}}" wx:key="id" data-id="{{item.id}}" bindtap="connect" disabled="{{busy}}"><text>{{item.name}}</text><text class="muted">连接</text></button><text class="note">{{bleText}}</text><view wx:if="{{paired}}"><text class="label">2.4 GHz Wi-Fi 名称</text><input class="field" value="{{ssid}}" data-field="ssid" bindinput="input" maxlength="32"/><text class="label">Wi-Fi 密码</text><input class="field" value="{{wifiPassword}}" data-field="wifiPassword" bindinput="input" password maxlength="63"/><text class="note">密码仅经蓝牙发给所选画屏，不上传后台。</text><button class="primary spaced" bindtap="wifi" disabled="{{busy}}" loading="{{busy}}">发送 Wi-Fi 设置</button><button class="text-button" bindtap="disconnect" disabled="{{busy}}">断开蓝牙</button></view></view>
-<view wx:if="{{!user}}" class="paper"><text class="section-title">照片和画面，跟随你的账户</text><text class="note">登录后上传照片、选择展示模式，网页与小程序共用。</text><button class="primary spaced" bindtap="login">去登录</button></view>
-<view wx:else><view class="paper"><text class="kicker">02 / 选择画面</text><text class="section-title">你希望看见什么？</text><view class="choice-row"><button class="choice {{contentMode==='prayer'?'selected':''}}" data-value="prayer" bindtap="content" disabled="{{busy}}"><text>每日祈福画</text><text class="note">祈福图 + 微行动</text></button><button class="choice {{contentMode==='photo'?'selected':''}}" data-value="photo" bindtap="content" disabled="{{busy}}"><text>我的照片</text><text class="note">微行动自由开关</text></button></view><view wx:if="{{contentMode==='photo'}}"><view class="check-row"><text>搭配微行动建议</text><switch checked="{{showActions}}" color="#415B48" bindchange="actions" disabled="{{busy}}"/></view><button class="secondary spaced" bindtap="choosePhoto" disabled="{{busy}}">从相册选择 / 拍一张</button><image wx:if="{{draft}}" class="draft" src="{{draft}}" mode="aspectFit"/><view wx:if="{{draft}}"><text class="label">给照片起个名字</text><input class="field" value="{{photoTitle}}" data-field="photoTitle" bindinput="input" maxlength="60" placeholder="例如：一家人的周末"/><button class="primary spaced" bindtap="upload" disabled="{{busy}}" loading="{{busy}}">上传到账户</button></view><text class="note">保留完整构图，移除照片位置信息。六色屏会与原照片存在色差。</text></view><view wx:if="{{artworks.length}}"><view wx:for="{{choices}}" wx:key="index"><text class="label">第 {{index+1}} 天画面</text><picker range="{{titles}}" value="{{item}}" data-day="{{index}}" bindchange="choice" disabled="{{busy}}"><view class="field">{{titles[item]}}</view></picker></view></view><view class="empty spaced" wx:else>{{contentMode==='photo'?'先上传一张自己的照片。':'画册里暂时没有已完成的祈福画，请到「我的」生成。'}}</view><button wx:if="{{cursor}}" class="text-button" bindtap="more" disabled="{{busy}}">载入更多画作和照片</button></view><view class="paper"><text class="kicker">03 / 日常节奏</text><text class="section-title">给变化一点时间</text><button class="choice wide {{mode==='test'?'selected':''}}" data-value="test" bindtap="mode" disabled="{{busy}}">测试体验<text class="note">每 2 分钟换动作 · 两天循环</text></button><button class="choice wide spaced {{mode==='daily'?'selected':''}}" data-value="daily" bindtap="mode" disabled="{{busy}}">日常陪伴<text class="note">凌晨 01:00 换画 · 活动时段每两小时换动作</text></button><button class="primary spaced wide" bindtap="save" disabled="{{busy}}" loading="{{busy}}">{{syncConfigured?'保存并准备同步':'保存画屏设置'}}</button><text class="note">{{syncConfigured?'保存成功不代表设备已完成显示，请查看设备回执。':'设备下发服务尚未接入；当前仅保存到账户，不会自动发送到画屏。'}}</text></view></view><canvas type="2d" id="photo-canvas" class="photo-canvas"></canvas></view>
+<view class="page">
+ <text class="kicker">MAKE IT YOURS / 04</text>
+ <text class="title">自定义</text>
+ <text class="subtitle">先上传自己的图片，再安排每天出现的那一张。</text>
+ <view class="error" role="alert">{{error}}</view>
+ <view class="notice" wx:if="{{message}}">{{message}}</view>
+
+ <view wx:if="{{!user}}" class="paper">
+  <text class="section-title">你的图片，跟随账户</text>
+  <text class="note">登录后上传、排序并同步到画屏；网页与小程序使用同一份轮播内容。</text>
+  <button class="primary spaced" bindtap="login">微信登录</button>
+ </view>
+
+ <view wx:else>
+  <view class="mode-banner">
+   <view>
+    <text class="kicker">CURRENT SCREEN</text>
+    <text class="section-title">{{photoMode?'当前播放：我的作品':'当前播放：祈福图'}}</text>
+   </view>
+   <text class="badge">{{syncConfigured?'已绑定画屏':'仅保存到账户'}}</text>
+  </view>
+
+  <view class="paper">
+   <text class="kicker">01 / UPLOAD</text>
+   <text class="section-title">上传自己的图片</text>
+   <text class="note">可一次选择多张；已上传图片会加入下方轮播。最多保留 6 张，按顺序每天 01:00 更换一张并循环。</text>
+   <button class="primary spaced wide" bindtap="choosePhotos" disabled="{{busy||photoSelection.length>=maxPhotos}}" loading="{{busy}}">从相册选择 / 拍照</button>
+   <text class="note" wx:if="{{photoSelection.length>=maxPhotos}}">轮播已满 6 张，请先移除一张再上传。</text>
+  </view>
+
+  <view class="paper">
+   <view class="row">
+    <view>
+     <text class="kicker">02 / ROTATION</text>
+     <text class="section-title">每日轮播</text>
+    </view>
+    <text class="badge">{{photoSelection.length}} / {{maxPhotos}}</text>
+   </view>
+   <text class="note" wx:if="{{photoItems.length}}">今天显示第 {{rotationPosition+1}} 张。之后每天换下一张，可用上移、下移调整顺序。</text>
+   <text class="note" wx:else>第 1 张从今天开始，之后每天换下一张。可用上移、下移调整顺序。</text>
+   <view class="photo-list">
+    <view wx:for="{{photoItems}}" wx:key="id" class="photo-row">
+     <view class="photo-thumb"><image src="{{item.preview}}" mode="aspectFill"/><text>{{item.position}}</text></view>
+     <view class="photo-copy"><text class="photo-name">{{item.title}}</text><text class="note">{{index===rotationPosition?'今天显示':'第 '+item.position+' 个轮播位置'}}</text></view>
+     <view class="order-row">
+      <button class="mini-button" data-id="{{item.id}}" data-direction="up" bindtap="movePhoto" disabled="{{busy||index===0}}">↑</button>
+      <button class="mini-button" data-id="{{item.id}}" data-direction="down" bindtap="movePhoto" disabled="{{busy||index===photoItems.length-1}}">↓</button>
+      <button class="mini-button remove" data-id="{{item.id}}" bindtap="removePhoto" disabled="{{busy}}">移除</button>
+     </view>
+    </view>
+   </view>
+   <view wx:if="{{!photoItems.length}}" class="empty">还没有选入轮播。上传图片后会自动加入。</view>
+   <view class="check-row action-row">
+    <view><text>附加呈现微行动建议</text><text class="note">关闭后，画框只显示图片。</text></view>
+    <switch checked="{{showActions}}" color="#415B48" bindchange="actions" disabled="{{busy}}"/>
+   </view>
+  </view>
+
+  <view wx:if="{{availablePhotos.length}}" class="paper">
+   <text class="section-title">加入已有图片</text>
+   <text class="note">这些图片已保存在账户中，点击即可加入轮播。</text>
+   <view class="available-grid">
+    <button wx:for="{{availablePhotos}}" wx:key="id" class="available-item" data-id="{{item.id}}" bindtap="addPhoto" disabled="{{busy||photoSelection.length>=maxPhotos}}">
+     <image src="{{item.preview}}" mode="aspectFill"/>
+     <text>{{item.title}}</text>
+     <text class="add-label">加入轮播</text>
+    </button>
+   </view>
+  </view>
+  <button wx:if="{{cursor}}" class="text-button" bindtap="more" disabled="{{busy}}">载入更多图片</button>
+
+  <view class="stack action-buttons">
+   <button class="primary wide" bindtap="savePhoto" disabled="{{busy||!photoSelection.length}}" loading="{{busy}}">{{photoMode?'保存并更新内容':'确认切换为自己作品'}}</button>
+   <button wx:if="{{photoMode}}" class="secondary wide" bindtap="switchPrayer" disabled="{{busy}}">切换回祈福图</button>
+   <text class="note">保存成功代表账户计划已更新；画框实际显示以设备领取和回执为准。</text>
+  </view>
+ </view>
+ <canvas type="2d" id="photo-canvas" class="photo-canvas"></canvas>
+</view>

@@ -1,9 +1,10 @@
 {
   "pages": [
+    "pages/network/index",
+    "pages/mine/index",
     "pages/today/index",
     "pages/screen/index",
-    "pages/answers/index",
-    "pages/mine/index"
+    "pages/answers/index"
   ],
   "window": {
     "navigationBarTitleText": "今日祈愿",
@@ -15,20 +16,20 @@
     "custom": true,
     "list": [
       {
-        "pagePath": "pages/today/index",
-        "text": "今日"
-      },
-      {
-        "pagePath": "pages/screen/index",
-        "text": "画屏"
-      },
-      {
-        "pagePath": "pages/answers/index",
-        "text": "答案"
+        "pagePath": "pages/network/index",
+        "text": "链接神物"
       },
       {
         "pagePath": "pages/mine/index",
-        "text": "我的"
+        "text": "许愿池"
+      },
+      {
+        "pagePath": "pages/today/index",
+        "text": "解读陪伴"
+      },
+      {
+        "pagePath": "pages/screen/index",
+        "text": "自定义"
       }
     ]
   },

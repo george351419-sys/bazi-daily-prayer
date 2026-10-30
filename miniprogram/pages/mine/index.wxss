@@ -1,1 +1,1 @@
-.recovery{display:block;word-break:break-all;font-family:monospace;font-size:27rpx;padding:20rpx 0}.wish-group{padding-bottom:16rpx}.paper .section-title{margin-bottom:0}
+.inline-action{display:flex;align-items:stretch;gap:16rpx}.inline-action .field{flex:1}.inline-action button{min-width:132rpx;padding-left:18rpx;padding-right:18rpx}.wish-group{padding-bottom:16rpx}.paper .section-title{margin-bottom:0}

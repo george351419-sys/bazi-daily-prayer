@@ -1,5 +1,75 @@
-<view class="page"><view class="row"><text class="kicker">DAILY RITUAL / 01</text><text class="date">{{date}}</text></view><text class="title">把心愿，放在眼前。</text><text class="subtitle">一幅画，一件小事，一点向前的力量。</text><view class="loading" wx:if="{{loading}}">正在载入今日内容…</view><view class="error" role="alert">{{error}}</view>
-<view class="artwork {{status.displayPlan.contentMode==='photo'?'photo':''}}"><image wx:if="{{image}}" src="{{image}}" mode="aspectFit" class="painting"/><view wx:elif="{{!sample}}" class="blank">还没有选择画面<text class="note">先在画屏页选择照片或已有祈福图。</text></view><view class="art-title" wx:if="{{sample||status.displayPlan.contentMode!=='photo'}}">今日祈愿</view><view class="seal" wx:if="{{sample||status.displayPlan.contentMode!=='photo'}}">愿</view><view class="art-action" wx:if="{{sample||status.action}}"><text class="action-label">{{sample?'此刻 · 一件小事':status.action.branch+'时 · '+status.action.title}}</text><text class="action-text">{{sample?'放松肩膀，慢慢呼吸片刻':status.action.text}}</text></view></view>
-<view class="row"><text class="badge">{{sample?'示例画面':status.displaySource==='device_report'?'设备最近回报':'计划预览'}}</text><button class="text-button" bindtap="refresh" disabled="{{loading}}">刷新内容</button></view><view wx:if="{{sample}}" class="notice">这是一张示例画。登录后，查看你的照片、祈福画和展示计划。</view><view wx:elif="{{status.syncConfigured===false}}" class="notice">内容保存在账户中。设备下发服务尚未接入，目前不会自动发送到画屏。</view><text wx:if="{{status.deviceReport.lastSeen}}" class="note">设备最近联网：{{status.deviceReport.lastSeen}}</text><text wx:if="{{status.notice}}" class="note">{{status.notice}}</text>
-<view class="paper" wx:if="{{status.action}}"><text class="kicker">此刻的微行动</text><text class="section-title">{{status.action.title}}</text><text>{{status.action.detail}}</text><text class="note">通用动作建议 · 请以身体舒适为准</text></view>
-<view class="paper" wx:if="{{status.artwork}}"><button class="text-button" bindtap="expand">{{expanded?'收起':'展开'}} · {{status.displayPlan.contentMode==='photo'?'照片说明':'画面解读'}}</button><view wx:if="{{expanded}}"><text>{{intro}}</text><view wx:for="{{readings}}" wx:key="title" class="spaced"><text class="section-title">{{item.title}}</text><text>{{item.body}}</text></view></view></view><view class="stack spaced"><button class="primary" bindtap="open">{{sample?'登录，开启我的画屏':'管理我的画屏'}}</button><button class="secondary" bindtap="answers">翻开答案之书</button></view></view>
+<view class="page">
+ <view class="row"><text class="kicker">YOUR DAILY COMPANION / 03</text><text class="date">{{date}}</text></view>
+ <text class="title">解读陪伴</text>
+ <text class="subtitle">一幅画，一件小事，一个答案，都在这里读完。</text>
+ <view class="loading" wx:if="{{loading}}">正在载入今日内容…</view>
+ <view class="error" role="alert">{{error}}</view>
+
+ <view class="artwork {{status.displayPlan.contentMode==='photo'?'photo':''}}">
+  <image wx:if="{{image}}" src="{{image}}" mode="aspectFit" class="painting"/>
+  <view wx:elif="{{!sample}}" class="blank">还没有选择画面<text class="note">先在画屏页选择照片或已有祈福图。</text></view>
+  <block wx:if="{{sample||status.displayPlan.contentMode!=='photo'}}">
+   <view class="art-title">今日祈愿</view>
+   <view class="seal">愿</view>
+  </block>
+  <view class="art-action" wx:if="{{sample||status.action}}"><text class="action-label">{{sample?'此刻 · 一件小事':status.action.branch+'时 · '+status.action.title}}</text><text class="action-text">{{sample?'放松肩膀，慢慢呼吸片刻':status.action.text}}</text></view>
+ </view>
+
+ <view class="row"><text class="badge">{{sample?'示例画面':status.displaySource==='device_report'?'设备最近回报':'计划预览'}}</text><button class="text-button" bindtap="refresh" disabled="{{loading}}">刷新内容</button></view>
+ <view wx:if="{{sample}}" class="notice">这是一张示例画。登录后，查看你的照片、祈福画与完整解读。</view>
+ <text wx:if="{{status.deviceReport.lastSeen}}" class="note">设备最近联网：{{status.deviceReport.lastSeen}}</text>
+ <text wx:if="{{status.notice}}" class="note">{{status.notice}}</text>
+ <view wx:if="{{!sample}}" class="notice">{{progress}}</view>
+ <view class="day-previews"><view wx:for="{{days}}" wx:key="artworkId" class="day-preview" wx:if="{{item.preview}}"><image src="{{item.preview}}" mode="aspectFit"/><text>{{item.label}} · {{item.date}}</text><text class="note">{{item.title}}</text></view></view>
+
+ <view class="paper companion-section">
+  <text class="kicker">01 / PICTURE READING</text>
+  <text class="section-title">画面解读</text>
+  <text wx:if="{{sample}}" class="companion-lead">登录后，这里会读出画中的主尊、色彩、生辰底色与每一份心愿。示例画面只展示阅读结构。</text>
+  <block wx:elif="{{status.artwork}}">
+   <text wx:if="{{status.displayPlan.contentMode==='photo'}}" class="companion-lead">这是你上传到私人画册的作品。照片模式不进入命理取象，也不会改动祈福画原有的画面解读。</text>
+   <block wx:else>
+    <text wx:if="{{artworkTitle}}" class="companion-title">{{artworkTitle}}</text>
+    <text wx:if="{{overview}}" class="companion-lead">{{overview}}</text>
+    <view wx:if="{{elements.length}}" class="element-list"><view wx:for="{{elements}}" wx:key="name" class="element-row"><text class="element-no">{{index+1}}</text><view><text class="element-name">{{item.name}}</text><text class="element-meaning">{{item.meaning}}</text></view></view></view>
+    <text wx:if="{{blessing}}" class="companion-blessing">{{blessing}}</text>
+    <view wx:for="{{readings}}" wx:key="title" class="insight-row"><text class="insight-no">{{index+1}}</text><view><text class="section-title">{{item.title}}</text><text>{{item.body}}</text></view></view>
+   </block>
+  </block>
+  <text wx:else class="note">先完成一幅祈福画，这里会显示它的完整画面解读。</text>
+ </view>
+
+ <view class="paper companion-section">
+  <text class="kicker">02 / MICRO ACTION READING</text>
+  <text class="section-title">微行动解读</text>
+  <block wx:if="{{status.action}}">
+   <text class="companion-title">{{status.action.branch}}时 · {{status.action.title}}</text>
+   <text class="companion-lead">{{status.action.text}}</text>
+   <text class="note">行动解读 · {{status.action.detail}}</text>
+   <text wx:if="{{status.action.number_basis}}" class="note">次数取象 · {{status.action.number_basis.element}}河图数 {{status.action.number_basis.number}}</text>
+  </block>
+  <text wx:elif="{{sample}}" class="companion-lead">此刻 · 放松肩膀，慢慢呼吸片刻。登录后，会按你的时辰与喜用给出更具体的行动和次数取象。</text>
+  <text wx:else class="companion-lead">当前时段没有新增动作建议，夜间请好好休息。</text>
+  <text class="note">动作以身体舒适为准；如不适，请停止并咨询专业人员。</text>
+  <button class="text-button spaced" bindtap="toggleActions">{{allActions?'收起':'展开'}}今日与明日全部时辰建议</button>
+  <view wx:if="{{allActions}}"><view wx:for="{{days}}" wx:key="label"><text class="section-title">{{item.label}} · {{item.title}}</text><view wx:for="{{item.actions}}" wx:for-item="action" wx:key="key" class="action-item"><text class="label">{{action.branch}}时 · {{action.range}}</text><view wx:for="{{action.options}}" wx:for-item="option" wx:key="id"><text class="action-option">{{index+1}} · {{option.title}}：{{option.text}}</text><text class="note">{{option.detail}}</text></view></view></view></view>
+ </view>
+
+ <view class="paper companion-section">
+  <text class="kicker">03 / ANSWER NUMBER READING</text>
+  <text class="section-title">答案之数解读</text>
+  <view wx:if="{{currentAnswer}}" class="answer-number">
+   <view class="answer-meta"><text class="answer-id">{{currentAnswer.id}}</text><text wx:if="{{answerNo}}">第 {{answerNo}} 数 · 答案之书</text></view>
+   <text class="companion-quote">{{currentAnswer.text}}</text>
+   <text class="companion-lead">{{currentAnswer.phone_detail}}</text>
+   <text class="note">{{currentAnswer.theme}} · {{currentAnswer.tendency}}</text>
+   <text class="note">{{answerSource==='device'?'来自画屏最近的上屏回报':'手机随机翻页 · 不会改变画屏内容'}}</text>
+  </view>
+  <text wx:else class="companion-lead">画屏上键抽到的答案，会在这里保留编号与解释。也可以现在就翻开一数。</text>
+  <button wx:if="{{currentAnswer}}" class="primary spaced wide" bindtap="drawAnswer" loading="{{drawing}}" disabled="{{drawing}}">再翻一数</button>
+  <button wx:else class="primary spaced wide" bindtap="drawAnswer" loading="{{drawing}}" disabled="{{drawing}}">翻开答案之数</button>
+  <button class="secondary spaced wide" bindtap="answers">查看全部 100 条答案与解读</button>
+ </view>
+
+ <view class="stack spaced"><button wx:if="{{sample}}" class="primary" bindtap="open">登录，开启我的画屏</button><button wx:else class="primary" bindtap="open">管理我的画屏</button></view>
+</view>
