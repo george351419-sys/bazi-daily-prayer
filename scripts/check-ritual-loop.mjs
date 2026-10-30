@@ -30,9 +30,10 @@ try{
  Object.assign(process.env,c);process.argv.push('--once');globalThis.fetch=fetcher;
  await import('./run-ritual-worker.mjs?isolated=1');
  assert.equal((await repo.get('ritual/'+account.id)).mode,'test');
- const build=await repo.get('ritual-build/'+account.id);assert.equal(build.status,'published');assert.equal(build.bytes,948608);
+ const build=await repo.get('ritual-build/'+account.id);assert.equal(build.status,'published');assert.equal(build.bytes,1440128);
  const configured=JSON.parse(decryptAccountData(env,map.get('devices/'+deviceId)));assert.equal(configured.ritualSha,build.sha256);
- const heartbeat=await fetcher('https://playmath.cn/api/v1/device/heartbeat?device_id='+deviceId+'&ritual_v=1',{headers:{authorization:'Bearer '+token}});const body=await heartbeat.json();assert.equal(body.data.commands[0].cmd,'download_ritual');
+ for(const version of [1,2]){const old=await fetcher('https://playmath.cn/api/v1/device/heartbeat?device_id='+deviceId+'&ritual_v='+version,{headers:{authorization:'Bearer '+token}});const reply=await old.json();assert.equal(reply.data.firmware_update_required,true);assert.ok(!reply.data.commands.some(c=>c.cmd==='download_ritual'));}
+ const heartbeat=await fetcher('https://playmath.cn/api/v1/device/heartbeat?device_id='+deviceId+'&ritual_v=3',{headers:{authorization:'Bearer '+token}});const body=await heartbeat.json();assert.equal(body.data.commands[0].cmd,'download_ritual');
  const response=await fetcher(body.data.commands[0].params.url),downloaded=Buffer.from(await response.arrayBuffer());validateRitual(downloaded);assert.equal(hash(downloaded),build.sha256);assert.equal(downloaded.readUInt32LE(12),0,'first successful device installation anchors the test');
  const before=calls;await import('./run-ritual-worker.mjs?isolated=2');assert.equal(calls,before,'unchanged plan does not re-upload');
  // A failed replacement retains the published package metadata and backs off.
@@ -46,18 +47,18 @@ try{
  const replacement=await repo.get('ritual-build/'+account.id);assert.equal(replacement.status,'published');assert.equal(replacement.previousPublication.sha256,build.sha256);assert.notEqual(replacement.publication.sha256,build.sha256);
  const photo=await uploadPhoto(c,account,{type:'image/jpeg',title:'Uploaded test photo',base64:(await readFile(new URL('../tests/fixtures/photo-upload.jpg',import.meta.url))).toString('base64')});
  for(const showActions of [false,true]){
-  await configureRitual(c,account,{mode:'test',contentMode:'photo',showActions,artworkIds:[photo.item.id,photo.item.id]});
+  await configureRitual(c,account,{mode:'test',contentMode:'photo',showActions,artworkIds:[photo.item.id]});
   await import('./run-ritual-worker.mjs?photo='+showActions);
   const built=await repo.get('ritual-build/'+account.id);assert.equal(built.status,'published');assert.equal(built.publication.manifest.contentMode,'photo');
-  const hb=await fetcher('https://playmath.cn/api/v1/device/heartbeat?device_id='+deviceId+'&ritual_v=2',{headers:{authorization:'Bearer '+token}}),reply=await hb.json();
-  const asset=await fetcher(reply.data.commands[0].params.url),packet=Buffer.from(await asset.arrayBuffer());validateRitual(packet);assert.equal(packet.readUInt32LE(36),2);assert.equal(packet.readUInt32LE(60),showActions?2:3);
+  const hb=await fetcher('https://playmath.cn/api/v1/device/heartbeat?device_id='+deviceId+'&ritual_v=3',{headers:{authorization:'Bearer '+token}}),reply=await hb.json();
+  const asset=await fetcher(reply.data.commands[0].params.url),packet=Buffer.from(await asset.arrayBuffer());validateRitual(packet);assert.equal(packet.readUInt32LE(36),3);assert.equal(packet.readUInt32LE(60),showActions?2:3);
  }
  await configureRitual(c,account,{mode:'test',contentMode:'prayer',showActions:false,artworkIds:ids});
  await import('./run-ritual-worker.mjs?prayer=no-actions');
  const prayerBuild=await repo.get('ritual-build/'+account.id);assert.equal(prayerBuild.status,'published');
- const prayerHeartbeat=await fetcher('https://playmath.cn/api/v1/device/heartbeat?device_id='+deviceId+'&ritual_v=2',{headers:{authorization:'Bearer '+token}});
+ const prayerHeartbeat=await fetcher('https://playmath.cn/api/v1/device/heartbeat?device_id='+deviceId+'&ritual_v=3',{headers:{authorization:'Bearer '+token}});
  const prayerReply=await prayerHeartbeat.json(),prayerPacket=Buffer.from(await(await fetcher(prayerReply.data.commands[0].params.url)).arrayBuffer());
- validateRitual(prayerPacket);assert.equal(prayerPacket.readUInt32LE(36),2);assert.equal(prayerPacket.readUInt32LE(60),3);
+ validateRitual(prayerPacket);assert.equal(prayerPacket.readUInt32LE(36),3);assert.equal(prayerPacket.readUInt32LE(60),3);
  console.log('PASS: private account plan -> real Python six-colour compiler -> signed chunk publication -> compatible heartbeat -> exact download; unchanged plan deduplicates. Failure preserves publication, retry backs off, a new revision bypasses backoff. No live requests.');
 }finally{
  globalThis.fetch=originalFetch;for(const key of Object.keys(process.env))if(!(key in oldEnv))delete process.env[key];Object.assign(process.env,oldEnv);process.argv.splice(0,process.argv.length,...oldArgs);await rm(tmp,{recursive:true,force:true});

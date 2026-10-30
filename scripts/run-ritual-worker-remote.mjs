@@ -8,7 +8,7 @@ import {promisify} from 'node:util';
 import {setTimeout as delay} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 import {answers} from '../content/ritual-content.mjs';
-import {ritualArtworkReady,ritualPublication} from '../lib/ritual.mjs';
+import {ritualArtworkReady,ritualPublication,ritualPhotoPair} from '../lib/ritual.mjs';
 import {publishRitualPackage} from '../lib/ritual-upload.mjs';
 import {ritualWorkerSignature} from '../lib/ritual-worker-bridge.mjs';
 import {personalizeActionOptions} from '../lib/action-personalization.mjs';
@@ -38,6 +38,10 @@ async function processAccount(accountId,deviceId){
   state=await snapshot(accountId);plan=state.plan;prior=state.build;
  }
  let records=plan.artworkIds.map(id=>state.records.find(record=>record.id===id)).filter(Boolean),startsAt=plan.startsAt;
+ if(plan.contentMode==='photo'){
+  const pair=ritualPhotoPair(plan.artworkIds,plan.rotationStartDate,Date.now()),today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+  records=pair.artworkIds.map(id=>state.records.find(record=>record.id===id)).filter(Boolean);startsAt=today+'T01:00:00+08:00';
+ }
  if(records.length!==2)throw new Error('Ritual plan artwork is missing');
  if(plan.mode==='daily'&&plan.contentMode!=='photo'){
   const today=new Date(Date.now()+7*3600000).toISOString().slice(0,10),previous=new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10);
@@ -45,7 +49,6 @@ async function processAccount(accountId,deviceId){
   const pair=[previous,today].map(date=>matching.filter(record=>record.date===date).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0]);
   if(pair.every(Boolean)){records=pair;startsAt=previous+'T01:00:00+08:00';}
  }
- if(plan.mode==='daily'&&plan.contentMode==='photo')startsAt=new Date(Date.now()+7*3600000).toISOString().slice(0,10)+'T01:00:00+08:00';
  const actionDays=records.map((record,index)=>personalizeActionOptions(record.mapping)[index]);
  const manifest={...plan,actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-five-v3':'prayer-overlay-five-v3',artworkIds:records.map(record=>record.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((record,index)=>({date:record.date,artworkId:record.id,actions:actionDays[index]}))};
  const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex');

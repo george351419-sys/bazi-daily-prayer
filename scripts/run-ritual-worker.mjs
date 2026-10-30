@@ -9,7 +9,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 import {accountRepository,accountsEnabled} from '../lib/account-store.mjs';
 import {getArtwork,privateImage} from '../lib/accounts.mjs';
-import {configureRitual,ritualArtworkReady,ritualPublication} from '../lib/ritual.mjs';
+import {configureRitual,ritualArtworkReady,ritualPublication,ritualPhotoPair} from '../lib/ritual.mjs';
 import {answers} from '../content/ritual-content.mjs';
 import {publishRitualPackage} from '../lib/ritual-upload.mjs';
 import {listRitualDeviceLinks} from '../lib/ritual-device.mjs';
@@ -33,6 +33,11 @@ do{
     await configureRitual(c,{id},{mode:'test',artworkIds:selected.map(r=>r.id)},{onlyIfNew:true});plan=await repo.get('ritual/'+id);
    }
    let records=await Promise.all(plan.artworkIds.map(art=>getArtwork(c,{id},art))),startsAt=plan.startsAt;
+   if(plan.contentMode==='photo'){
+    const pair=ritualPhotoPair(plan.artworkIds,plan.rotationStartDate,Date.now()),today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+    records=await Promise.all(pair.artworkIds.map(art=>getArtwork(c,{id},art)));startsAt=today+'T01:00:00+08:00';
+   }
+   if(records.length!==2)throw new Error('Ritual plan artwork is missing');
    if(plan.mode==='daily'&&plan.contentMode!=='photo'){
     const today=new Date(Date.now()+7*3600000).toISOString().slice(0,10),previous=new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10),matching=[];let cursor;
     // Consume the existing daily worker's archived output; never trigger paid generation here.
@@ -40,7 +45,6 @@ do{
     const pair=[previous,today].map(date=>matching.filter(r=>r.date===date).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0]);
     if(pair.every(Boolean)){records=pair;startsAt=previous+'T01:00:00+08:00';}
    }
-   if(plan.mode==='daily'&&plan.contentMode==='photo')startsAt=new Date(Date.now()+7*3600000).toISOString().slice(0,10)+'T01:00:00+08:00';
    const personalized=records.map((record,index)=>personalizeActionOptions(record.mapping)[index]);
    const manifest={...plan,actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-five-v3':'prayer-overlay-five-v3',artworkIds:records.map(r=>r.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((r,i)=>({date:r.date,artworkId:r.id,actions:personalized[i]}))};
    const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),state=await repo.get('ritual-build/'+id);
