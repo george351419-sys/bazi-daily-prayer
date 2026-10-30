@@ -3,10 +3,10 @@
 ## 2026-10-31 更新
 
 - 微信开发者工具登录态有效，正式 AppID `wx67be26840ab16898` 已完成真实编译，五个路由均可编译打开；模拟器首屏、许愿池、解读陪伴、自定义和答案之书已逐页检查。
-- 小程序单测 11 项通过；服务端账号、微信登录、小程序准入与画屏计划相关测试 19 项通过。主包脚本检查约 384 KiB。
-- 已上传开发版本 `1.0.0`，微信返回包体 394002 字节。该版本尚未在公众平台设为体验版，也尚未提交审核。
+- 小程序单测 13 项通过；服务端完整测试 149 项通过。主包脚本检查 393137 字节；微信上传包体 403560 字节。
+- 已上传开发版本 `1.0.1`，微信返回包体 403560 字节。该版本尚未在公众平台设为体验版，也尚未提交审核。
 - 开发者工具实测 `wx.request` 返回 `request:fail url not in domain list`，确认微信后台仍缺 `https://playmath.cn` 的 request/downloadFile 合法域名。
-- EdgeOne 已有多小程序 AppID 允许列表中的正式 AppID，但尚未配置该 AppID 的 AppSecret；线上接口也仍返回旧版 bootstrap，未带 `wechatLoginEnabled`。因此微信一键登录当前不能通过真实验收。
+- EdgeOne 已配置正式 AppID 与该 AppID 的 AppSecret，包含微信登录接口的最新服务端版本已部署。普通浏览器请求不带微信 Referer，因此 bootstrap 中 `miniProgram.enabled=false` 属于预期；仍需在配置合法域名后用真机验证微信登录。
 - 本轮优化：网络错误改为可行动提示；解读页刷新从 30 秒延长到 60 秒并缓存已下载图片；照片轮播按上海时间 01:00 切换；缩略图批量加载并复用刚上传的本地文件。
 
 - 设计：使用腾讯官方 ui-design、miniprogram-development skills；五路由原生 WXML/WXSS/JS，纸本画册风格。
@@ -30,6 +30,6 @@
 
 已校验腾讯官方 Electron Nightly 2.02.2610272 安装包（Apple 公证、Tencent Developer ID Installer 签名）。工具使用微信自带 wechatide-skill 0.3.14；后续安装诊断和登录状态以实际工具返回为准。
 
-安装诊断结果：compatible=true，version=2.02.2610272；/usr/local/bin/wechatide 软链已就绪。2026-10-31 的 check_wechatide_status 返回 loginExpired=false、versionRelation=equal；已完成真实编译与开发版本上传。
+安装诊断结果：compatible=true，version=2.02.2610272；/usr/local/bin/wechatide 软链已就绪。2026-10-31 的 check_wechatide_status 返回 loginExpired=false、versionRelation=equal；已完成真实编译与开发版本 `1.0.1` 上传。
 
 正确新版下载入口来自微信官方 Skills.html → log#nightly（Electron Nightly 2.02.2607032+）；旧 miniprogram-development skill 的 nightly_backup.html 指向旧 NW.js 构建。本次已修正安装为 Electron Nightly，不以旧版安装成功代替自动化就绪。
