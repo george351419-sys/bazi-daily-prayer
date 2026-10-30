@@ -21,6 +21,11 @@ export function arkDeviceId(name){
 export class ArkNetwork {
  constructor({bluetooth,onState=()=>{},onDownload=()=>{},onOta=()=>{},delay=sleep,timeout=30000}={}){this.bluetooth=bluetooth;this.onState=onState;this.onDownload=onDownload;this.onOta=onOta;this.delay=delay;this.timeout=timeout;this.pendingResponses=new Map();this.epoch=0;}
  state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic,deviceName:this.device?.name||null,deviceId:this.deviceId||null});}
+ async open(device){
+  if(device.gatt.connected)device.gatt.disconnect();
+  const server=await device.gatt.connect(),service=await server.getPrimaryService(SERVICE),characteristic=await service.getCharacteristic(CHARACTERISTIC);
+  return {server,characteristic};
+ }
  async connect(){
   const epoch=++this.epoch;
   if(this.characteristic&&this.listener)this.characteristic.removeEventListener('characteristicvaluechanged',this.listener);
@@ -33,8 +38,19 @@ export class ArkNetwork {
    device=await this.bluetooth.requestDevice({filters:[{namePrefix:'FRAMEFILM'}],optionalServices:[SERVICE]});
    if(epoch!==this.epoch)return;
    this.device=device;this.deviceId=arkDeviceId(device.name);
-   if(device.gatt.connected)device.gatt.disconnect();
-   const server=await device.gatt.connect(),service=await server.getPrimaryService(SERVICE),characteristic=await service.getCharacteristic(CHARACTERISTIC);
+   let opened;
+   try{opened=await this.open(device);}
+   catch(error){
+    if(!/GATT operation already in progress/i.test(error?.message||'')||typeof this.bluetooth.getDevices!=='function')throw error;
+    const alternatives=(await this.bluetooth.getDevices()).filter(candidate=>candidate!==device&&/^FRAMEFILM/i.test(candidate.name||''));
+    for(const candidate of alternatives){
+     try{
+      opened=await this.open(candidate);device=candidate;this.device=candidate;this.deviceId=arkDeviceId(candidate.name);break;
+     }catch{}
+    }
+    if(!opened)throw error;
+   }
+   const {characteristic}=opened;
    if(epoch!==this.epoch){device.gatt.disconnect();return;}
    device.addEventListener('gattserverdisconnected',this.lost=()=>{if(epoch===this.epoch)this.disconnect('蓝牙已断开。画屏休眠时会断开，可唤醒后重新连接。');});
    this.characteristic=characteristic;this.listener=event=>{if(epoch===this.epoch&&this.characteristic===characteristic)this.receive(new Uint8Array(event.target.value.buffer,event.target.value.byteOffset,event.target.value.byteLength));};

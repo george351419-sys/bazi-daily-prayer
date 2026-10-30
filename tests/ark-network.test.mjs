@@ -41,6 +41,13 @@ test('an already connected device follows ForFilm disconnect then reconnect sequ
  const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,onState:()=>{},delay:async()=>{}});p.device.gatt.connected=true;
  await client.connect();assert.equal(p.disconnectCalls,1);assert.equal(p.connectCalls,1);assert.equal(p.device.gatt.connected,true);assert.equal(client.characteristic!==null,true);client.disconnect();
 });
+test('a busy stale duplicate falls back to the other authorized screen',async()=>{
+ const characteristic={addEventListener(){},removeEventListener(){},async startNotifications(){},async writeValue(){}};
+ const makeDevice=(name,busy)=>{let connected=false;return {name,addEventListener(){},removeEventListener(){},gatt:{get connected(){return connected;},async connect(){if(busy)throw new DOMException('GATT operation already in progress','NetworkError');connected=true;return this;},async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};},disconnect(){connected=false;}}}};
+ const stale=makeDevice('FRAMEFILMARK-Elink',true),active=makeDevice('FRAMEFILMARK-Elink',false);
+ const bluetooth={async requestDevice(){return stale;},async getDevices(){return [stale,active];}};
+ const client=new ArkNetwork({bluetooth,onState:()=>{},delay:async()=>{}});await client.connect();assert.equal(client.device,active);assert.equal(active.gatt.connected,true);client.disconnect();
+});
 test('download progress is read over the existing BLE connection',async()=>{
  const p=peripheral(),downloads=[],client=new ArkNetwork({bluetooth:p.bluetooth,onDownload:s=>downloads.push(s),delay:async()=>{}});
  await client.connect();const state=await client.queryDownload();assert.deepEqual(state,{state:1,progress:42});assert.deepEqual(downloads,[{state:1,progress:42}]);assert.equal(p.writes.at(-1)[1],0x3d);client.disconnect();
