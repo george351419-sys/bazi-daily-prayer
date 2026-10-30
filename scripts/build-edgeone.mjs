@@ -1,5 +1,6 @@
+import {createHash} from 'node:crypto';
 import {build} from 'esbuild';
-import {mkdir,writeFile,rm} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,readdir,rm} from 'node:fs/promises';
 import path from 'node:path';
 import {SYSTEM} from '../lib/prompt.mjs';
 // Inline rules at build time: server runtime must never depend on source paths.
@@ -9,6 +10,7 @@ await mkdir('cloud-functions/api/account/artworks/[id]',{recursive:true});
 await mkdir('cloud-functions/api/account/devices/[id]',{recursive:true});
 await mkdir('cloud-functions/api/account/automation',{recursive:true});
 await writeFile('cloud-functions/api/account/automation/retry.js',`import handler from '../../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
+await rm('.edgeone-build',{recursive:true,force:true});
 await mkdir('.edgeone-build',{recursive:true});
 await build({entryPoints:['edgeone/handler.mjs'],outfile:'.edgeone-build/handler.mjs',bundle:true,platform:'node',target:'node20',format:'esm',plugins:[{name:'inline-prayer-rules',setup(b){b.onLoad({filter:/lib\/prompt\.mjs$/},()=>({contents:'export const SYSTEM = '+JSON.stringify(SYSTEM)+';',loader:'js'}));}}]});
 for(const [file,relative] of [['bootstrap.js','../../.edgeone-build/handler.mjs'],['analyze.js','../../.edgeone-build/handler.mjs'],['jobs/[id]/image.js','../../../../.edgeone-build/handler.mjs']])await writeFile('cloud-functions/api/'+file,`import handler from '${relative}';\nexport default async function onRequest(context){return handler(context); }\n`);
@@ -35,3 +37,26 @@ for(const [file,relative] of [['v1/device/heartbeat.js','../../../../.edgeone-bu
 }
 
 for(const file of ['photos','ritual','answers'])await writeFile('cloud-functions/api/account/'+file+'.js',`import handler from '../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
+
+
+// Include bundled dependency changes in each function entry's source identity.
+// Some incremental builders cache the thin entry independently of generated imports.
+const versioned = {};
+for (const name of ['handler','ark-handler']) {
+ const bytes=await readFile('.edgeone-build/'+name+'.mjs');
+ const digest=createHash('sha256').update(bytes).digest('hex').slice(0,16);
+ versioned[name]=name+'-'+digest+'.mjs';
+ await writeFile('.edgeone-build/'+versioned[name],bytes);
+}
+async function stampEntries(directory){
+ for(const entry of await readdir(directory,{withFileTypes:true})){
+  const file=path.join(directory,entry.name);
+  if(entry.isDirectory()){await stampEntries(file);continue;}
+  if(!entry.name.endsWith('.js'))continue;
+  let text=await readFile(file,'utf8');
+  for(const [name,target] of Object.entries(versioned))text=text.replaceAll('.edgeone-build/'+name+'.mjs','.edgeone-build/'+target);
+  await writeFile(file,text);
+ }
+}
+await stampEntries('cloud-functions');
+console.log('Function entries reference content-addressed server bundles.');
