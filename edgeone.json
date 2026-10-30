@@ -4,6 +4,11 @@
   "outputDirectory": "dist",
   "nodeVersion": "22.11.0",
   "cloudFunctions": {
-    "nodejs": {"maxDuration": 120}
+    "nodejs": {
+      "maxDuration": 120
+    }
+  },
+  "nodeFunctionsConfig": {
+    "maxDuration": 120
   }
 }

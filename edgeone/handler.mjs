@@ -1,8 +1,14 @@
+import {randomUUID} from 'node:crypto';
 import {handleRequest} from '../api/gateway.js';
 // EdgeOne Node functions receive a Web Request and environment per invocation.
 export default async function onRequest({request,env={}}){
- const config={...process.env,...env,ACCOUNT_STORAGE:env.ACCOUNT_STORAGE||process.env.ACCOUNT_STORAGE||'blob',DEEPSEEK_TIMEOUT_MS:'100000',ARK_TIMEOUT_MS:'105000',ANALYSIS_BUDGET_MS:'108000'};
+ const config={...process.env,...env,ACCOUNT_STORAGE:env.ACCOUNT_STORAGE||process.env.ACCOUNT_STORAGE||'blob',DEEPSEEK_TIMEOUT_MS:'90000',ARK_TIMEOUT_MS:'85000',ANALYSIS_BUDGET_MS:'95000'};
+ const startedAt=Date.now(),requestId=randomUUID();
  const url=new URL(request.url),headers=Object.fromEntries(request.headers);
+ const tracked=url.pathname==='/api/analyze'||/^\/api\/jobs\/[a-f0-9]+\/image$/.test(url.pathname);
+ const log=data=>{if(tracked)console.info(JSON.stringify({event:'prayer_request',requestId,path:url.pathname,elapsedMs:Date.now()-startedAt,...data}));};
+ log({stage:'started'});
+ config.ANALYSIS_DIAGNOSTIC=data=>log({stage:'analysis',...data});
  headers.host=url.host;
  let body;
  if(request.method==='POST'){
@@ -11,8 +17,9 @@ export default async function onRequest({request,env={}}){
   try{body=JSON.parse(text);}catch{return Response.json({error:'提交内容格式不正确。'},{status:400});}
  }
  const req={method:request.method,url:request.url,headers,body,query:{route:url.pathname.replace(/^\/api\//,'')}};
- const outputHeaders=new Headers();let status=200,result;
+ const outputHeaders=new Headers({'X-Prayer-Request-Id':requestId});let status=200,result;
  const res={setHeader(k,v){outputHeaders.set(k,v);},status(code){status=code;return this;},json(data){outputHeaders.set('Content-Type','application/json; charset=utf-8');result=JSON.stringify(data);},end(bytes){result=bytes??null;}};
  await handleRequest(req,res,config);
+ log({stage:'responded',status});
  return new Response(result,{status,headers:outputHeaders});
 }

@@ -1,3 +1,4 @@
+import {readAPIResponse} from './api-response.js?v=20261030-timeout-v1';
 import {setupNetwork} from './ark-network.js?v=20261030-frame-film-parity-v5';
 import {setupAccounts} from './account-ui.js?v=20261030-followup-v1';
 import {WISH_GROUPS} from './wishes.js';
@@ -20,7 +21,7 @@ function apiURL(p){
 }
 async function request(p,body){
  const response=await fetch(apiURL(p),{method:body?'POST':'GET',credentials:'include',headers:{...(body?{'Content-Type':'application/json','X-CSRF-Token':bootstrap?.csrf||''}:{}),...(sessionToken?{'X-Session-Token':sessionToken}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(310000)});
- let data;try{data=await response.json();}catch{throw new Error('服务地址未返回有效数据，请检查后端连接。');}if(!response.ok){const e=new Error(data.error||'请求未完成，请稍后重试。');e.status=response.status;if(['revision_conflict','policy_conflict','profile_conflict'].includes(data.code))e.code=data.code;throw e;}return data;
+ return readAPIResponse(response,p);
 }
 function drawWishes(groups){const selected=new Set([...form.querySelectorAll('input[name=wish]:checked')].map(x=>x.value));const target=$('#wish-groups');target.replaceChildren();for(const group of groups){const box=document.createElement('div');box.className='wish-group';const title=document.createElement('h4');title.textContent=group.name;const options=document.createElement('div');options.className='wish-options';for(const wish of group.items){const label=document.createElement('label');label.className='wish-chip';const input=document.createElement('input');input.type='checkbox';input.name='wish';input.value=wish.id;input.checked=selected.has(wish.id);const text=document.createElement('span');text.textContent=wish.label;label.append(input,text);options.append(label);}box.append(title,options);target.append(box);}updateCount();}
 function updateCount(){setText('#selected-count','已选 '+form.querySelectorAll('input[name=wish]:checked').length+' 项');}
