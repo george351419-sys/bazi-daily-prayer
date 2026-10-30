@@ -92,3 +92,19 @@ body>footer{max-width:none;margin:0;padding:20px 44px;border-top:1px solid var(-
 #ritual-answers{margin-top:26px;padding:22px 0;border-top:1px solid var(--studio-line)}
 #ritual-answers>h5{font:23px "Songti SC",serif;margin:0 0 18px}
 #ritual-answers>input{width:100%;box-sizing:border-box}
+
+.screen-mode-picker{border:0;padding:0;margin:0;min-width:0}
+.screen-mode-picker legend{padding:0;margin-bottom:10px;font-size:14px;font-weight:600;color:#24362f}
+.screen-mode-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.screen-mode-options label{display:flex!important;flex-direction:row;align-items:center;gap:10px;padding:14px;border:1px solid #dce2d8;border-radius:10px;background:#fffefb;cursor:pointer;margin:0!important}
+.screen-mode-options label:has(input:checked){background:#eaf0e9;border-color:#174c3e}
+.screen-mode-options input{width:16px!important;height:16px;margin:0;accent-color:#174c3e;flex-shrink:0}
+.screen-mode-options span{display:grid;gap:4px;min-width:0}
+.screen-mode-options strong{font-size:14px;color:#174c3e}
+.screen-mode-options small{font-size:11px;line-height:1.5;color:#747a73}
+.screen-mode-options label:has(input:focus-visible){outline:2px solid #174c3e;outline-offset:3px}
+#custom-content #ritual-settings{border:0;padding:0}
+#custom-content #ritual-settings>summary{display:none}
+#custom-content .ritual-form{margin-top:0}
+#custom-content .photo-action-toggle{padding:12px 0;border-bottom:1px solid #e2e7dc}
+@media(max-width:540px){.screen-mode-options{grid-template-columns:1fr}.screen-mode-options label{padding:12px 14px}.screen-mode-options span{gap:3px}}

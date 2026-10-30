@@ -26,10 +26,18 @@ export function setupRitual({request,fetchImage,getUser}){
   const transfer=node('div');transfer.setAttribute('role','status');transfer.setAttribute('aria-live','polite');
   const title=node('h4','一日祈愿 · 此刻行动'),status=node('p'),report=node('p'),current=node('div');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const shortcuts=node('nav');shortcuts.className='ritual-shortcuts';shortcuts.setAttribute('aria-label','画屏功能');
-  const settings=node('details');settings.id='ritual-settings';settings.append(node('summary','选择画屏模式 · 上传我的照片'));const form=node('form');form.className='ritual-form';
+  const settings=node('details');settings.id='ritual-settings';settings.append(node('summary','画屏呈现设置'));const form=node('form');form.className='ritual-form';
   const choicesBox=node('div');choicesBox.className='ritual-choices';form.append(choicesBox);
-  const contentLabel=node('label','画屏呈现方式'),contentMode=node('select');contentMode.setAttribute('aria-label','画屏呈现方式');
-  for(const [value,text] of [['prayer','祈福图'],['photo','自己的照片']]){const option=node('option',text);option.value=value;contentMode.append(option);}contentLabel.append(contentMode);choicesBox.append(contentLabel);
+  const contentLabel=node('fieldset'),contentMode=node('select');contentLabel.className='screen-mode-picker';contentLabel.append(node('legend','选择呈现方式'));contentMode.hidden=true;
+  for(const [value,text] of [['prayer','祈福图'],['photo','自己的照片']]){const option=node('option',text);option.value=value;contentMode.append(option);}contentLabel.append(contentMode);
+  const modeOptions=node('div');modeOptions.className='screen-mode-options';
+  const modeRadios=[['prayer','祈福画','使用已生成的专属祈福画'],['photo','自己的照片 / 画作','上传喜欢的照片或手绘作品']].map(([value,title,hint])=>{
+   const label=node('label'),radio=node('input'),copy=node('span');radio.type='radio';radio.name='screen-content';radio.value=value;radio.checked=value==='prayer';
+   copy.append(node('strong',title),node('small',hint));label.append(radio,copy);modeOptions.append(label);
+   radio.addEventListener('change',()=>{if(radio.checked){contentMode.value=value;contentMode.dispatchEvent(new Event('change',{bubbles:true}));}});
+   return radio;
+  });
+  contentLabel.append(modeOptions);choicesBox.append(contentLabel);
   const actionLabel=node('label');actionLabel.className='photo-action-toggle';const showActions=node('input');showActions.type='checkbox';showActions.checked=true;actionLabel.append(showActions,document.createTextNode('在画面下方显示微行动建议（可选）'));choicesBox.append(actionLabel);
   const labels=[],selects=[0,1].map((_,i)=>{const dayName=i===0?'今日':'明日';const label=node('label'),caption=node('span'),select=node('select');select.setAttribute('aria-label',dayName+'画面');select.required=true;label.append(caption,select);labels.push(caption);choicesBox.append(label);return select;});
   const uploadBox=node('div');uploadBox.className='photo-upload';const fileLabel=node('label','选择自己的照片'),file=node('input');file.type='file';file.accept='image/jpeg,image/png,image/webp';file.setAttribute('aria-label','选择自己的照片');fileLabel.append(file);const photoLabel=node('label','照片名称'),photoTitle=node('input');photoTitle.maxLength=60;photoTitle.placeholder='例如：一家人的周末';photoLabel.append(photoTitle);const upload=node('button','上传到账户');upload.type='button';upload.className='secondary';const uploadState=node('p'),draft=node('img');draft.hidden=true;draft.className='photo-draft';draft.alt='上传照片预览';uploadState.setAttribute('role','status');uploadBox.append(fileLabel,photoLabel,upload,draft,uploadState,node('small','上传时保留完整构图，并移除照片位置信息。六色墨水屏会与原照片存在色彩差异。'));form.append(uploadBox);
@@ -38,6 +46,7 @@ export function setupRitual({request,fetchImage,getUser}){
   const settingsState=node('p');settingsState.setAttribute('role','status');settingsState.setAttribute('aria-live','polite');
   const submit=node('button','保存并同步到画屏');submit.type='submit';submit.className='primary';const deliveryNote=node('small','设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。');form.append(mode,submit,deliveryNote,settingsState);settings.append(form);
   function populate(result){
+   for(const radio of modeRadios)radio.checked=radio.value===contentMode.value;
    const photo=contentMode.value==='photo';form.classList.toggle('photo-settings',photo);uploadBox.hidden=!photo;
    const choices=new Map((artworks||[]).filter(a=>a.status==='complete').map(a=>[a.id,a]));
    for(const a of result?.plannedDays||[])choices.set(a.artworkId,{id:a.artworkId,...a});
@@ -117,11 +126,7 @@ export function setupRitual({request,fetchImage,getUser}){
   if(action&&showActions){const actionBox=node('div');actionBox.className='ritual-artwork-action';actionBox.append(node('strong',action.branch+'时 · '+action.title),node('p',action.text),node('small',action.detail+(action.number_basis?' · 次数或时长按'+action.number_basis.element+'的河图数取'+action.number_basis.number:'')));copy.append(actionBox);}
   if(result.answer){const answer=node('details');answer.open=true;answer.append(node('summary',result.answer.id+' · '+result.answer.text),node('p',result.answer.phone_detail));copy.append(answer);}
   const mapping=node('details');mapping.dataset.prayerReading='';mapping.open=mappingOpen;mapping.append(node('summary',photo?'查看照片说明':'查看祈福画面解读'));const reading=node('div');renderConsumerReading(reading,artwork.mapping);mapping.append(reading);copy.append(mapping);row.append(visual,copy);
-  const previews=node('section');previews.className='ritual-day-previews';
-  for(const [index,day] of previewDays.slice(0,2).entries()){
-   const figure=node('figure');figure.className='ritual-day-preview';const thumb=node('img');thumb.alt=(index===0?'今日':'明日')+'祈福画面：'+day.title;thumb.loading='lazy';thumb.src=day.image;const caption=node('figcaption');caption.append(node('strong',(index===0?'今日':'明日')+'祈福画面'),node('span',day.date+' · '+day.title));figure.append(thumb,caption);previews.append(figure);
-  }
-  if(previews.children.length)shell.current.append(row,previews);else shell.current.append(row);
+  shell.current.append(row);
   if(!result.answer&&!image.src){const life=lifecycle,path=artwork.image;void fetchImage(path).then(next=>{
    if(!alive(life)||!image.isConnected){URL.revokeObjectURL(next);return;}if(url)URL.revokeObjectURL(url);url=next;imagePath=path;image.src=next;
   }).catch(()=>{if(alive(life)&&image.isConnected){image.alt='画作预览暂不可用';renderedKey=null;}});}

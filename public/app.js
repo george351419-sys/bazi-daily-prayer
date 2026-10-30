@@ -1,6 +1,6 @@
 import {readAPIResponse} from './api-response.js?v=20261030-timeout-v1';
 import {setupNetwork} from './ark-network.js?v=20261030-frame-film-parity-v5';
-import {setupAccounts} from './account-ui.js?v=20261030-followup-v1';
+import {setupAccounts} from './account-ui.js?v=20261030-compact-custom-v1';
 import {WISH_GROUPS} from './wishes.js';
 import {normalizeBirthDate} from './date-input.js?v=20261017-solar';
 import {setupBirthInputs} from './birth-picker.js?v=20261017-solar';
