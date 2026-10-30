@@ -1,4 +1,4 @@
-import {setupNetwork} from './ark-network.js?v=20261030-ritual-pair-v10';
+import {setupNetwork} from './ark-network.js?v=20261030-ritual-pair-v11';
 import {setupAccounts} from './account-ui.js?v=20261030-ritual-sync-v14';
 import {WISH_GROUPS} from './wishes.js';
 import {normalizeBirthDate} from './date-input.js?v=20261017-solar';

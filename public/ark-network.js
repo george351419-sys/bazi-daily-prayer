@@ -34,12 +34,12 @@ export class ArkNetwork {
  }
  async connectDevice(device,epoch){
   let lastError;
-  for(const pause of [0,250,500,1000]){
+  for(const pause of [0,500,1000,2000,3000]){
    if(epoch!==this.epoch)throw new Error('蓝牙连接已取消。');
    if(pause){this.state('等待画屏释放旧蓝牙连接…');await this.delay(pause);}
-   await this.release(device);
    try{
-    const server=await device.gatt.connect(),service=await server.getPrimaryService(SERVICE),characteristic=await service.getCharacteristic(CHARACTERISTIC);
+    // A paired device can already be connected as soon as the chooser returns.
+    const server=device.gatt.connected?device.gatt:await device.gatt.connect(),service=await server.getPrimaryService(SERVICE),characteristic=await service.getCharacteristic(CHARACTERISTIC);
     return {server,characteristic};
    }
    catch(error){lastError=error;if(!this.busyError(error))throw error;}
@@ -222,7 +222,7 @@ export function setupNetwork(){
  if(!window.isSecureContext||!navigator.bluetooth){
   connect.disabled=true;state.textContent='此浏览器暂不支持蓝牙配网。请用电脑 Chrome / Edge 或 Android Chrome，在 HTTPS 页面打开；iPhone 请先用支持蓝牙的电脑完成配网。';return;
  }
- connect.onclick=async()=>{connect.disabled=true;try{await client.connect();}catch(e){const message=e.message||e.name||'未知错误',busy=/GATT operation already in progress/i.test(message);state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':busy?'画屏仍被另一个网页连接。请回到连接过画屏的页面点击“断开”或关闭该标签页，然后直接重试；无需刷新本页。':'蓝牙连接失败：'+message;}finally{connect.disabled=false;}};
+ connect.onclick=async()=>{connect.disabled=true;try{await client.connect();}catch(e){const message=e.message||e.name||'未知错误',busy=/GATT operation already in progress/i.test(message);state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':busy?'画屏仍在完成配对或释放旧连接。请等待几秒后直接重试；若持续失败，请在系统蓝牙中断开画屏（必要时忽略此设备），并确认没有其他页面连接过它。':'蓝牙连接失败：'+message;}finally{connect.disabled=false;}};
  disconnect.onclick=()=>client.disconnect();
  bind.onclick=()=>window.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
  form.onsubmit=async event=>{event.preventDefault();busy=true;send.disabled=true;connect.disabled=true;
