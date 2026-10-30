@@ -81,3 +81,14 @@ body>footer{max-width:none;margin:0;padding:20px 44px;border-top:1px solid var(-
  .studio-menu small{display:none}
  html{scroll-padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
 }
+.transfer-status{margin:18px 0;padding:18px;background:#edf3e9;border:1px solid #cbd7c7;border-radius:12px}
+.transfer-status strong{display:block;font-size:15px;color:#174c3e}
+.transfer-status p{font-size:12px;line-height:1.8;margin:8px 0 14px;color:#637168}
+.transfer-status ol{display:flex;list-style:none;padding:0;margin:0;gap:8px;flex-wrap:wrap}
+.transfer-status li{font-size:11px;color:#747a73;padding:5px 8px;border-radius:6px;background:#fffef9}
+.transfer-status li.complete{color:#174c3e;background:#d5e5cf}
+.transfer-status li[aria-current]{outline:1px solid #9db18f}
+.transfer-status progress{width:100%;height:8px;accent-color:#174c3e;margin-top:14px}
+#ritual-answers{margin-top:26px;padding:22px 0;border-top:1px solid var(--studio-line)}
+#ritual-answers>h5{font:23px "Songti SC",serif;margin:0 0 18px}
+#ritual-answers>input{width:100%;box-sizing:border-box}

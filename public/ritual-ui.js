@@ -1,3 +1,4 @@
+import {transferStatus,renderTransfer} from './transfer-status.js?v=20261030-followup-v1';
 import {renderConsumerReading} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
@@ -15,13 +16,14 @@ export function setupRitual({request,fetchImage,getUser}){
    return {...action,text,detail:String(action.detail||'').replace('当前未确认喜用数字，不套用命理次数。','本次按'+element+'的河图数取'+number+'，仅作传统数字取象；动作以舒适为准。'),number_basis:{system:'河图生成数',element,number}};
   });
  }
- let active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null,latestGenerated=null;
+ let transferPending=false,active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null,latestGenerated=null;
  function pause(){active=false;epoch++;clearTimeout(timer);timer=null;}
- function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell?.settings.remove();shell=null;renderedKey=null;latestGenerated=null;host.replaceChildren();host.hidden=true;}
+ function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell?.settings.remove();shell=null;renderedKey=null;latestGenerated=null;host.replaceChildren();host.hidden=true;const transfer=document.querySelector('#artwork-transfer');if(transfer){transfer.replaceChildren();transfer.hidden=true;}}
  function alive(life){return life===lifecycle&&!!getUser();}
- function schedule(result){if(!active)return;clearTimeout(timer);const next=Date.parse(result?.scheduledPosition?.nextAt||result?.position?.nextAt);timer=setTimeout(refresh,Number.isFinite(next)?Math.max(1000,Math.min(30000,next-Date.now()+200)):30000);}
+ function schedule(result){if(!active)return;clearTimeout(timer);const next=Date.parse(result?.scheduledPosition?.nextAt||result?.position?.nextAt);timer=setTimeout(refresh,Number.isFinite(next)?Math.max(1000,Math.min(latestGenerated&&transferPending?5000:30000,next-Date.now()+200)):(latestGenerated&&transferPending?5000:30000));}
  function ensureShell(){
   if(shell)return;
+  const transfer=node('div');transfer.setAttribute('role','status');transfer.setAttribute('aria-live','polite');
   const title=node('h4','一日祈愿 · 此刻行动'),status=node('p'),report=node('p'),current=node('div');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const shortcuts=node('nav');shortcuts.className='ritual-shortcuts';shortcuts.setAttribute('aria-label','画屏功能');
   const settings=node('details');settings.id='ritual-settings';settings.append(node('summary','选择画屏模式 · 上传我的照片'));const form=node('form');form.className='ritual-form';
@@ -66,7 +68,7 @@ export function setupRitual({request,fetchImage,getUser}){
    finally{if(alive(life)){saving=false;for(const control of form.elements)control.disabled=false;}}
   };
   const actions=node('section');actions.id='ritual-actions';actions.className='ritual-actions';actions.append(node('h5','八个时辰的微行动与解读'));const actionList=node('div');actionList.className='ritual-action-list';actions.append(actionList);
-  const book=node('details');book.id='ritual-answers';book.append(node('summary','答案之书 · 搜索回答与解读'));const search=node('input');search.type='search';search.maxLength=120;search.placeholder='输入关键词或编号，例如事业、OB001';search.setAttribute('aria-label','搜索答案之书');
+  const book=node('section');book.id='ritual-answers';book.append(node('h5','答案之书 · 搜索回答与解读'));const search=node('input');search.type='search';search.maxLength=120;search.placeholder='输入关键词或编号，例如事业、OB001';search.setAttribute('aria-label','搜索答案之书');
   const count=node('p','输入关键词后查看回答。'),list=node('div');count.setAttribute('role','status');
   async function find(){
    const q=search.value.normalize('NFKC').trim();const turn=++searchTurn;clearTimeout(searchTimer);list.replaceChildren();
@@ -82,9 +84,9 @@ export function setupRitual({request,fetchImage,getUser}){
   }
   search.oninput=find;book.append(search,count,list);
   for(const [label,target] of [['查看八时辰建议',actions],['搜索答案之书',book],['上传照片 · 选择模式',settings]]){const button=node('button',label);button.type='button';button.className='secondary';button.onclick=()=>{if(target.tagName==='DETAILS')target.open=true;if(target===settings)location.hash='custom';target.scrollIntoView({behavior:'smooth',block:'start'});if(target===book)search.focus();};shortcuts.append(button);}
-  host.append(title,status,report,shortcuts,current,actions,book);
+  host.append(title,transfer,status,report,shortcuts,current,actions,book);
   const custom=document.querySelector('#custom-content');if(custom){settings.open=true;custom.append(settings);}else host.append(settings);
-  shell={status,settingsState,report,current,settings,form,deliveryNote,selects,mode,submit,contentMode,showActions,populate,book,search,count,find,actionList};
+  shell={transfer,status,settingsState,report,current,settings,form,deliveryNote,selects,mode,submit,contentMode,showActions,populate,book,search,count,find,actionList};
  }
  function updateSettings(result){
   if(dirty||saving)return;
@@ -128,7 +130,12 @@ export function setupRitual({request,fetchImage,getUser}){
   const days=result.planDays?.length?result.planDays:(result.days?.length?result.days:[{title:'通用参考',actions:result.actionGuide||[]}]);
   if(!days[0].actions?.length){list.append(node('p','微行动建议正在准备中。'));return;}
   const preview=currentActionFor(result,days),currentAction=preview.action;
-  if(!currentAction)list.append(node('p','当前时段没有新增动作建议，夜间请好好休息。'));
+  if(currentAction){
+   const card=node('article');card.className='ritual-action-card current ritual-current-action';
+   const hour=Number(currentAction.hour),range=Number.isFinite(hour)?String(hour).padStart(2,'0')+':00–'+String(hour+2).padStart(2,'0')+':00':'';
+   card.append(node('strong','当前时辰 · '+currentAction.branch+'时 · '+range+' · '+currentAction.title),node('p',currentAction.text),node('small',currentAction.detail||''));
+   list.append(card);
+  }else list.append(node('p','当前时段没有新增动作建议，夜间请好好休息。'));
   const all=node('details');all.className='ritual-all-actions';all.append(node('summary','展开今日与明日全部 16 条时辰建议'));
   for(const [dayIndex,day] of days.entries()){
    const section=node('section');section.className='ritual-action-day';section.append(node('h6',(dayIndex===0?'今日':'明日')+' · '+day.title));
@@ -141,32 +148,37 @@ export function setupRitual({request,fetchImage,getUser}){
   }
   list.append(all);
  }
+ function updateTransfer(result,override){
+  const state=override||transferStatus(result,latestGenerated?.id);
+  transferPending=!['rendered','unbound','photo','firmware'].includes(state.phase);
+  if(shell)renderTransfer(shell.transfer,state);
+  const besideImage=document.querySelector('#artwork-transfer');
+  if(besideImage&&(latestGenerated||!besideImage.hidden))renderTransfer(besideImage,state);
+ }
  async function refresh(){
   if(saving||uploading)return;active=true;const turn=++epoch,life=lifecycle;clearTimeout(timer);if(!getUser()){reset();return;}
   ensureShell();host.hidden=false;
   try{
    const result=await request('/api/account/ritual');if(turn!==epoch||!alive(life))return;failures=0;
+   updateTransfer(result);
    const r=result.deviceReport;
-   let progress=result.build?.status==='retrying'?' 更新暂未成功，正在重试；设备保留已下载内容。':result.build?.status==='waiting_for_artworks'?' 还需要两幅已完成的画作。':result.pendingUpdate?' 新计划等待准备。':result.build?.status==='published'?(r?.renderReport?' 设备驱动已回报上屏请求；实屏仍需验收。':r?.stored?' 内容已保存到画屏，尚未收到上屏回报。':r?.downloadState===3?' 设备下载失败，后台会继续重试。':r?.downloadState===1?' 设备正在下载内容 '+(r.downloadProgress??0)+'%。':' 内容已准备，等待设备领取。'):'';
-   if(r?.firmwareUpdateRequired)progress+=' 照片模式需要更新至 3.2.5-ritual.2 固件，旧固件暂保留原画面。';
    shell.submit.textContent=result.syncConfigured===false?'保存画屏设置':'保存并同步到画屏';
    shell.deliveryNote.textContent=result.syncConfigured===false?'内容保存到你的账户；请先通过蓝牙连接并绑定画屏，自动同步才会启用。':'设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。';
-   if(result.plan&&result.syncConfigured===false)progress=' 内容已保存；尚未绑定画屏，绑定后才会编译并下发。';
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
    const generated=latestGenerated?.status==='complete'&&latestGenerated.date===today?latestGenerated:null;
    const planDays=result.planDays?.length?result.planDays:result.days||[];
    const effective=generated?{...result,planDays:planDays.map((day,index)=>index===0?{...day,title:generated.mapping.title,artworkId:generated.id,image:generated.image,mapping:generated.mapping,actions:personalizeActions(day.actions||[],generated.mapping,0)}:day)}:result;
-   shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+progress+(generated&&result.plan?.artworkIds?.[0]!==generated.id?' 网页已显示刚完成的今日画；设备仍在领取上一版两日内容。':'');
+   shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+(generated&&result.plan?.artworkIds?.[0]!==generated.id?' 网页已显示刚完成的今日画；设备仍在领取上一版两日内容。':'');
    shell.settingsState.textContent=shell.status.textContent;
    shell.report.textContent=r?'设备最近联网：'+new Date(r.lastSeen).toLocaleString('zh-CN')+(r.stale?'（回报较早，设备可能离线）':'')+'；'+(r.renderReport?'最近上屏请求：第 '+(r.renderReport.day+1)+' 天'+(r.answerId?' · '+r.answerId:r.renderReport.action>=0?' · 第 '+(r.renderReport.action+1)+' 条动作':' · 祈福图')+(r.showingPrevious?'（新内容仍在同步）':''):'尚未收到当前内容的上屏回报')+'。实屏效果待验收。':'';
    updateContent(effective);updateActions(effective);schedule(effective);
    if(!artworks){const page=await request('/api/account/artworks');if(turn!==epoch||!alive(life))return;artworks=page.items;cursor=page.cursor||null;}
    updateSettings(result);
-  }catch(error){if(turn===epoch&&alive(life)){shell.status.textContent=error.message;shell.settingsState.textContent=error.message;timer=setTimeout(refresh,Math.min(60000,5000*2**Math.min(failures++,4)));}}
+  }catch(error){if(turn===epoch&&alive(life)){shell.status.textContent=error.message;shell.settingsState.textContent=error.message;updateTransfer(null,{phase:'unavailable',title:'同步状态暂不可用',detail:'正在重新连接，请稍后查看。',step:0,percent:null});timer=setTimeout(refresh,Math.min(60000,5000*2**Math.min(failures++,4)));}}
  }
  async function prepare(){
   if(preparing||!getUser())return false;
-  let status;try{status=await request('/api/account/ritual');}catch{return false;}
+  let status;try{status=await request('/api/account/ritual');updateTransfer(status);}catch{updateTransfer(null,{phase:'unavailable',title:'暂时无法准备传输',detail:'请检查网络，稍后重新查看同步状态。',step:0,percent:null});return false;}
   if(!status.syncConfigured)return false;
   ensureShell();host.hidden=false;preparing=true;shell.status.textContent='正在检查两日画作；缺少次日画作时会为你补齐。';
   if(status.plan?.contentMode==='photo'){
@@ -183,7 +195,7 @@ export function setupRitual({request,fetchImage,getUser}){
    await refresh();
    shell.status.textContent='两日祈福内容已提交后台；设备联网领取并回报后才能显示设备实际画面。';
    return true;
-  }catch(error){if(shell)shell.status.textContent='两日内容准备暂未完成：'+error.message;return false;}
+  }catch(error){if(shell)shell.status.textContent='两日内容准备暂未完成：'+error.message;updateTransfer(null,{phase:'retrying',title:'画屏内容准备暂未完成',detail:error.message,step:0,percent:null});return false;}
   finally{preparing=false;}
  }
  async function bindDevice(deviceId){
@@ -195,7 +207,7 @@ export function setupRitual({request,fetchImage,getUser}){
  }
  function showGeneratedArtwork(job){
   if(!getUser()||job?.status!=='complete'||!job.image||!job.mapping)return;
-  latestGenerated=job;renderedKey=null;if(active)void refresh();
+  latestGenerated=job;renderedKey=null;updateTransfer();if(active)void refresh();
  }
  return {refresh,reset,pause,prepare,bindDevice,showGeneratedArtwork};
 }

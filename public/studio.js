@@ -14,7 +14,7 @@ function selectView() {
   if (link.dataset.view === view) link.setAttribute('aria-current', 'page');
   else link.removeAttribute('aria-current');
  });
- document.title = views[view][0] + ' · 生辰造像馆';
+ document.title = views[view][0] + ' · 点好运';
  if (views[target]) requestAnimationFrame(() => window.scrollTo(0, 0));
 }
 window.addEventListener('hashchange', selectView);
