@@ -7,7 +7,7 @@ import onRequest from '../edgeone/handler.mjs';
 import {getArtwork,saveArtwork,newArtworkId} from '../lib/accounts.mjs';
 import {accountRepository} from '../lib/account-store.mjs';
 import {validatePhoto} from '../lib/photos.mjs';
-import {configureRitual,ritualStatus} from '../lib/ritual.mjs';
+import {configureRitual,ritualStatus,ritualPhotoPair} from '../lib/ritual.mjs';
 const jpeg=await readFile(new URL('./fixtures/photo-upload.jpg',import.meta.url));
 const payload={type:'image/jpeg',base64:jpeg.toString('base64'),title:'一家人的周末'};
 async function context(t){
@@ -25,12 +25,22 @@ test('photo upload is private, authenticated, bounded and reusable in photo-only
  const response=await request('account/photos',payload);assert.equal(response.status,201);const {item}=await response.json();assert.equal(item.source,'upload');
  const image=await request('account/artworks/'+item.id+'/image');assert.equal(image.status,200);assert.deepEqual(Buffer.from(await image.arrayBuffer()),jpeg);assert.match(image.headers.get('cache-control'),/private/);
  const list=await(await request('account/artworks')).json();assert.equal(list.items[0].source,'upload');
- const photo=await request('account/ritual',{mode:'test',contentMode:'photo',showActions:false,artworkIds:[item.id,item.id]});assert.equal(photo.status,200);let result=await photo.json();assert.equal(result.action,null);assert.equal(result.displayPlan.showActions,false);assert.equal(result.artwork.source,'upload');
- await configureRitual(env,account,{mode:'test',contentMode:'photo',showActions:true,artworkIds:[item.id,item.id]});result=await ritualStatus(env,account);assert.ok(result.action);assert.equal(result.plan.contentMode,'photo');
+ const photo=await request('account/ritual',{mode:'test',contentMode:'photo',showActions:false,artworkIds:[item.id]});assert.equal(photo.status,200);let result=await photo.json();assert.equal(result.action,null);assert.equal(result.displayPlan.showActions,false);assert.equal(result.artwork.source,'upload');
+ await configureRitual(env,account,{mode:'test',contentMode:'photo',showActions:true,artworkIds:[item.id]});result=await ritualStatus(env,account);assert.ok(result.action);assert.equal(result.plan.contentMode,'photo');assert.equal(result.plan.mode,'daily');
  await assert.rejects(getArtwork(env,{id:'f'.repeat(32)},item.id),e=>e.status===404);
  assert.equal((await request('account/ritual',{mode:'test',contentMode:'prayer',showActions:true,artworkIds:[item.id,item.id]})).status,400);
  const raw=await readFile(path.join(env.ACCOUNT_DATA_DIR,'images',account.id,item.id));assert.ok(!raw.includes(jpeg));
  await request('account/logout',{});assert.equal((await request('account/photos',payload)).status,401);
+});
+test('photo rotation keeps an ordered list of at most six and loops daily',async t=>{
+ const {env,account}=await context(t),photos=[];
+ for(let i=0;i<7;i++){const id=newArtworkId();photos.push(id);await saveArtwork(env,account,{id,userId:account.id,status:'complete',date:'2026-10-29',source:'upload',image:{key:'dummy/'+id},mapping:{title:'照片 '+i}});}
+ const plan=(await configureRitual(env,account,{contentMode:'photo',showActions:true,artworkIds:photos.slice(0,6)})).plan;
+ assert.deepEqual(plan.artworkIds,photos.slice(0,6));assert.equal(plan.rotationStartDate,new Date(Date.now()+7*3600000).toISOString().slice(0,10));
+ await assert.rejects(()=>configureRitual(env,account,{contentMode:'photo',showActions:true,artworkIds:photos}),e=>e.status===400);
+ await assert.rejects(()=>configureRitual(env,account,{contentMode:'photo',showActions:true,artworkIds:[photos[0],photos[0]]}),e=>e.status===400);
+ const pair=ritualPhotoPair(photos.slice(0,6),'2026-10-29',Date.parse('2026-11-01T12:00:00+08:00'));
+ assert.equal(pair.dayIndex,3);assert.deepEqual(pair.artworkIds,[photos[3],photos[4]]);
 });
 test('photo mode rejects generated pictures and prayer mode permits hiding actions',async t=>{
  const {env,account}=await context(t),ids=[];
