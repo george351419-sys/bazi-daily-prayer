@@ -199,8 +199,8 @@ export function setupNetwork(){
  firmwareButton.onclick=async()=>{
   if(firmwareButton.disabled)return;firmwareButton.disabled=true;firmwareStatus.textContent='正在读取固件清单和画屏已保存的 Wi‑Fi…';
   try{
-   const manifest=await fetch('/firmware/ritual-3.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('固件清单不可用');return r.json();});
-   await client.startWifiOta('/firmware/'+manifest.file,manifest.bytes,manifest.sha256);
+   const manifest=await fetch('/firmware/ritual-5.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('固件清单不可用');return r.json();});
+   await client.startWifiOta(new URL('/firmware/'+manifest.file,location.origin).href,manifest.bytes,manifest.sha256);
    firmwareStatus.textContent='固件已应用，画屏正在重启。';
   }catch(error){firmwareStatus.textContent='固件升级失败：'+error.message;}
   finally{firmwareButton.disabled=!client.characteristic;}
