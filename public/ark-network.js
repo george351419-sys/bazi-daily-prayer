@@ -54,7 +54,7 @@ export class ArkNetwork {
   this.characteristic=null;this.device=null;this.deviceId=null;this.connecting=true;
   // Start releasing our previous GATT session without awaiting: requestDevice must stay in the click task.
   const previousReleased=this.release(previous);
-  this.state('请选择名称以 FRAMEFILMARK 开头的画屏…');
+  this.state('请选择名称以 FRAMEFILMARK 开头的画屏，然后点击弹窗右下角的“配对”确认。');
   let device;
   try{
    // Must remain directly in the click handler before any await (Web Bluetooth gesture).
