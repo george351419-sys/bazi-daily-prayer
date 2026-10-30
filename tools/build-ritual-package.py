@@ -7,9 +7,6 @@ MAGIC=b'RITUAL1\0'; FRAME=172832; STRIP=7680; ANSWER=4800
 COLORS=[(0,0,0),(255,255,255),(255,255,0),(255,0,0),(0,0,255),(0,255,0)]
 def text_bitmap(lines, size, font_path, action=False):
  im=Image.new('1',size,0);d=ImageDraw.Draw(im)
- if action:
-  d.line((12,0,12,127),fill=1);d.line((468,0,468,127),fill=1)
-  d.line((48,37,432,37),fill=1)
  y=8
  for text,px in lines:
   f=ImageFont.truetype(font_path,px)
@@ -46,35 +43,25 @@ def build(plan,films,answers,font):
  start=int(datetime.datetime.fromisoformat(plan['startsAt'].replace('Z','+00:00')).timestamp())
  if len(plan['days'])!=2 or any(len(d['actions'])!=8 for d in plan['days']):raise ValueError('16 actions required')
  photo=plan.get('contentMode','prayer')=='photo';show_actions=plan.get('showActions',True)
+ variants=5 if plan.get('actionVariants')==5 else 1
  frames=[]
  for raw in films:
   if not show_actions:
    frames.append(raw);continue
-  source=portrait(raw);im=Image.new('RGB',(480,720),'white')
-  # One continuous scroll frame, with the full deity preserved inside it.
-  # The replaceable action band crosses the same frame, keeping both assets independent.
-  bounds=ImageChops.difference(source,Image.new('RGB',source.size,'white')).getbbox()
-  if bounds:source=source.crop(bounds) # Remove only wholly empty outer padding, never crop the figure.
-  fitted=ImageOps.contain(source,((400 if photo else 340),480),Image.Resampling.NEAREST);im.paste(fitted,((480-fitted.width)//2,62+(480-fitted.height)//2))
-  d=ImageDraw.Draw(im);d.rectangle((12,18,468,702),outline='black',width=1)
-  title=ImageFont.truetype(font,24);side=ImageFont.truetype(font,18);foot=ImageFont.truetype(font,14)
-  d.text((240,26),'我的照片' if photo else '今日祈愿',anchor='mt',font=title,fill='black')
-  if not photo:
-   for i,ch in enumerate('心有所愿向好而行'):d.text((34,190+i*27),ch,font=side,fill='black')
-   d.rectangle((423,112,454,149),outline='red',width=2);d.text((427,116),'愿',font=title,fill='red')
-  d.line((48,549,432,549),fill='black',width=1)
-  d.text((240,684),'上键 · 答案之书    下键 · 回到今日',anchor='mt',font=foot,fill='black')
-  # Pillow antialiases fonts on RGB; snap only those edge pixels back to the six supported inks.
-  palette=Image.new('P',(1,1));palette.putpalette([v for c in COLORS for v in c]+[0]*(768-18))
-  im=im.quantize(palette=palette,dither=Image.Dither.NONE).convert('RGB')
+  source=portrait(raw)
+  im=ImageOps.fit(source,(480,720),method=Image.Resampling.NEAREST)
   frames.append(encode(im,raw[:32]))
  strips=[]
  for day in plan['days']:
-  for a in day['actions']:
-   strips.append(text_bitmap([(a['branch']+'时 · '+a['title'],20),(a['text'],30)],(480,128),font,action=True))
+  for variant in range(variants):
+   for original in day['actions']:
+    options=[original]+original.get('alternatives',[])
+    if len(options)<variants:raise ValueError('Five action options required')
+    a=options[variant]
+    strips.append(text_bitmap([(a['branch']+'时 · '+a['title']+((' '+str(variant+1)+'/5') if variants==5 else ''),20),(a['text'],30)],(480,128),font,action=True))
  answer_bits=[text_bitmap([(a['id']+' · 答案之书',18),(a['text'],32)],(480,80),font) for a in answers]
- offset1=64;offset2=offset1+2*FRAME;offset3=offset2+16*STRIP;length=offset3+len(answers)*ANSWER
- header=struct.pack('<8s8I24x',MAGIC,length,start,int(plan['mode']=='test'),len(answers),offset1,offset2,offset3,2 if photo or not show_actions else 1)
+ offset1=64;offset2=offset1+2*FRAME;offset3=offset2+16*variants*STRIP;length=offset3+len(answers)*ANSWER
+ header=struct.pack('<8s8I24x',MAGIC,length,start,int(plan['mode']=='test'),len(answers),offset1,offset2,offset3,3 if variants==5 else (2 if photo or not show_actions else 1))
  header=bytearray(header);struct.pack_into('<I',header,60,(2|int(not show_actions)) if photo or not show_actions else 0);header[44:60]=hashlib.sha256(json.dumps(plan,sort_keys=True).encode()).digest()[:16]
  if plan.get('anchor','first_connection')=='first_connection' and plan['mode']=='test':
   struct.pack_into('<I',header,12,0);struct.pack_into('<I',header,40,1)
@@ -94,7 +81,7 @@ def main():
   films=[]
   for f in args.images:
    with Image.open(f) as original:
-    image=ImageOps.exif_transpose(original).convert('RGBA');canvas=Image.new('RGBA',image.size,'white');canvas.alpha_composite(image);canvas=ImageOps.contain(canvas.convert('RGB'),(480,720),Image.Resampling.LANCZOS)
+    image=ImageOps.exif_transpose(original).convert('RGBA');canvas=Image.new('RGBA',image.size,'white');canvas.alpha_composite(image);canvas=ImageOps.fit(canvas.convert('RGB'),(480,720),method=Image.Resampling.LANCZOS)
     frame=Image.new('RGB',(480,720),'white');frame.paste(canvas,((480-canvas.width)//2,(720-canvas.height)//2))
     film,_=_encoder().convert_for_device(frame.rotate(180),'pro',{'dither_type':'floyd_steinberg','dither_strength':80},screen_profile=profile_screen(ARK_PROFILE));films.append(film)
  data=build(plan,films,answers,args.font);target=Path(args.out);target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)

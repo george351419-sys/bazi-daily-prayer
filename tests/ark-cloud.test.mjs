@@ -62,7 +62,7 @@ test('replacement reports identify the previous package, and disabling ritual cl
  const params='&ritual_v=1&ritual_active=1&cloud_stored_sha='+hash(first)+'&ritual_render=1&ritual_day=1&ritual_action=3&ritual_answer=0&ritual_started_at='+String(Math.floor(now/1000)-10)+'&download_state=3&download_progress=67';
  await invoke(c,hb+params,{headers:{authorization}});
  let status=await(await invoke(c,'/api/ark/status?device_id='+deviceId,{headers:{authorization}})).json();
- assert.equal(status.report.stored,false);assert.equal(status.report.renderSha,hash(first));assert.equal(status.report.renderReport.day,1);assert.equal(status.report.downloadState,3);assert.equal(status.report.downloadProgress,67);assert.equal(status.mode,'test');assert.equal(status.intervalMinutes,1);
+ assert.equal(status.report.stored,false);assert.equal(status.report.renderSha,hash(first));assert.equal(status.report.renderReport.day,1);assert.equal(status.report.downloadState,3);assert.equal(status.report.downloadProgress,67);assert.equal(status.mode,'test');assert.equal(status.intervalMinutes,2);
  await provision(c,{type:'ritual_disable',deviceId});
  const result=await(await invoke(c,hb+params,{headers:{authorization}})).json();assert.equal(result.data.commands[0].cmd,'disable_ritual');assert.ok(result.data.commands.some(c=>c.cmd==='download_film'));
  const legacy=await(await invoke(c,hb,{headers:{authorization}})).json();assert.ok(!legacy.data.commands.some(c=>c.cmd==='disable_ritual'));

@@ -1,3 +1,4 @@
+import {personalizeActionOptions} from '../lib/action-personalization.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -30,7 +31,7 @@ test('a newly saved plan never relabels the previous package render report',asyn
  const requested=(await configureRitual(c,account,{mode:'test',artworkIds:ids.slice(2)})).plan;
  const result=await ritualStatus(c,account,now);
  assert.equal(result.plan.revision,requested.revision);assert.equal(result.artwork.id,ids[1]);assert.equal(result.displaySource,'device_report');assert.equal(result.pendingUpdate,true);assert.equal(result.answer.id,'OB001');assert.match(result.action.text,/^包内动作/);
- assert.equal(result.scheduledPosition.actionIndex,2,'schedule uses the device installation clock');assert.deepEqual(result.plannedDays.map(d=>d.artworkId),ids.slice(2));
+ assert.equal(result.scheduledPosition.actionIndex,1,'schedule uses the device installation clock');assert.deepEqual(result.plannedDays.map(d=>d.artworkId),ids.slice(2));
  assert.deepEqual(result.planDays.map(d=>d.artworkId),ids.slice(2),'website preview follows the requested plan, not the old device report');
 });
 test('a previous package remains identifiable while a new package is downloading',async t=>{
@@ -101,4 +102,16 @@ test('a newer image for today replaces the same-date artwork in the existing pla
  await configureRitual(c,account,{mode:'daily',artworkIds:[oldToday,tomorrow]});
  const ready=await prepareRitualPair(c,account,{mode:'daily',now:Date.parse('2026-10-29T12:00:00+08:00')});
  assert.equal(ready.status,'ready');assert.deepEqual((await ritualStatus(c,account)).plan.artworkIds,[newToday,tomorrow]);
+});
+
+test('encoded variant 39 resolves the final option of the second-day final slot',async t=>{
+ const {c,repo,account,device,ids,cloud}=await setup(t);
+ const plan=(await configureRitual(c,account,{mode:'test',artworkIds:ids.slice(0,2)})).plan;
+ const published={...manifest(plan,ids.slice(0,2)),actionVariants:5};
+ const days=personalizeActionOptions({});published.days.forEach((d,i)=>d.actions=days[i]);
+ await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:published,sha256:'c'.repeat(64)}});
+ cloud('reports/'+device,{targetSha:'c'.repeat(64),renderSha:'c'.repeat(64),stored:true,lastSeen:new Date().toISOString(),renderReport:{day:1,action:39,answer:-1}});
+ const result=await ritualStatus(c,account);
+ assert.equal(result.position.actionIndex,7);assert.equal(result.position.actionVariant,4);
+ assert.equal(result.action.id,days[1][7].alternatives[3].id);assert.equal(result.displaySource,'device_report');
 });

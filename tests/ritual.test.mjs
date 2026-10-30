@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import {ritualPosition,searchAnswers,actionPlans} from '../lib/ritual.mjs';
 import {validateRitual} from '../lib/ark-cloud.mjs';
 const start=Date.parse('2026-10-29T01:00:00+08:00');
-test('one-minute eight-slot days, two-day repeat and restart use absolute anchor',()=>{
+test('two-minute eight-slot days, two-day repeat and restart use absolute anchor',()=>{
  const p={mode:'test',startsAt:new Date(start).toISOString()};
- for(let i=0;i<33;i++){const r=ritualPosition(p,start+i*60000);assert.equal(r.dayIndex,Math.floor(i/8)%2);assert.equal(r.actionIndex,i%8);assert.equal(Date.parse(r.nextAt),start+(i+1)*60000);}
- assert.equal(ritualPosition(p,start+59999).actionIndex,0);
+ for(let i=0;i<33;i++){const r=ritualPosition(p,start+i*120000);assert.equal(r.dayIndex,Math.floor(i/8)%2);assert.equal(r.actionIndex,i%8);assert.equal(Date.parse(r.nextAt),start+(i+1)*120000);}
+ assert.equal(ritualPosition(p,start+119999).actionIndex,0);
 });
 test('daily changes at Shanghai 01:00; actions only 07–23 and expire instead of repeating yesterday',()=>{
  const p={mode:'daily',startsAt:new Date(start).toISOString()};
