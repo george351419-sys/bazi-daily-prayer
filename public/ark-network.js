@@ -35,7 +35,7 @@ export class ArkNetwork {
   let device;
   try{
    // Must remain directly in the click handler before any await (Web Bluetooth gesture).
-   device=await this.bluetooth.requestDevice({filters:[{services:[SERVICE]}],optionalServices:[SERVICE]});
+   device=await this.bluetooth.requestDevice({filters:[{namePrefix:'FRAMEFILM'}],optionalServices:[SERVICE]});
    if(epoch!==this.epoch)return;
    this.device=device;this.deviceId=arkDeviceId(device.name);
    let opened;
@@ -57,7 +57,6 @@ export class ArkNetwork {
    characteristic.addEventListener('characteristicvaluechanged',this.listener);await characteristic.startNotifications();
    if(epoch!==this.epoch)return;
    this.state('蓝牙已连接：'+device.name+'。请输入画屏要连接的 2.4 GHz Wi-Fi。');
-   await this.write(0x3a,[],epoch);
   }catch(error){if(epoch===this.epoch){this.disconnect();throw error;}}
  }
  receive(bytes){

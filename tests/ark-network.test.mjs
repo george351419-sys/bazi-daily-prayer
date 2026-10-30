@@ -16,7 +16,7 @@ function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
  if(bytes[1]===0x57||bytes[1]===0x58){const reply=packet(bytes[1],[0]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  }};
  const device={name:'FRAMEFILMARK-TEST',addEventListener:(key,fn)=>deviceListeners.set(key,fn),removeEventListener:key=>deviceListeners.delete(key),gatt:{connected:false,async connect(){connectCalls++;this.connected=true;return this;},async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};},disconnect(){disconnectCalls++;this.connected=false;deviceListeners.get('gattserverdisconnected')?.();}}};
- return {writes,device,get connectCalls(){return connectCalls;},get disconnectCalls(){return disconnectCalls;},bluetooth:{async requestDevice(options){assert.deepEqual(options.filters[0].services,['00002000-0000-1000-8000-00805f9b34fb']);return device;}}};
+ return {writes,device,get connectCalls(){return connectCalls;},get disconnectCalls(){return disconnectCalls;},bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILM');return device;}}};
 }
 test('Wi-Fi UTF-8 validation rejects truncation, open passwords and control characters',()=>{
  assert.throws(()=>wifiCredentials('中'.repeat(11),'12345678'));
@@ -32,8 +32,8 @@ test('ForFilm protocol preserves UTF-8 credentials and waits for device network 
  const p=peripheral(),states=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async()=>{}});
  await client.connect();assert.equal(states.at(-1).connected,false);
  await client.configure('家里的网','test-password');
- const channels=p.writes.map(p=>p[1]);assert.deepEqual(channels,[0x3a,0x39,0x3a,0x32,0x34,0x33,0x30,0x38,0x3a]);
- assert.equal(states.at(-1).connected,true);assert.equal(new TextDecoder().decode(Uint8Array.from(p.writes[3].slice(3,-1))),'家里的网');
+ const channels=p.writes.map(p=>p[1]);assert.deepEqual(channels,[0x39,0x3a,0x32,0x34,0x33,0x30,0x38,0x3a]);
+ assert.equal(states.at(-1).connected,true);assert.equal(new TextDecoder().decode(Uint8Array.from(p.writes[2].slice(3,-1))),'家里的网');
  for(const bytes of p.writes)assert.equal(bytes.at(-1),bytes.slice(0,-1).reduce((s,n)=>(s+n)&255,0));
  client.disconnect();assert.equal(p.device.gatt.connected,false);
 });
