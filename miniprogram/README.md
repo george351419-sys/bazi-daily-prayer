@@ -23,7 +23,7 @@
 1. 确认实际经营主体、服务类目、备案与必要资质。若未来在小程序销售实体画屏或线下服务，应先核对主体和支付资格；本版没有支付功能。不要为赶进度随意选择主体。
 2. EdgeOne 已配置 `MINIPROGRAM_APP_IDS=wx67be26840ab16898` 与对应的 `WECHAT_MINIPROGRAM_SECRETS`，包含 `/api/account/wechat-login` 的最新服务端版本也已部署。只在服务端环境变量填写 AppSecret；不要更换 `SESSION_SECRET`，也不要把 AppSecret 写进源码、项目配置或聊天。
 3. 已完成：微信开发者工具登录、正式 AppID 真实编译和开发版本 `1.0.1` 上传。仍需由管理员在公众平台把该版本设为体验版并添加体验成员。
-4. 微信后台尚未配置 request/downloadFile 合法域名 `https://playmath.cn`；开发者工具实测错误为 `request:fail url not in domain list`。照片通过 wx.request 的 JSON 上传，不使用第三方域名。保持域名校验，不能通过 urlCheck=false 假装生产通过。
+4. 微信后台的 request/downloadFile 合法域名已可用：开发者工具实测 `https://playmath.cn/api/bootstrap` 与 `/api/account/me` 均返回 200。照片通过 wx.request 的 JSON 上传，不使用第三方域名。保持域名校验，不能通过 urlCheck=false 假装生产通过。
 5. 填齐运营主体、隐私联系渠道和隐私保护指引；声明相册/相机、蓝牙、本地存储、生辰/城市/愿望数据用途。按平台要求完成备案、服务类目与必要资质。宗教造像、八字/祈福解读等内容须按实际业务核验；不能保证审核通过，也不能把改文案当成规避审核。
 6. 真机检查 iOS/Android 相册方向、JPEG 1440 上限、768 KiB、EXIF 去除、中文 SSID、MTU、写入/读回确认、断网重试与断开清理；无真实回执不得显示设备同步成功。
 7. 完成 EdgeOne 自动内容编译和设备下发适配。现阶段保存计划仅保存在账户中，这个既有缺口不会因改成小程序自动消失。

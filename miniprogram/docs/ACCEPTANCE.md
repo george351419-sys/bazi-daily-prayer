@@ -5,8 +5,8 @@
 - 微信开发者工具登录态有效，正式 AppID `wx67be26840ab16898` 已完成真实编译，五个路由均可编译打开；模拟器首屏、许愿池、解读陪伴、自定义和答案之书已逐页检查。
 - 小程序单测 13 项通过；服务端完整测试 149 项通过。主包脚本检查 393137 字节；微信上传包体 403560 字节。
 - 已上传开发版本 `1.0.1`，微信返回包体 403560 字节。该版本尚未在公众平台设为体验版，也尚未提交审核。
-- 开发者工具实测 `wx.request` 返回 `request:fail url not in domain list`，确认微信后台仍缺 `https://playmath.cn` 的 request/downloadFile 合法域名。
-- EdgeOne 已配置正式 AppID 与该 AppID 的 AppSecret，包含微信登录接口的最新服务端版本已部署。普通浏览器请求不带微信 Referer，因此 bootstrap 中 `miniProgram.enabled=false` 属于预期；仍需在配置合法域名后用真机验证微信登录。
+- 开发者工具实测 `wx.request` 已可访问 `https://playmath.cn/api/bootstrap` 与 `/api/account/me` 并返回 200，确认微信后台 request/downloadFile 合法域名已生效。
+- EdgeOne 已配置正式 AppID 与该 AppID 的 AppSecret，包含微信登录接口的最新服务端版本已部署。普通浏览器请求不带微信 Referer，因此 bootstrap 中 `miniProgram.enabled=false` 属于预期；带微信 Referer 时已返回 `enabled=true`、`wechatLoginEnabled=true`。仍需用真机完成微信登录验收。
 - 本轮优化：网络错误改为可行动提示；解读页刷新从 30 秒延长到 60 秒并缓存已下载图片；照片轮播按上海时间 01:00 切换；缩略图批量加载并复用刚上传的本地文件。
 
 - 设计：使用腾讯官方 ui-design、miniprogram-development skills；五路由原生 WXML/WXSS/JS，纸本画册风格。
@@ -22,7 +22,7 @@
 
 ## 正式发布还缺什么
 
-小程序 AppID 与开发者登录已完成。仍需配置合法域名与 AppSecret、部署最新服务端、核对主体/隐私指引/备案/类目和必要资质，并完成 iOS/Android 真机 BLE/照片验收；之后由管理员设为体验版、提交审核与发布。
+小程序 AppID、开发者登录、合法域名、AppSecret 与最新服务端部署已完成。仍需核对主体/隐私指引/备案/类目和必要资质，并完成 iOS/Android 真机 BLE/照片与微信登录验收；之后由管理员设为体验版、提交审核与发布。
 
 既有 EdgeOne 内容编译和设备自动下发仍未接通。原生配网成功与账户计划保存都不代表设备已收到新图；UI 已明确标注。
 
