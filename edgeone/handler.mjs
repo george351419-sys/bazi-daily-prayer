@@ -17,7 +17,7 @@ export default async function onRequest({request,env={}}){
   try{body=JSON.parse(text);}catch{return Response.json({error:'提交内容格式不正确。'},{status:400});}
  }
  const req={method:request.method,url:request.url,headers,body,query:{route:url.pathname.replace(/^\/api\//,'')}};
- const outputHeaders=new Headers({'X-Prayer-Request-Id':requestId});let status=200,result;
+ const outputHeaders=new Headers({'X-Prayer-Request-Id':requestId,'X-Prayer-Analysis-Version':'20261030-stem-repair-v1'});let status=200,result;
  const res={setHeader(k,v){outputHeaders.set(k,v);},status(code){status=code;return this;},json(data){outputHeaders.set('Content-Type','application/json; charset=utf-8');result=JSON.stringify(data);},end(bytes){result=bytes??null;}};
  await handleRequest(req,res,config);
  log({stage:'responded',status});
