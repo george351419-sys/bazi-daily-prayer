@@ -48,7 +48,7 @@ test('程序给出解冲方向与日主生克根气，纠错一次覆盖多个�
  assert.match(context.natal_stem_roles.find(x=>x.id==='natal.hour').relation,/食伤.*泄身/);
  assert.ok(context.natal_hidden_stems.find(x=>x.id==='natal.day').same_element_roots.includes('丙'));
  const m=addClashStem(fresh(),calendar);m.rationale.stems.items[0].stem='乙';m.rationale.stems.items[0].purpose='解冲兼调候';m.rationale.stems.items[0].clash_targets=[{natal_id:'natal.month',incoming_id:'transit.day'}];
- const hints=repairHints(m,calendar,STEM_PARTNER);assert.equal(hints.length,2);assert.ok(hints.some(x=>x.includes('取己合甲')));
+ const hints=repairHints(m,calendar,STEM_PARTNER);assert.equal(hints.length,3);assert.ok(hints.some(x=>x.includes('skip_for_required_tiaohou')));assert.ok(hints.some(x=>x.includes('取己合甲')));
 });
 
 

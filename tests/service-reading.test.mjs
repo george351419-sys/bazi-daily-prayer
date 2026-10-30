@@ -13,15 +13,15 @@ test('模型首次输出非法JSON时，在总预算内重试完整结构并返�
  assert.equal(calls,2);assert.equal(result.reading.sections.length,5);assert.ok(!result.professional.includes('JSON'));assert.equal(result.birth_summary.time_basis,'真太阳时');
 });
 
-test('多个独立取用错误可在总时限内累计纠正，避免顾此失彼',async()=>{
+test('纠错保留已通过的生肖部分，避免修主尊时引入新错误',async()=>{
  let calls=0;const mapping=makeMapping(input,calendar);
  const result=await analyzeMapping({DEEPSEEK_API_KEY:'test-only',ANALYSIS_BUDGET_MS:108000},input,calendar,[],async(url,init)=>{
   calls++;const body=JSON.parse(init.body),request=JSON.parse(body.messages[1].content);
-  if(calls===3){assert.equal(request.validation_errors.length,2);assert.match(body.messages[0].content,/流日甲.*取己合甲/);}
+  if(calls===2){assert.ok(request.fixed_selection.zodiac.existing_relations.length);assert.match(body.messages[0].content,/流日甲.*取己合甲/);}
   const raw=structuredClone(mapping);if(calls===1)raw.rationale.deity.today_reason='';if(calls===2)raw.rationale.zodiac.existing_relations=[];
   return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(raw)}}]});
  });
- assert.equal(calls,3);assert.equal(result.deity,'陈九公');
+ assert.equal(calls,2);assert.equal(result.deity,'陈九公');
 });
 test('生肖空选违反天干边界时，重试收到只修正地支层文案的定向指令',async()=>{
  let calls=0;const mapping=makeMapping(input,calendar);
@@ -45,17 +45,17 @@ test('审美辅色标错五行时，重试会要求改为中性点缀而不是�
  });
  assert.equal(calls,2);assert.equal(result.colors.some(color=>color.name==='土黄'),false);
 });
-test('连续出现不同校验错误时，后续修复指令保留所有定向要求',async()=>{
+test('纠错保留已通过的地支解释，避免修颜色时引入新矛盾',async()=>{
  let calls=0;const mapping=makeMapping(input,calendar);
  const result=await analyzeMapping({DEEPSEEK_API_KEY:'test-only',ANALYSIS_BUDGET_MS:108000},input,calendar,[],async(url,init)=>{
   calls++;const request=JSON.parse(JSON.parse(init.body).messages[1].content);
-  if(calls===3){assert.match(request.instruction,/element="中性" 且 role="点缀"/);assert.match(request.instruction,/单独重写 rationale\.zodiac/);}
+  if(calls===2){assert.match(request.instruction,/element="中性" 且 role="点缀"/);assert.ok(request.fixed_selection.zodiac.existing_relations.length);}
   const raw=structuredClone(mapping);
   if(calls===1){raw.colors.push({name:'土黄',hex:'#D7B56D'});raw.rationale.colors.push({name:'土黄',element:'土',role:'辅色',reason:'用于台座层次。',effect:'稳定画面。'});}
   if(calls===2)raw.rationale.zodiac.reason_if_empty='本次以天干珠玉意象回应地支层的冲害，不另加生肖。';
   return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(raw)}}]});
  });
- assert.equal(calls,3);assert.equal(result.title,mapping.title);
+ assert.equal(calls,2);assert.equal(result.title,mapping.title);
 });
 test('首次模型请求超时后仍保留后续重试预算',async()=>{
  let calls=0;const mapping=makeMapping(input,calendar);
