@@ -9,3 +9,28 @@
 .ritual-answer-card{max-width:620px;padding:20px;border:1px solid var(--line);border-radius:10px;background:#fff}.ritual-answer-card h5{font-family:var(--serif);font-size:21px;margin:12px 0}.ritual-answer-card p{line-height:1.8}.ritual-answer-pager{display:flex;align-items:center;gap:12px;margin:14px 0}.ritual-answer-pager button{padding:8px 14px}.ritual-answer-pager span{color:var(--muted)}
 .ritual-day-previews{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:20px 0}.ritual-day-preview{margin:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;min-width:0}.ritual-day-preview img{display:block;width:100%;aspect-ratio:2/3;object-fit:contain;background:#f5f1e8;border-radius:6px}.ritual-day-preview figcaption{display:grid;gap:4px;margin-top:10px}.ritual-day-preview figcaption strong{color:var(--green)}.ritual-day-preview figcaption span{color:var(--muted);font-size:12px;line-height:1.5}.ritual-current-action{margin-bottom:16px}.ritual-all-actions>summary{cursor:pointer;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:#fffdf8;color:var(--green)}.ritual-all-actions[open]>summary{margin-bottom:18px}@media(max-width:540px){.ritual-day-previews{grid-template-columns:1fr 1fr;gap:8px}.ritual-day-preview{padding:8px}}
 .ritual-current{display:grid;grid-template-columns:minmax(0,680px);justify-content:center;gap:0;max-width:780px;margin:24px auto;padding:0;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}.ritual-artwork{display:grid;place-items:center;padding:18px;background:#f5f1e8}.ritual-artwork>img{display:block;width:min(100%,430px);max-height:560px;aspect-ratio:2/3;object-fit:contain}.ritual-artwork-copy{display:grid;gap:10px;padding:22px 26px 24px;background:#fff;border-top:1px solid var(--line)}.ritual-artwork-copy>small{color:var(--muted);line-height:1.6}.ritual-artwork-copy>h5{font-family:var(--serif);font-size:23px;font-weight:500;line-height:1.45;margin:0;color:var(--green)}.ritual-artwork-action{display:grid;gap:7px;margin-top:4px;padding:15px 16px;background:#fff;border:1px solid var(--line);border-radius:8px}.ritual-artwork-action strong{font-size:15px;line-height:1.55}.ritual-artwork-action p{margin:0;line-height:1.8}.ritual-artwork-action small{color:var(--muted);line-height:1.7}.ritual-artwork-copy details{margin-top:4px}.ritual-all-actions{margin-top:14px}.ritual-all-actions>summary{display:flex;justify-content:space-between;cursor:pointer;padding:13px 15px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--green);font-weight:600}.ritual-all-actions[open]>summary{margin-bottom:18px}@media(max-width:540px){.ritual-day-previews{grid-template-columns:1fr 1fr;gap:8px}.ritual-day-preview{padding:8px}.ritual-current{border-radius:10px;margin:18px auto}.ritual-artwork{padding:10px}.ritual-artwork-copy{padding:18px 16px 20px}.ritual-artwork-copy>h5{font-size:20px}}
+.ritual-companion-block{margin:34px 0;padding-top:28px;border-top:1px solid var(--line);scroll-margin-top:24px}
+.ritual-block-heading{max-width:720px;margin-bottom:20px}
+.ritual-block-heading h5{font:400 24px/1.4 var(--serif);letter-spacing:2px;color:var(--green);margin:8px 0 6px}
+.ritual-block-heading p{font-size:12px;line-height:1.9;color:var(--muted);margin:0}
+.reading-overview{font:400 20px/1.9 var(--serif);color:#53634f;letter-spacing:.5px;margin:0 0 8px}
+.ritual-reading-actions{display:flex;justify-content:flex-end;margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+.ritual-answer-latest{margin:0 0 22px}
+.ritual-answer-card{display:grid;gap:9px;max-width:none;padding:22px;border:1px solid #d9d3c4;border-left:6px solid var(--green);border-radius:10px;background:#fff}
+.ritual-answer-card>small{font-size:11px;letter-spacing:1px;color:var(--muted);line-height:1.7}
+.ritual-answer-card>strong{font:400 24px/1.6 var(--serif);color:var(--green)}
+.ritual-answer-card>p{margin:0;font-size:13px;line-height:1.9;color:#65725d}
+.ritual-answer-empty{padding:20px;border:1px dashed #c9c7b9;border-radius:10px;background:#fffdf8}
+.ritual-answer-empty p{margin:0 0 5px;color:var(--green)}
+.ritual-answer-empty small{color:var(--muted);line-height:1.8}
+.ritual-answer-book>summary{cursor:pointer;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:#fffdf8;color:var(--green)}
+.ritual-answer-book[open]>summary{margin-bottom:16px}
+.ritual-answer-book input{margin-top:4px}
+.ritual-answer-book details{padding:12px 0;border-bottom:1px solid var(--line)}
+.ritual-answer-book details summary{cursor:pointer;line-height:1.7;color:var(--green)}
+.ritual-answer-book details p{font-size:13px;line-height:1.9;color:#65725d;margin:10px 0 6px}
+.ritual-answer-book details small{color:var(--muted);line-height:1.7}
+@media(max-width:540px){.ritual-block-heading h5{font-size:22px}.ritual-answer-card{padding:18px}}
+#result .reading-note{margin-top:22px;padding:22px;border:1px solid #ded8c8;border-radius:10px;background:#f8f5eb}
+#result .reading-note h3{font:400 24px/1.5 var(--serif);color:var(--green);margin:8px 0}
+#result .reading-note p{margin:0;color:var(--muted);line-height:1.9}

@@ -1,5 +1,5 @@
 import {transferStatus,renderTransfer} from './transfer-status.js?v=20261030-followup-v1';
-import {renderConsumerReading} from './reading-view.js';
+import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
  const host=document.createElement('section');host.className='ritual-section';host.hidden=true;
@@ -16,15 +16,30 @@ export function setupRitual({request,fetchImage,getUser}){
    return {...action,text,detail:String(action.detail||'').replace('当前未确认喜用数字，不套用命理次数。','本次按'+element+'的河图数取'+number+'，仅作传统数字取象；动作以舒适为准。'),number_basis:{system:'河图生成数',element,number}};
   });
  }
- let transferPending=false,active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null,latestGenerated=null;
+ function answerNumber(answer){const match=/(\d+)\s*$/.exec(answer?.id||'');return match?Number(match[1]):null;}
+ function answerLabel(answer){if(!answer)return '';const number=answerNumber(answer);return answer.id+(number?` · 第 ${number} 数`:'');}
+ function actionNote(action){const detail=String(action?.detail||'').replace('当前未确认喜用数字','动作重复次数尚未个性化');const basis=action?.number_basis?`次数取象：${action.number_basis.element}河图数 ${action.number_basis.number}。`:'';return [detail,basis].filter(Boolean).join(' ');}
+ function readingMarkdown(mapping,date,title){const lines=[];if(date||title)lines.push('# '+[date,title].filter(Boolean).join(' · '));if(!mapping)return lines.join('\n');if(mapping.overview)lines.push(mapping.overview);if(mapping.elements?.length)lines.push(...mapping.elements.map(item=>'**'+item.name+'**\n'+item.meaning));if(mapping.blessing)lines.push(mapping.blessing);if(mapping.reading){lines.push('## 生辰与画面解析');lines.push(consumerReadingMarkdown(mapping));}return lines.join('\n\n');}
+ function renderArtworkReading(container,mapping,{photo,date,title}){
+  container.replaceChildren();container.className='reading ritual-reading-copy';
+  if(photo){const copy=node('p','这是你放进私人画册的日常一帧。照片模式不进入命理取象，也不改变今日造像原有的解读。');copy.className='reading-intro';container.append(copy);return;}
+  if(!mapping){const copy=node('p','这幅画暂时没有可读取的画面文字。重新生成后，可在这里查看完整解读。');copy.className='reading-intro';container.append(copy);return;}
+  if(mapping.overview){const overview=node('p',mapping.overview);overview.className='reading-overview';container.append(overview);}
+  if(mapping.colors?.length){const palette=node('div');palette.className='palette';for(const color of mapping.colors){const item=node('span');item.className='swatch';const dot=node('i');dot.style.backgroundColor=color.hex;item.append(dot,document.createTextNode(color.name));palette.append(item);}container.append(palette);}
+  if(mapping.elements?.length){container.append(node('h4','画中每一份心意'));const list=node('div');for(const [index,element] of mapping.elements.entries()){const row=node('div');row.className='element-item';const number=node('span',String(index+1).padStart(2,'0'));number.className='element-index';const box=node('div');box.append(node('h5',element.name),node('p',element.meaning));row.append(number,box);list.append(row);}container.append(list);}
+  if(mapping.blessing){const blessing=node('blockquote',mapping.blessing);container.append(blessing);}
+  if(mapping.reading){container.append(node('h4','生辰与画面解析'));const caption=node('p','这是一份传统取象解释，读到这里就好；不必把它当成对现实结果的保证。');caption.className='reading-caption';const copy=node('div');copy.className='consumer-reading';renderConsumerReading(copy,mapping);container.append(caption,copy);}
+  if(mapping.reading||mapping.overview){const row=node('div');row.className='ritual-reading-actions';const download=node('button','保存画面解读 ↗');download.type='button';download.className='text-button';download.onclick=()=>{const text=readingMarkdown(mapping,date,title);const link=URL.createObjectURL(new Blob([text],{type:'text/markdown;charset=utf-8'})),anchor=document.createElement('a');anchor.href=link;anchor.download='今日造像解读-'+(date||'')+'.md';anchor.click();setTimeout(()=>URL.revokeObjectURL(link),1000);};row.append(download);container.append(row);}
+ }
+ let transferPending=false,active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,answers=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null,latestGenerated=null;
  function pause(){active=false;epoch++;clearTimeout(timer);timer=null;}
- function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell?.settings.remove();shell=null;renderedKey=null;latestGenerated=null;host.replaceChildren();host.hidden=true;const transfer=document.querySelector('#artwork-transfer');if(transfer){transfer.replaceChildren();transfer.hidden=true;}}
+ function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;answers=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell?.settings.remove();shell=null;renderedKey=null;latestGenerated=null;host.replaceChildren();host.hidden=true;const transfer=document.querySelector('#artwork-transfer');if(transfer){transfer.replaceChildren();transfer.hidden=true;}}
  function alive(life){return life===lifecycle&&!!getUser();}
  function schedule(result){if(!active)return;clearTimeout(timer);const next=Date.parse(result?.scheduledPosition?.nextAt||result?.position?.nextAt);timer=setTimeout(refresh,Number.isFinite(next)?Math.max(1000,Math.min(latestGenerated&&transferPending?5000:30000,next-Date.now()+200)):(latestGenerated&&transferPending?5000:30000));}
  function ensureShell(){
   if(shell)return;
   const transfer=node('div');transfer.setAttribute('role','status');transfer.setAttribute('aria-live','polite');
-  const title=node('h4','一日祈愿 · 此刻行动'),status=node('p'),report=node('p'),current=node('div');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+  const title=node('h4','解读陪伴 · 今日三读'),status=node('p'),report=node('p'),current=node('div');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const shortcuts=node('nav');shortcuts.className='ritual-shortcuts';shortcuts.setAttribute('aria-label','画屏功能');
   const settings=node('details');settings.id='ritual-settings';settings.append(node('summary','画屏呈现设置'));const form=node('form');form.className='ritual-form';
   const choicesBox=node('div');choicesBox.className='ritual-choices';form.append(choicesBox);
@@ -76,26 +91,28 @@ export function setupRitual({request,fetchImage,getUser}){
    catch(error){if(alive(life)){status.textContent=error.message;settingsState.textContent=error.message;schedule();}}
    finally{if(alive(life)){saving=false;for(const control of form.elements)control.disabled=false;}}
   };
-  const actions=node('section');actions.id='ritual-actions';actions.className='ritual-actions';actions.append(node('h5','八个时辰的微行动与解读'));const actionList=node('div');actionList.className='ritual-action-list';actions.append(actionList);
-  const book=node('section');book.id='ritual-answers';book.append(node('h5','答案之书 · 搜索回答与解读'));const search=node('input');search.type='search';search.maxLength=120;search.placeholder='输入关键词或编号，例如事业、OB001';search.setAttribute('aria-label','搜索答案之书');
-  const count=node('p','输入关键词后查看回答。'),list=node('div');count.setAttribute('role','status');
-  async function find(){
-   const q=search.value.normalize('NFKC').trim();const turn=++searchTurn;clearTimeout(searchTimer);list.replaceChildren();
-   if(!q){count.textContent='输入关键词后查看回答。';return;}
-   count.textContent='正在搜索…';
-   searchTimer=setTimeout(async()=>{
-    try{const data=await request('/api/account/answers?q='+encodeURIComponent(q));if(turn!==searchTurn||!alive(lifecycle))return;
-     const items=data.items||[];let index=0;count.textContent=items.length?`找到 ${items.length} 条，逐条查看。`:'没有找到相关回答。';
-     function show(){const a=items[index];list.replaceChildren();if(!a)return;const card=node('article');card.className='ritual-answer-card';card.append(node('small',a.id+' · '+a.theme+' · '+a.tendency),node('h5',a.text),node('p',a.phone_detail));list.append(card);if(items.length>1){const pager=node('div');pager.className='ritual-answer-pager';const previous=node('button','上一条'),next=node('button','下一条');previous.type=next.type='button';previous.disabled=index===0;next.disabled=index===items.length-1;previous.onclick=()=>{index--;show();};next.onclick=()=>{index++;show();};pager.append(previous,node('span',`${index+1} / ${items.length}`),next);list.append(pager);}}
-     show();
-    }catch(error){if(turn===searchTurn&&alive(lifecycle))count.textContent=error.message;}
-   },250);
+  const picture=node('section');picture.id='ritual-picture';picture.className='ritual-companion-block';
+  const pictureHead=node('div');pictureHead.className='ritual-block-heading';const pictureKicker=node('span','01 / PICTURE READING');pictureKicker.className='eyebrow';pictureHead.append(pictureKicker,node('h5','画面解读'),node('p','先看画里有什么，再读它为什么落在今天。'));
+  const pictureBody=node('div');pictureBody.className='ritual-reading-body';picture.append(pictureHead,pictureBody);
+  const actions=node('section');actions.id='ritual-actions';actions.className='ritual-companion-block';
+  const actionHead=node('div');actionHead.className='ritual-block-heading';const actionKicker=node('span','02 / MICRO ACTION READING');actionKicker.className='eyebrow';actionHead.append(actionKicker,node('h5','微行动解读'),node('p','从一幅画，走到身体能做的一件小事；不追求完成，只求此刻舒服。'));
+  const actionList=node('div');actionList.className='ritual-action-list';actions.append(actionHead,actionList);
+  const answer=node('section');answer.id='ritual-answers';answer.className='ritual-companion-block';
+  const answerHead=node('div');answerHead.className='ritual-block-heading';const answerKicker=node('span','03 / ANSWER NUMBER READING');answerKicker.className='eyebrow';answerHead.append(answerKicker,node('h5','答案之数解读'),node('p','把画屏上的答案留在这里，保留编号、短句，也给自己一点慢慢理解的时间。'));
+  const answerLatest=node('div');answerLatest.className='ritual-answer-latest';
+  const book=node('details');book.className='ritual-answer-book';book.append(node('summary','展开 100 条答案与解读'));
+  const search=node('input');search.type='search';search.maxLength=120;search.placeholder='输入编号、短句或关键词，例如 OB005、事业';search.setAttribute('aria-label','搜索答案之数');
+  const count=node('p','正在载入答案库…'),list=node('div');count.setAttribute('role','status');
+  function find(){
+   if(!answers)return;const q=search.value.normalize('NFKC').trim().toLowerCase(),items=answers.filter(a=>!q||[a.id,a.text,a.theme,a.tendency,a.phone_detail].some(v=>String(v||'').toLowerCase().includes(q)));
+   const open=new Set([...list.querySelectorAll('details[open]')].map(d=>d.dataset.answer));list.replaceChildren();count.textContent=items.length+' 条回答';
+   for(const a of items){const item=node('details');item.dataset.answer=a.id;item.open=open.has(a.id);item.append(node('summary',answerLabel(a)+' · '+a.text),node('p',a.phone_detail),node('small',a.theme+' · '+a.tendency+' · '+a.review_status));list.append(item);}
   }
-  search.oninput=find;book.append(search,count,list);
-  for(const [label,target] of [['查看八时辰建议',actions],['搜索答案之书',book],['上传照片 · 选择模式',settings]]){const button=node('button',label);button.type='button';button.className='secondary';button.onclick=()=>{if(target.tagName==='DETAILS')target.open=true;if(target===settings)location.hash='custom';target.scrollIntoView({behavior:'smooth',block:'start'});if(target===book)search.focus();};shortcuts.append(button);}
-  host.append(title,transfer,status,report,shortcuts,current,actions,book);
+  search.oninput=find;book.append(search,count,list);answer.append(answerHead,answerLatest,book);
+  for(const [label,target] of [['画面解读',picture],['微行动解读',actions],['答案之数解读',answer],['上传照片 · 选择模式',settings]]){const button=node('button',label);button.type='button';button.className='secondary';button.onclick=()=>{if(target.tagName==='DETAILS')target.open=true;if(target===settings)location.hash='custom';if(target===answer)book.open=true;target.scrollIntoView({behavior:'smooth',block:'start'});if(target===answer)search.focus();};shortcuts.append(button);}
+  host.append(title,transfer,status,report,shortcuts,current,picture,actions,answer);
   host.append(settings);
-  shell={transfer,status,settingsState,report,current,settings,form,deliveryNote,selects,mode,submit,contentMode,showActions,populate,book,search,count,find,actionList};
+  shell={transfer,status,settingsState,report,current,settings,form,deliveryNote,selects,mode,submit,contentMode,showActions,populate,book,search,count,find,actionList,pictureBody,answerLatest};
  }
  function updateSettings(result){
   if(dirty||saving)return;
@@ -112,24 +129,29 @@ export function setupRitual({request,fetchImage,getUser}){
   const previewDays=result.planDays?.length?result.planDays:(result.days||[]);
   const key=JSON.stringify([result.artwork,result.action,result.answer,result.displaySource,result.pendingUpdate,result.displayPlan?.contentMode,result.displayPlan?.showActions,previewDays.map(day=>[day.artworkId,day.image,day.title])]);
   if(key===renderedKey)return;renderedKey=key;
-  const mappingOpen=!!shell.current.querySelector('[data-prayer-reading][open]');shell.current.replaceChildren();
+  shell.current.replaceChildren();
   const planned=previewDays[0];
   const artwork=planned?{id:planned.artworkId,title:planned.title,date:planned.date,source:planned.source,image:planned.image,mapping:planned.mapping||result.artwork?.mapping}:result.artwork;
   const preview=currentActionFor(result,previewDays),reportedCurrent=result.displaySource==='device_report'&&!result.pendingUpdate&&!result.deviceReport?.stale&&result.artwork?.id===planned?.artworkId;
   const action=reportedCurrent?result.action:(preview.action||result.action);
-  if(!artwork){shell.current.append(node('p',result.position?.expired?'两天内容已用完，等待新画作。':'准备好两幅画作后，可以开始两天体验。'));return;}
+  if(!artwork){shell.current.append(node('p',result.position?.expired?'两天内容已用完，等待新画作。':'准备好两幅画作后，可以开始两天体验。'));renderArtworkReading(shell.pictureBody,null,{photo:false,date:'',title:''});updateAnswer(result);return;}
   const photo=result.plan?.contentMode==='photo',showActions=result.plan?.showActions!==false;
   const row=node('article');row.className='ritual-current'+(photo?' ritual-photo':'');
   const visual=node('div');visual.className='ritual-artwork';const image=node('img');image.alt=artwork.title;if(url&&imagePath===artwork.image)image.src=url;visual.append(image);
-  if(result.answer){const answerScreen=node('div');answerScreen.className='ritual-answer';answerScreen.append(node('small',result.answer.id+' · 答案之书'),node('strong',result.answer.text));visual.replaceChildren(answerScreen);}
-  const copy=node('div');copy.className='ritual-artwork-copy';copy.append(node('small','今日祈福画面 · '+artwork.date),node('h5',artwork.title));
+  if(result.answer){const answerScreen=node('div');answerScreen.className='ritual-answer';answerScreen.append(node('small',answerLabel(result.answer)+' · 答案之数'),node('strong',result.answer.text));visual.replaceChildren(answerScreen);}
+  const copy=node('div');copy.className='ritual-artwork-copy';copy.append(node('small','今日造像 · '+artwork.date),node('h5',artwork.title));
   if(action&&showActions){const actionBox=node('div');actionBox.className='ritual-artwork-action';actionBox.append(node('strong',action.branch+'时 · '+action.title),node('p',action.text),node('small',action.detail+(action.number_basis?' · 次数或时长按'+action.number_basis.element+'的河图数取'+action.number_basis.number:'')));copy.append(actionBox);}
-  if(result.answer){const answer=node('details');answer.open=true;answer.append(node('summary',result.answer.id+' · '+result.answer.text),node('p',result.answer.phone_detail));copy.append(answer);}
-  const mapping=node('details');mapping.dataset.prayerReading='';mapping.open=mappingOpen;mapping.append(node('summary',photo?'查看照片说明':'查看祈福画面解读'));const reading=node('div');renderConsumerReading(reading,artwork.mapping);mapping.append(reading);copy.append(mapping);row.append(visual,copy);
+  const jump=node('button','读画面解读 ↓');jump.type='button';jump.className='text-button';jump.onclick=()=>shell.pictureBody.scrollIntoView({behavior:'smooth',block:'start'});copy.append(jump);row.append(visual,copy);
   shell.current.append(row);
+  renderArtworkReading(shell.pictureBody,artwork.mapping,{photo,date:artwork.date,title:artwork.title});updateAnswer(result);
   if(!result.answer&&!image.src){const life=lifecycle,path=artwork.image;void fetchImage(path).then(next=>{
    if(!alive(life)||!image.isConnected){URL.revokeObjectURL(next);return;}if(url)URL.revokeObjectURL(url);url=next;imagePath=path;image.src=next;
   }).catch(()=>{if(alive(life)&&image.isConnected){image.alt='画作预览暂不可用';renderedKey=null;}});}
+ }
+ function updateAnswer(result){
+  const host=shell.answerLatest;host.replaceChildren();
+  if(result.answer){const card=node('article');card.className='ritual-answer-card';card.append(node('small',answerLabel(result.answer)+' · 答案之数'),node('strong',result.answer.text),node('p',result.answer.phone_detail),node('small',[result.answer.theme,result.answer.tendency].filter(Boolean).join(' · ')));host.append(card);return;}
+  const empty=node('div');empty.className='ritual-answer-empty';empty.append(node('p','画屏上键抽到的答案，会在这里保留编号与解释。'),node('small','也可以展开下方答案库，按编号、短句或关键词查找。'));host.append(empty);
  }
  function updateActions(result){
   const list=shell.actionList;list.replaceChildren();
@@ -139,16 +161,16 @@ export function setupRitual({request,fetchImage,getUser}){
   if(currentAction){
    const card=node('article');card.className='ritual-action-card current ritual-current-action';
    const hour=Number(currentAction.hour),range=Number.isFinite(hour)?String(hour).padStart(2,'0')+':00–'+String(hour+2).padStart(2,'0')+':00':'';
-   card.append(node('strong','当前时辰 · '+currentAction.branch+'时 · '+range+' · '+currentAction.title),node('p',currentAction.text),node('small',currentAction.detail||''));
+   card.append(node('strong','当前时辰 · '+currentAction.branch+'时 · '+range+' · '+currentAction.title),node('p',currentAction.text),node('small','行动解读 · '+actionNote(currentAction)));
    list.append(card);
   }else list.append(node('p','当前时段没有新增动作建议，夜间请好好休息。'));
-  const all=node('details');all.className='ritual-all-actions';all.append(node('summary','展开今日与明日全部 16 条时辰建议'));
+  const all=node('details');all.className='ritual-all-actions';all.append(node('summary','展开今日与明日全部时辰建议'));
   for(const [dayIndex,day] of days.entries()){
    const section=node('section');section.className='ritual-action-day';section.append(node('h6',(dayIndex===0?'今日':'明日')+' · '+day.title));
    for(const [index,action] of (day.actions||[]).entries()){
     const item=node('article');item.className='ritual-action-card';if(dayIndex===0&&index===preview.index)item.classList.add('current');
     const hour=Number(action.hour),range=Number.isFinite(hour)?String(hour).padStart(2,'0')+':00–'+String(hour+2).padStart(2,'0')+':00':'';
-    item.append(node('strong',action.branch+'时 · '+range+' · '+action.title),node('p',action.text),node('small',String(action.detail||'').replace('当前未确认喜用数字','动作重复次数尚未个性化')));
+    item.append(node('strong',action.branch+'时 · '+range+' · '+action.title),node('p',action.text),node('small','行动解读 · '+actionNote(action)));
     if(action.alternatives?.length){const options=node('details');options.append(node('summary','画屏下键 · 轮换本时辰5条建议'));for(const [i,option] of [action,...action.alternatives].entries()){options.append(node('p',(i+1)+'/5 · '+option.title+'：'+option.text),node('small',option.detail||''));}item.append(options);}
     section.append(item);
    }
@@ -182,6 +204,7 @@ export function setupRitual({request,fetchImage,getUser}){
    updateContent(effective);updateActions(effective);schedule(effective);
    if(!artworks){const page=await request('/api/account/artworks');if(turn!==epoch||!alive(life))return;artworks=page.items;cursor=page.cursor||null;}
    updateSettings(result);
+   if(!answers){const page=await request('/api/account/answers');if(turn!==epoch||!alive(life))return;answers=page.items||[];shell.find();}
   }catch(error){if(turn===epoch&&alive(life)){shell.status.textContent=error.message;shell.settingsState.textContent=error.message;updateTransfer(null,{phase:'unavailable',title:'同步状态暂不可用',detail:'正在重新连接，请稍后查看。',step:0,percent:null});timer=setTimeout(refresh,Math.min(60000,5000*2**Math.min(failures++,4)));}}
  }
  async function prepare(){

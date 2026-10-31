@@ -108,3 +108,28 @@ body>footer{max-width:none;margin:0;padding:20px 44px;border-top:1px solid var(-
 #custom-content .ritual-form{margin-top:0}
 #custom-content .photo-action-toggle{padding:12px 0;border-bottom:1px solid #e2e7dc}
 @media(max-width:540px){.screen-mode-options{grid-template-columns:1fr}.screen-mode-options label{padding:12px 14px}.screen-mode-options span{gap:3px}}
+
+:root{--studio-paper-deep:#f0ede4;--studio-gold:#b5975c;--studio-red:#a44b3f}
+body{background:linear-gradient(135deg,var(--studio-paper) 0%,#f8f6ef 55%,var(--studio-paper-deep) 100%)}
+.studio-menu a[aria-current]{position:relative}
+.studio-menu a[aria-current]::before{content:'';position:absolute;left:-1px;top:13px;bottom:13px;width:3px;border-radius:3px;background:var(--studio-red)}
+.studio-heading{padding-left:22px;border-left:2px solid var(--studio-gold)}
+.studio-heading .eyebrow{letter-spacing:2.4px}
+.studio-heading h1{font-size:40px;font-weight:400;line-height:1.35;letter-spacing:4px;margin:12px 0 8px;color:#173d32}
+.studio-heading p{font-size:13px;line-height:1.9;max-width:560px}
+.studio-edition{font-size:13px;line-height:2;letter-spacing:5px;padding:2px 0 2px 24px;color:#6d806f;white-space:nowrap}
+body main>#network-onboarding,body main>#create,body main>#ritual-home,body main>#custom{padding:32px;background:radial-gradient(circle at 92% 0%,#fff 0,rgba(255,255,255,0) 36%),#fffefb}
+body[data-studio-view="network-onboarding"] main>#network-onboarding,body[data-studio-view="create"] main>#create,body[data-studio-view="ritual-home"] main>#ritual-home,body[data-studio-view="custom"] main>#custom{animation:studio-reveal .32s ease-out both}
+@keyframes studio-reveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.section-top{padding-bottom:22px;border-bottom:1px solid #e6e8df}
+.section-top h2{font-size:29px;font-weight:400;line-height:1.45;letter-spacing:1.5px;color:#173d32}
+.section-top h2::after{content:'';display:block;width:42px;height:2px;margin-top:16px;background:var(--studio-gold)}
+.section-top p{max-width:390px;line-height:2}
+.companion-map{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0 26px}
+.companion-map article{position:relative;min-height:168px;padding:22px 20px 20px;border:1px solid #dfe3d8;border-radius:12px;background:#f7f6ef;overflow:hidden}
+.companion-map article:nth-child(2){background:#f5efe3}
+.companion-map article::after{content:'';position:absolute;right:-24px;bottom:-30px;width:90px;height:90px;border:1px solid #cdd7c6;border-radius:50%;opacity:.65}
+.companion-map span{display:block;font-size:10px;letter-spacing:2px;color:#8a9485}
+.companion-map b{display:block;margin:20px 0 10px;font:400 22px/1.4 "Songti SC",serif;letter-spacing:2px;color:#174c3e}
+.companion-map p{font-size:12px;line-height:1.9;color:#747a73;margin:0;max-width:240px}
+@media(max-width:700px){.studio-heading{padding-left:16px}.studio-heading h1{font-size:31px;letter-spacing:2px}.companion-map{grid-template-columns:1fr;gap:12px}.companion-map article{min-height:0;padding:20px}.companion-map b{margin:14px 0 7px}.companion-map p{max-width:none}}
