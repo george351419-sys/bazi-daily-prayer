@@ -1,3 +1,4 @@
+import {normalizeArtStyle} from '../lib/art-styles.mjs';
 // Long-running remote worker for an HTTPS site connected to the same account store.
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -30,7 +31,7 @@ async function processAccount(accountId,deviceId){
  let state=await snapshot(accountId),plan=state.plan,prior=state.build,tmp;
  if(prior?.status==='retrying'&&prior.attemptedRevision===(plan?.revision||plan?.updatedAt)&&Date.parse(prior.nextAttemptAt)>Date.now())return;
  if(!plan){
-  const complete=state.records.filter(record=>ritualArtworkReady(record)&&record.source!=='upload');
+  const complete=state.records.filter(record=>ritualArtworkReady(record)&&record.source!=='upload'&&normalizeArtStyle(record.mapping?.art_style)===normalizeArtStyle(state.profile?.artStyle));
   const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10),future=complete.filter(record=>record.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
   const selected=future.length>=2?future.slice(0,2):complete.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,2).reverse();
   if(selected.length<2){await saveBuild(accountId,{status:'waiting_for_artworks',note:'Two completed private artworks are required'});return;}
@@ -45,7 +46,7 @@ async function processAccount(accountId,deviceId){
  if(records.length!==2)throw new Error('Ritual plan artwork is missing');
  if(plan.mode==='daily'&&plan.contentMode!=='photo'){
   const today=new Date(Date.now()+7*3600000).toISOString().slice(0,10),previous=new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10);
-  const matching=state.records.filter(record=>ritualArtworkReady(record)&&[previous,today].includes(record.date)&&record.profileSignature===records[0].profileSignature);
+  const matching=state.records.filter(record=>ritualArtworkReady(record)&&[previous,today].includes(record.date)&&record.profileSignature===records[0].profileSignature&&normalizeArtStyle(record.mapping?.art_style)===normalizeArtStyle(records[0].mapping?.art_style));
   const pair=[previous,today].map(date=>matching.filter(record=>record.date===date).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0]);
   if(pair.every(Boolean)){records=pair;startsAt=previous+'T01:00:00+08:00';}
  }

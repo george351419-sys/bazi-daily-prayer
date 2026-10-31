@@ -6,8 +6,8 @@ test('豆包明确请求单图并下载实际图像',async()=>{let calls=0;const
 test('模型输出截断不可作为完整解读使用',async()=>{await assert.rejects(()=>deepseek({DEEPSEEK_API_KEY:'test'},'',{},async()=>Response.json({choices:[{finish_reason:'length',message:{content:'{}'}}]})),/暂不可用/);});
 test('Seedream 5.0 Flash不发送不支持的组图参数',async()=>{const out=await doubao({ARK_API_KEY:'test',ARK_IMAGE_MODEL:'doubao-seedream-5-0-flash-260915'},'visuals',async(url,init)=>{const body=JSON.parse(init.body);assert.equal(body.sequential_image_generation,undefined);assert.equal(body.stream,undefined);return Response.json({data:[{url:'https://cdn.example.com/flash.png'}]});},true);assert.equal(out.url,'https://cdn.example.com/flash.png');});
 
-test('竖屏样图显式传入2:3尺寸，默认方图保持不变',async()=>{
- for(const [size,expected] of [[undefined,'2048x2048'],['1664x2496','1664x2496']]){
+test('竖屏样图显式传入2:3尺寸，默认使用3:2横图',async()=>{
+ for(const [size,expected] of [[undefined,'2496x1664'],['1664x2496','1664x2496']]){
   await doubao({ARK_API_KEY:'test',ARK_IMAGE_MODEL:'doubao-seedream-5-0-flash-260915',ARK_IMAGE_SIZE:size},'visuals',async(url,init)=>{assert.equal(JSON.parse(init.body).size,expected);return Response.json({data:[{url:'https://cdn.example.com/portrait.png'}]});},true);
  }
 });

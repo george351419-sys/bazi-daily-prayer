@@ -74,7 +74,7 @@
     <text class="label">{{item.name}}</text>
     <text wx:for="{{item.items}}" wx:for-item="wish" wx:key="id" class="pill {{wish.selected?'selected':''}}" data-id="{{wish.id}}" bindtap="wish">{{wish.label}}</text>
    </view>
-   <button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">保存生辰与祈愿</button>
+   <text class="section-title art-style-heading">画面风格</text><view wx:for="{{artStyles}}" wx:key="id" class="art-style-row"><button class="choice {{(profile.artStyle||'cute')===item.id?'selected':''}}" data-field="artStyle" data-value="{{item.id}}" bindtap="choose" disabled="{{busy}}"><text>{{item.label}}</text><text class="note">{{item.description}}</text></button><button class="text-button" data-id="{{item.id}}" bindtap="previewArtStyle">查看示例</button></view><text class="note">示意图仅供风格参考；保存后用于新生成的画面，已完成作品保持原样。</text><button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">保存生辰与祈愿</button>
    <text class="note">保存资料不会触发画面生成。</text>
    <view class="rule"></view>
    <text class="section-title">为今天，留一幅画</text>

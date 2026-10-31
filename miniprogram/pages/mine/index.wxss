@@ -1,1 +1,3 @@
 .inline-action{display:flex;align-items:stretch;gap:16rpx}.inline-action .field{flex:1}.inline-action button{min-width:132rpx;padding-left:18rpx;padding-right:18rpx}.wish-group{padding-bottom:16rpx}.paper .section-title{margin-bottom:0}
+
+.art-style-heading{margin-top:32rpx}.art-style-row{display:flex;align-items:center;gap:20rpx;margin:14rpx 0}.art-style-row .choice{flex:1}.art-style-row .note{margin-top:4rpx;font-size:22rpx}.art-style-row .text-button{flex-shrink:0}

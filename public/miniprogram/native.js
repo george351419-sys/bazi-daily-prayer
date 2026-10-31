@@ -1961,9 +1961,14 @@
     "miniprogram/pages/mine/index.js"() {
       var api = require_api();
       var { syncGeneratedPrayer } = require_ritual_sync();
-      var fresh = () => ({ gender: "female", birthDate: "", birthTime: "", calendar: "solar", leap: false, city: "", wishes: [] });
+      var fresh = () => ({ gender: "female", birthDate: "", birthTime: "", calendar: "solar", leap: false, city: "", wishes: [], artStyle: "cute" });
       Page({
-        data: { user: null, error: "", message: "", busy: false, authMode: "wechat", username: "", password: "", nicknameDraft: "", agreed: false, profile: fresh(), groups: [], today: new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10), privacyOpen: false, generation: "", jobReady: false, wechatEnabled: false },
+        data: { artStyles: [{ id: "cute", label: "\u53EF\u7231\u98CE", description: "Q\u7248\u795E\u4ED9\uFF0C\u5706\u6DA6\u559C\u5E86" }, { id: "spirit", label: "\u7075\u517D\u98CE", description: "\u95EE\u95EE\u517D\u6F14\u7ECE\uFF0C\u4FDD\u7559\u795E\u50CF\u914D\u9970" }, { id: "folk", label: "\u6C11\u4FD7\u98CE", description: "\u4F20\u7EDF\u795E\u50CF\uFF0C\u5E84\u91CD\u4EB2\u5207" }], user: null, error: "", message: "", busy: false, authMode: "wechat", username: "", password: "", nicknameDraft: "", agreed: false, profile: fresh(), groups: [], today: new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10), privacyOpen: false, generation: "", jobReady: false, wechatEnabled: false },
+        previewArtStyle(e) {
+          const id = e.currentTarget.dataset.id;
+          if (!["folk", "cute", "spirit"].includes(id)) return;
+          wx.previewImage({ current: "/assets/prayer-styles/" + id + ".jpg", urls: ["/assets/prayer-styles/" + id + ".jpg"] });
+        },
         async onShow() {
           api.tab(this, 1);
           await getApp().ready;
@@ -2677,7 +2682,7 @@
     <text class="label">{{item.name}}</text>
     <text wx:for="{{item.items}}" wx:for-item="wish" wx:key="id" class="pill {{wish.selected?'selected':''}}" data-id="{{wish.id}}" bindtap="wish">{{wish.label}}</text>
    </view>
-   <button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">\u4FDD\u5B58\u751F\u8FB0\u4E0E\u7948\u613F</button>
+   <text class="section-title art-style-heading">\u753B\u9762\u98CE\u683C</text><view wx:for="{{artStyles}}" wx:key="id" class="art-style-row"><button class="choice {{(profile.artStyle||'cute')===item.id?'selected':''}}" data-field="artStyle" data-value="{{item.id}}" bindtap="choose" disabled="{{busy}}"><text>{{item.label}}</text><text class="note">{{item.description}}</text></button><button class="text-button" data-id="{{item.id}}" bindtap="previewArtStyle">\u67E5\u770B\u793A\u4F8B</button></view><text class="note">\u793A\u610F\u56FE\u4EC5\u4F9B\u98CE\u683C\u53C2\u8003\uFF1B\u4FDD\u5B58\u540E\u7528\u4E8E\u65B0\u751F\u6210\u7684\u753B\u9762\uFF0C\u5DF2\u5B8C\u6210\u4F5C\u54C1\u4FDD\u6301\u539F\u6837\u3002</text><button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">\u4FDD\u5B58\u751F\u8FB0\u4E0E\u7948\u613F</button>
    <text class="note">\u4FDD\u5B58\u8D44\u6599\u4E0D\u4F1A\u89E6\u53D1\u753B\u9762\u751F\u6210\u3002</text>
    <view class="rule"></view>
    <text class="section-title">\u4E3A\u4ECA\u5929\uFF0C\u7559\u4E00\u5E45\u753B</text>
@@ -2701,7 +2706,7 @@
   </view>
  </view>
 </view>
-`, "css": ".inline-action{display:flex;align-items:stretch;gap:calc(16 * var(--rpx))}.inline-action .field{flex:1}.inline-action button{min-width:calc(132 * var(--rpx));padding-left:calc(18 * var(--rpx));padding-right:calc(18 * var(--rpx))}.wish-group{padding-bottom:calc(16 * var(--rpx))}.paper .section-title{margin-bottom:0}\n" }, "today": { "wxml": `<view class="page">
+`, "css": ".inline-action{display:flex;align-items:stretch;gap:calc(16 * var(--rpx))}.inline-action .field{flex:1}.inline-action button{min-width:calc(132 * var(--rpx));padding-left:calc(18 * var(--rpx));padding-right:calc(18 * var(--rpx))}.wish-group{padding-bottom:calc(16 * var(--rpx))}.paper .section-title{margin-bottom:0}\n\n.art-style-heading{margin-top:calc(32 * var(--rpx))}.art-style-row{display:flex;align-items:center;gap:calc(20 * var(--rpx));margin:calc(14 * var(--rpx)) 0}.art-style-row .choice{flex:1}.art-style-row .note{margin-top:calc(4 * var(--rpx));font-size:calc(22 * var(--rpx))}.art-style-row .text-button{flex-shrink:0}\n" }, "today": { "wxml": `<view class="page">
  <view class="row"><text class="kicker">YOUR DAILY COMPANION / 03</text><text class="date">{{date}}</text></view>
  <text class="title">\u89E3\u8BFB\u966A\u4F34</text>
  <text class="subtitle">\u4E00\u5E45\u753B\uFF0C\u4E00\u4EF6\u5C0F\u4E8B\uFF0C\u4E00\u4E2A\u7B54\u6848\uFF0C\u90FD\u5728\u8FD9\u91CC\u8BFB\u5B8C\u3002</text>

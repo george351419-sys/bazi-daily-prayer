@@ -70,7 +70,7 @@ test('account-owned Ark binding is exclusive and the worker discovers it from st
 });
 test('two completed prayer artworks create the plan automatically without generation',async t=>{
  const dir=await mkdtemp(path.join(os.tmpdir(),'ritual-pair-'));t.after(()=>rm(dir,{recursive:true,force:true}));
- const account={id:'3'.repeat(32)},profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']},c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-pair-test-secret-123456'};
+ const account={id:'3'.repeat(32)},profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02'],artStyle:'folk'},c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-pair-test-secret-123456'};
  await saveProfile(c,account,profile);
  const input=validateInput(profile,'2026-10-29'),signature=profileSignature(input),ids=[newArtworkId(),newArtworkId()];
  const mappings=[{title:'今日祈福画',primary_element:'火',secondary_element:'木'},{title:'明日祈福画',primary_element:'火',secondary_element:'木'}];
@@ -81,7 +81,7 @@ test('two completed prayer artworks create the plan automatically without genera
 });
 test('one completed artwork creates one idempotent next-day mapping before image generation',async t=>{
  const dir=await mkdtemp(path.join(os.tmpdir(),'ritual-next-'));t.after(()=>rm(dir,{recursive:true,force:true}));
- const account={id:'4'.repeat(32)},profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']},c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-next-test-secret-123456',DEEPSEEK_API_KEY:'test-only'};
+ const account={id:'4'.repeat(32)},profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02'],artStyle:'folk'},c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-next-test-secret-123456',DEEPSEEK_API_KEY:'test-only'};
  await saveProfile(c,account,profile);
  const input=validateInput(profile,'2026-10-29'),id=newArtworkId(),oldId=newArtworkId();
  await saveArtwork(c,account,{id:oldId,userId:account.id,date:'2026-10-28',createdAt:new Date().toISOString(),profileSignature:profileSignature(input),status:'complete',image:{key:'test/'+oldId},mapping:{title:'昨日祈福画'}});
@@ -95,7 +95,7 @@ test('one completed artwork creates one idempotent next-day mapping before image
 });
 test('a newer image for today replaces the same-date artwork in the existing plan',async t=>{
  const dir=await mkdtemp(path.join(os.tmpdir(),'ritual-refresh-today-'));t.after(()=>rm(dir,{recursive:true,force:true}));
- const account={id:'5'.repeat(32)},profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']},c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-refresh-test-secret-123456'};
+ const account={id:'5'.repeat(32)},profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02'],artStyle:'folk'},c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-refresh-test-secret-123456'};
  await saveProfile(c,account,profile);
  const input=validateInput(profile,'2026-10-29'),signature=profileSignature(input),oldToday=newArtworkId(),newToday=newArtworkId(),tomorrow=newArtworkId(),mapping={title:'祈福画',primary_element:'火',secondary_element:'木'};
  for(const [id,date,createdAt] of [[oldToday,'2026-10-29','2026-10-29T01:00:00.000Z'],[tomorrow,'2026-10-30','2026-10-29T02:00:00.000Z'],[newToday,'2026-10-29','2026-10-29T03:00:00.000Z']])await saveArtwork(c,account,{id,userId:account.id,date,createdAt,profileSignature:signature,status:'complete',image:{key:'test/'+id},mapping});

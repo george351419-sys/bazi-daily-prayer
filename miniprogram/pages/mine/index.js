@@ -1,8 +1,9 @@
 const api=require('../../utils/api');
 const {syncGeneratedPrayer}=require('../../utils/ritual-sync');
-const fresh=()=>({gender:'female',birthDate:'',birthTime:'',calendar:'solar',leap:false,city:'',wishes:[]});
+const fresh=()=>({gender:'female',birthDate:'',birthTime:'',calendar:'solar',leap:false,city:'',wishes:[],artStyle:'cute'});
 Page({
- data:{user:null,error:'',message:'',busy:false,authMode:'wechat',username:'',password:'',nicknameDraft:'',agreed:false,profile:fresh(),groups:[],today:new Date(Date.now()+8*3600000).toISOString().slice(0,10),privacyOpen:false,generation:'',jobReady:false,wechatEnabled:false},
+ data:{artStyles:[{id:'cute',label:'可爱风',description:'Q版神仙，圆润喜庆'},{id:'spirit',label:'灵兽风',description:'问问兽演绎，保留神像配饰'},{id:'folk',label:'民俗风',description:'传统神像，庄重亲切'}],user:null,error:'',message:'',busy:false,authMode:'wechat',username:'',password:'',nicknameDraft:'',agreed:false,profile:fresh(),groups:[],today:new Date(Date.now()+8*3600000).toISOString().slice(0,10),privacyOpen:false,generation:'',jobReady:false,wechatEnabled:false},
+ previewArtStyle(e){const id=e.currentTarget.dataset.id;if(!['folk','cute','spirit'].includes(id))return;wx.previewImage({current:'/assets/prayer-styles/'+id+'.jpg',urls:['/assets/prayer-styles/'+id+'.jpg']});},
  async onShow(){
   api.tab(this,1);await getApp().ready;
   const app=getApp();

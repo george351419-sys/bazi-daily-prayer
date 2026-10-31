@@ -1,3 +1,4 @@
+import {normalizeArtStyle} from '../lib/art-styles.mjs';
 // Isolated content compiler/uploader. No model calls. Run one instance per account store.
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -25,8 +26,9 @@ do{
    const prior=await repo.get('ritual-build/'+id);
    if(prior?.status==='retrying'&&prior.attemptedRevision===(plan?.revision||plan?.updatedAt)&&Date.parse(prior.nextAttemptAt)>Date.now())continue;
    if(!plan){
+    const currentStyle=normalizeArtStyle((await repo.get('profiles/'+id))?.artStyle);
     const complete=[];let cursor;
-    for(let page=0;page<10;page++){const batch=await repo.list({prefix:'artworks/'+id+'/',limit:100,cursor});for(const item of batch.blobs){const r=await repo.get(item.key);if(r?.userId===id&&ritualArtworkReady(r)&&r.source!=='upload')complete.push(r);}if(!batch.cursor)break;cursor=batch.cursor;}
+    for(let page=0;page<10;page++){const batch=await repo.list({prefix:'artworks/'+id+'/',limit:100,cursor});for(const item of batch.blobs){const r=await repo.get(item.key);if(r?.userId===id&&ritualArtworkReady(r)&&r.source!=='upload'&&normalizeArtStyle(r.mapping?.art_style)===currentStyle)complete.push(r);}if(!batch.cursor)break;cursor=batch.cursor;}
     const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10),future=complete.filter(r=>r.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
     const selected=future.length>=2?future.slice(0,2):complete.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,2).reverse();
     if(selected.length<2){await repo.put('ritual-build/'+id,{status:'waiting_for_artworks',note:'Two completed private artworks are required for the initial test cache'});continue;}
@@ -41,7 +43,7 @@ do{
    if(plan.mode==='daily'&&plan.contentMode!=='photo'){
     const today=new Date(Date.now()+7*3600000).toISOString().slice(0,10),previous=new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10),matching=[];let cursor;
     // Consume the existing daily worker's archived output; never trigger paid generation here.
-    for(let page=0;page<10;page++){const batch=await repo.list({prefix:'artworks/'+id+'/',limit:100,cursor});for(const item of batch.blobs){const r=await repo.get(item.key);if(ritualArtworkReady(r)&&[previous,today].includes(r.date)&&r.profileSignature&&r.profileSignature===records[0].profileSignature)matching.push(r);}if(!batch.cursor)break;cursor=batch.cursor;}
+    for(let page=0;page<10;page++){const batch=await repo.list({prefix:'artworks/'+id+'/',limit:100,cursor});for(const item of batch.blobs){const r=await repo.get(item.key);if(ritualArtworkReady(r)&&[previous,today].includes(r.date)&&r.profileSignature&&r.profileSignature===records[0].profileSignature&&normalizeArtStyle(r.mapping?.art_style)===normalizeArtStyle(records[0].mapping?.art_style))matching.push(r);}if(!batch.cursor)break;cursor=batch.cursor;}
     const pair=[previous,today].map(date=>matching.filter(r=>r.date===date).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0]);
     if(pair.every(Boolean)){records=pair;startsAt=previous+'T01:00:00+08:00';}
    }
