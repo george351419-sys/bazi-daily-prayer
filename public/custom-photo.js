@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer} from './transfer-status.js?v=20261101-journey-v1';
+import {transferStatus,renderTransfer} from './transfer-status.js?v=20261101-copy-v1';
 import {preparePhoto} from './photo-upload.js';
 
 export function setupCustomPhoto({request,fetchImage,getUser}){

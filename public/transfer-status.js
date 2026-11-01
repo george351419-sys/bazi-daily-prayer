@@ -38,6 +38,13 @@ export function transferStatus(result = {}, artworkId = null) {
  return state('confirming', '画屏已联网 · 正在确认同步结果', '云端内容已就绪，但当前内容包的下载或刷新回执尚不完整；如画屏已显示新画，无需重复推送。', 1);
 }
 
+export function transferGuidance(state){
+ if(state.phase==='preparing')return state.preparation?'无需提前配网。':'请耐心等待，暂不需要操作。';
+ if(state.phase==='retrying'&&state.step===0)return '';
+ if(state.phase==='connect')return '点击下方按钮前往「链接神物」，已有 Wi-Fi 设置会优先复用。';
+ return state.step>=3?'可以按画屏确认键进入“画面”；网页按钮不会遥控跳转。':'请等待“内容已保存”后，再在画屏选择“画面”并按确认键查看新内容。';
+}
+
 export function renderTransfer(host, state) {
  host.hidden = false;
  host.classList.add('transfer-status');
@@ -46,9 +53,9 @@ export function renderTransfer(host, state) {
  const heading = document.createElement('strong');heading.textContent = state.title;
  const detail = document.createElement('p');detail.textContent = state.detail;
  host.append(heading, detail);
- const guidance=document.createElement('p');guidance.className='note';guidance.textContent=state.preparation?'内容准备完成后，再连接画屏；无需提前配网。':state.phase==='connect'?'点击下方按钮前往「链接神物」，已有 Wi-Fi 设置会优先复用。':state.step>=3?'可以按画屏确认键进入“画面”；网页按钮不会遥控跳转。':'请等待“内容已保存”后，再在画屏选择“画面”并按确认键查看新内容。';host.append(guidance);
+ const guidanceText=transferGuidance(state);if(guidanceText){const guidance=document.createElement('p');guidance.className='note';guidance.textContent=guidanceText;host.append(guidance);}
  if(['connect','waiting'].includes(state.phase)){const link=document.createElement('a');link.className='primary';link.href='#network-onboarding';link.textContent='去链接神物并同步';host.append(link);}
- const check=document.createElement('button');check.type='button';check.className='secondary';check.textContent='立即检查同步（需蓝牙）';check.onclick=()=>document.dispatchEvent(new CustomEvent('prayer:ark-sync'));if(!state.preparation&&!['connect','unbound'].includes(state.phase))host.append(check);
+ const check=document.createElement('button');check.type='button';check.className='secondary';check.textContent='立即检查同步（需蓝牙）';check.onclick=()=>document.dispatchEvent(new CustomEvent('prayer:ark-sync'));if(!state.preparation&&!['connect','unbound','preparing'].includes(state.phase)&&!(state.phase==='retrying'&&state.step===0))host.append(check);
  const steps = document.createElement('ol');steps.setAttribute('aria-label', '画面同步阶段');
  for (const [index, label] of (state.preparation?['两日画作','转换画屏格式','保存内容包','准备完成']:['内容就绪', '设备下载', '传输完成', '画屏刷新']).entries()) {
   const item = document.createElement('li');item.textContent = label;item.classList.toggle('complete', index < (state.preparation?state.preparationStep:state.step));

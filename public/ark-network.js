@@ -1,6 +1,6 @@
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer} from './transfer-status.js?v=20261101-journey-v1';
+import {renderTransfer} from './transfer-status.js?v=20261101-copy-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -69,7 +69,7 @@ export class ArkNetwork {
    const connected=bytes[3]===1;
    this.lastStatus=connected;
    if(connected&&this.waiting){this.waiting.resolve();this.waiting=null;}
-   this.state(connected?'画屏已确认连接 Wi-Fi，下载进度将在本页自动更新。':'蓝牙已连接，画屏 Wi-Fi 尚未连接；会尝试使用已保存的网络，首次使用或更换网络时再填写密码。',connected);
+   this.state(connected?'画屏 Wi-Fi 已连接。':'蓝牙已连接，画屏 Wi-Fi 尚未连接；会尝试使用已保存的网络，首次使用或更换网络时再填写密码。',connected);
   }
  }
  async write(channel,data,epoch=this.epoch,pace=200){
@@ -199,9 +199,8 @@ export function setupNetwork(){
  let reconnectTimer=null,reconnectAttempts=0,rememberedDevice=null,allowReconnect=false,latestStatus=null,syncSha=null,syncBusy=false;
  const password=form.elements.wifiPassword;
  const transfer=document.createElement('div');transfer.hidden=true;state.after(transfer);
- const downloadState=document.createElement('p');downloadState.className='network-state download-state';downloadState.hidden=true;downloadState.setAttribute('role','status');
  const firmwareBox=document.createElement('details');firmwareBox.className='firmware-update';
- const firmwareSummary=document.createElement('summary');firmwareSummary.textContent='通过 Wi‑Fi 更新画屏固件';
+ const firmwareSummary=document.createElement('summary');firmwareSummary.textContent='画屏固件更新';
  const firmwareVersion=document.createElement('p');firmwareVersion.textContent='连接蓝牙后可读取当前固件版本。';
  const firmwareButton=document.createElement('button');firmwareButton.type='button';firmwareButton.className='secondary';firmwareButton.textContent='下载并安装最新固件';firmwareButton.disabled=true;
  const firmwareStatus=document.createElement('p');firmwareStatus.setAttribute('role','status');firmwareStatus.setAttribute('aria-live','polite');
@@ -231,17 +230,18 @@ export function setupNetwork(){
    }
   }
  },onDownload:next=>{
-  const labels=['尚未开始下载','正在下载','内容已保存','下载失败'];
   document.dispatchEvent(new CustomEvent('prayer:ark-download',{detail:{...next,deviceId:client.deviceId}}));
-  downloadState.hidden=false;downloadState.textContent='画屏下载状态：'+(labels[next.state]||'状态未知')+(next.state===1?' '+Math.max(0,Math.min(100,next.progress))+'%':next.state===2?' 100%':'')+'（当前内容核验见下方进度）';
  },onOta:next=>{
   const labels=['等待开始','连接 Wi‑Fi','下载固件','恢复原 Wi‑Fi','已完成','下载失败','已取消','可应用','正在应用'];
   firmwareStatus.textContent='固件升级：'+(labels[next.state]||'状态未知')+(next.state===2?' '+next.progress+'%':'');
  }});
- state.after(downloadState);downloadState.after(firmwareBox);
- const editWifi=document.createElement('button');editWifi.type='button';editWifi.className='secondary';editWifi.textContent='填写 Wi-Fi 名称和密码';state.after(editWifi);
- editWifi.onclick=()=>{form.scrollIntoView({behavior:'smooth',block:'center'});form.elements.ssid.focus({preventScroll:true});};
- async function pollDownload(){if(!client.characteristic||downloadBusy||busy)return;downloadBusy=true;try{await client.write(0x3a,[]);await client.queryDownload();}catch{if(!downloadState.hidden)downloadState.textContent='内容下载：暂时无法读取设备进度。';}finally{downloadBusy=false;}}
+ root.append(firmwareBox);
+ async function pollDownload(){
+  if(!client.characteristic||downloadBusy||busy)return;downloadBusy=true;
+  try{await client.write(0x3a,[]);await client.queryDownload();}
+  catch(error){document.dispatchEvent(new CustomEvent('prayer:ark-download',{detail:{deviceId:client.deviceId,unavailable:true,error:error.message}}));}
+  finally{downloadBusy=false;}
+ }
  firmwareButton.textContent='打开固件升级与版本核验';
  firmwareButton.onclick=()=>{location.href='/firmware-upgrade.html?fix=ota-compat-v1';};
  if(!window.isSecureContext||!navigator.bluetooth){
@@ -261,7 +261,7 @@ export function setupNetwork(){
   if(!client.characteristic){state.textContent='请先连接附近画屏蓝牙，再点击立即检查同步。';location.hash='network-onboarding';root.scrollIntoView({behavior:'smooth'});return;}
   try{await client.resumeWifi();state.textContent='已请求画屏检查云端内容。请保持联网，等待“内容已保存”后在画屏进入“画面”。旧固件若仍无回报，请先更新到 ritual.6。';}catch(error){state.textContent='检查同步未启动：'+error.message;}
  });
- connect.onclick=async()=>{connect.disabled=true;try{allowReconnect=true;reconnectAttempts=0;clearTimeout(reconnectTimer);reconnectTimer=null;await client.connect();rememberedDevice=client.device;downloadState.hidden=true;await client.resumeWifi();await syncPublished();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{connect.disabled=false;}};
+ connect.onclick=async()=>{connect.disabled=true;try{allowReconnect=true;reconnectAttempts=0;clearTimeout(reconnectTimer);reconnectTimer=null;await client.connect();rememberedDevice=client.device;await client.resumeWifi();await syncPublished();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{connect.disabled=false;}};
  disconnect.onclick=()=>{allowReconnect=false;clearTimeout(reconnectTimer);reconnectTimer=null;client.disconnect();};
  bind.onclick=()=>document.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
  form.onsubmit=async event=>{event.preventDefault();busy=true;send.disabled=true;connect.disabled=true;
