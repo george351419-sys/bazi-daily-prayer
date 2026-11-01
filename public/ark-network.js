@@ -56,7 +56,7 @@ export class ArkNetwork {
    this.characteristic=characteristic;this.listener=event=>{if(epoch===this.epoch&&this.characteristic===characteristic)this.receive(new Uint8Array(event.target.value.buffer,event.target.value.byteOffset,event.target.value.byteLength));};
    characteristic.addEventListener('characteristicvaluechanged',this.listener);await characteristic.startNotifications();
    if(epoch!==this.epoch)return;
-   this.state('蓝牙已连接：'+device.name+'。请输入画屏要连接的 2.4 GHz Wi-Fi。');
+   this.state('蓝牙已连接：'+device.name+'。请在「02 / Wi-Fi 配网」输入 Wi-Fi 名称和密码，点击「写入并连接 Wi-Fi」。');
   }catch(error){if(epoch===this.epoch){this.disconnect();throw error;}}
  }
  receive(bytes){
@@ -172,7 +172,7 @@ export function setupNetwork(){
  const firmwareButton=document.createElement('button');firmwareButton.type='button';firmwareButton.className='secondary';firmwareButton.textContent='下载并安装最新固件';firmwareButton.disabled=true;
  const firmwareStatus=document.createElement('p');firmwareStatus.setAttribute('role','status');firmwareStatus.setAttribute('aria-live','polite');
  firmwareBox.append(firmwareSummary,firmwareVersion,firmwareButton,firmwareStatus);
- downloadState.after(firmwareBox);
+
  let buildChecked=false;
  const client=new ArkNetwork({bluetooth:navigator.bluetooth,onState:status=>{
   state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;firmwareButton.disabled=!status.paired||busy;
@@ -194,7 +194,9 @@ export function setupNetwork(){
   const labels=['等待开始','连接 Wi‑Fi','下载固件','恢复原 Wi‑Fi','已完成','下载失败','已取消','可应用','正在应用'];
   firmwareStatus.textContent='固件升级：'+(labels[next.state]||'状态未知')+(next.state===2?' '+next.progress+'%':'');
  }});
- state.after(downloadState);
+ state.after(downloadState);downloadState.after(firmwareBox);
+ const editWifi=document.createElement('button');editWifi.type='button';editWifi.className='secondary';editWifi.textContent='填写 Wi-Fi 名称和密码';state.after(editWifi);
+ editWifi.onclick=()=>{form.scrollIntoView({behavior:'smooth',block:'center'});form.elements.ssid.focus({preventScroll:true});};
  async function pollDownload(){if(!client.characteristic||downloadBusy)return;downloadBusy=true;try{await client.queryDownload();}catch{if(!downloadState.hidden)downloadState.textContent='内容下载：暂时无法读取设备进度。';}finally{downloadBusy=false;}}
  firmwareButton.onclick=async()=>{
   if(firmwareButton.disabled)return;firmwareButton.disabled=true;firmwareStatus.textContent='正在读取固件清单和画屏已保存的 Wi‑Fi…';
