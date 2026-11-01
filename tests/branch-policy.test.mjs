@@ -28,3 +28,15 @@ test('重复地支按来源分配，同等级竞争保留分支，合不删除�
  const repeated=branchRelations(branches('卯卯戌戌'));
  assert.ok(allocateBindings(repeated,repeated.filter(r=>r.type==='六合').map(relationKey)).every(c=>c.bindings.length===2));
 });
+
+test('能参与合的实例即抑制冲，即使该合因优先级没有分配',()=>{
+ const rs=branchRelations(branches('寅卯辰午戌亥申子'));
+ const effective=rs.filter(r=>['三会','三合','六合'].includes(r.type)).map(relationKey);
+ const alternatives=allocateBindings(rs,effective);
+ for(const option of alternatives){
+  assert.ok(!option.bindings.some(r=>r.type==='三合')); // 寅已优先分配三会
+  const clash=rs.find(r=>r.type==='六冲'&&r.branches.includes('午'));
+  assert.ok(option.suppressed_clashes.some(r=>relationKey(r)===relationKey(clash)));
+  assert.ok(!option.residual_relations.some(r=>relationKey(r)===relationKey(clash)));
+ }
+});

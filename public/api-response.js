@@ -10,7 +10,8 @@ export async function readAPIResponse(response, path) {
   throw error;
  }
  if (!response.ok) {
-  const error = new Error(data?.error || stage + '请求未完成，请稍后重试。');
+  const diagnostic = /^[a-f0-9]{16}$/.test(data?.diagnosticId || '') ? '（错误编号：' + data.diagnosticId + '）' : '';
+  const error = new Error((data?.error || stage + '请求未完成，请稍后重试。') + diagnostic);
   error.status = response.status;
   error.code = data?.code;
   throw error;

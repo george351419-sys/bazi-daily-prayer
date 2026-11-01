@@ -9,3 +9,8 @@ test('JSON errors preserve conflict codes and successful objects pass through',a
  assert.deepEqual(await readAPIResponse(Response.json({status:'mapped'}),'/api/analyze'),{status:'mapped'});
  await assert.rejects(readAPIResponse(Response.json(null),'/api/analyze'),/格式异常/);
 });
+
+test('条件错误编号可追踪且不回显任意服务端文本',async()=>{
+ await assert.rejects(readAPIResponse(Response.json({error:'条件未完成',diagnosticId:'0123456789abcdef'},{status:503}),'/api/analyze'),/错误编号：0123456789abcdef/);
+ await assert.rejects(readAPIResponse(Response.json({error:'条件未完成',diagnosticId:'不可信文本'},{status:503}),'/api/analyze'),e=>!e.message.includes('不可信文本'));
+});
