@@ -27,3 +27,14 @@ test('unbound, photo mode, firmware mismatch and retry states tell the next acti
  assert.equal(transferStatus({...ready,deviceReport:{...ready.deviceReport,downloadState:3}},'new').phase,'retrying');
  assert.equal(transferStatus({...ready,pendingUpdate:true,deviceReport:{...ready.deviceReport,stored:true,renderReport:{day:0}}},'new').phase,'preparing');
 });
+
+test('下载完成和回执未完整上报不再显示等待领取',()=>{
+ const completed=transferStatus({...ready,deviceReport:{...ready.deviceReport,downloadState:2}},'new');assert.equal(completed.phase,'confirming');assert.match(completed.title,/下载完成/);
+ const idle=transferStatus(ready,'new');assert.equal(idle.phase,'confirming');assert.doesNotMatch(idle.title,/等待画屏领取/);
+});
+test('当前包刷新回执不依赖另一次保存标记，其他包回执不可冒充成功',()=>{
+ const current={...ready,build:{...ready.build,sha256:'new-sha'},deviceReport:{...ready.deviceReport,targetSha:'new-sha',stored:false,renderedCurrent:true,renderReport:{day:0}}};
+ assert.equal(transferStatus(current,'new').phase,'rendered');
+ const previous={...current,deviceReport:{...current.deviceReport,targetSha:'old-sha',stored:true,renderedCurrent:false,downloadState:2}};
+ assert.equal(transferStatus(previous,'new').phase,'confirming');
+});
