@@ -45,3 +45,15 @@ test('当前包的保存和刷新凭据在休眠后仍有效，但不套用到�
  assert.equal(transferStatus({...asleep,deviceReport:{...asleep.deviceReport,renderedCurrent:true,renderReport:{day:0}}},'new').phase,'rendered');
  assert.equal(transferStatus({...asleep,build:{...asleep.build,sha256:'next'}},'new').phase,'waiting');
 });
+
+test('live BLE progress requires a fresh matching device and published package',async()=>{
+ const {withLiveDownload}=await import('../public/transfer-status.js');
+ const result={...ready,device:{id:'screen'},deviceReport:{...ready.deviceReport,targetSha:'current'},build:{...ready.build,sha256:'current'}};
+ const state=transferStatus(result),live={deviceId:'screen',state:1,progress:42,receivedAt:Date.now()};
+ assert.equal(withLiveDownload(state,result,live).percent,42);
+ assert.equal(withLiveDownload(state,{...result,pendingUpdate:true},live),state);
+ assert.equal(withLiveDownload(state,result,{...live,deviceId:'other'}),state);
+ assert.equal(withLiveDownload(state,result,{...live,receivedAt:Date.now()-10000}),state);
+ assert.equal(withLiveDownload(state,{...result,deviceReport:{...result.deviceReport,targetSha:'old'}},live),state);
+ assert.equal(withLiveDownload(state,{...result,deviceReport:{...result.deviceReport,stale:true}},live),state);
+});

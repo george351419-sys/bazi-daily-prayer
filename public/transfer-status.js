@@ -50,3 +50,11 @@ export function renderTransfer(host, state) {
   const progress = document.createElement('progress');progress.max = 100;progress.value = state.percent;progress.setAttribute('aria-label', '设备下载进度');host.append(progress);
  }
 }
+
+// BLE download replies carry no package hash: require a current cloud target first.
+export function withLiveDownload(state,result,live,now=Date.now()){
+ if(!live||now-live.receivedAt>6000||result?.pendingUpdate||result?.build?.status!=='published'||!result.build.sha256||result.device?.id!==live.deviceId||result.deviceReport?.targetSha!==result.build.sha256||result.deviceReport?.stale||Date.parse(result.deviceReport?.lastSeen)<Date.parse(result.build.publishedAt)||!['downloading','confirming','waiting'].includes(state.phase))return state;
+ if(live.state!==1||!Number.isFinite(live.progress))return state;
+ const percent=Math.max(0,Math.min(100,live.progress));
+ return {...state,phase:'downloading',title:'正在传输到画屏 · '+percent+'%',detail:'设备通过蓝牙回报的下载进度，请保持画屏联网。',step:2,percent};
+}

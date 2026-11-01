@@ -97,3 +97,11 @@ test('corrupt downloaded firmware cannot start a BLE write',async()=>{const p=pe
 test('actual device capacity and project are read and checked before erase',async()=>{const p=peripheral({capacity:512}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();assert.equal((await client.readBuildInfo()).project,'frame_film_ark');assert.equal((await client.readBuildInfo()).otaMax,512);const b=otaImage();await assert.rejects(client.startBleOta(b,imageHash(b)),/容量不匹配/);assert.equal(p.writes.some(b=>b[1]===0x10),false);client.disconnect();});
 test('a failed processing barrier never commits or continues firmware data',async()=>{const p=peripheral({badBarrier:true}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();const b=otaImage();await assert.rejects(client.startBleOta(b,imageHash(b)),/处理确认/);assert.equal(p.writes.some(b=>b[1]===0x11||b[1]===0x13),false);client.disconnect();});
 test('a failed data transfer is never followed by the firmware commit command',async()=>{let count=0;const p=peripheral({onWrite:b=>{if(b[1]===0x11&&++count===3)throw Error('write failed');}}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();const b=otaImage();await assert.rejects(client.startBleOta(b,imageHash(b)),/write failed/);assert.equal(p.writes.some(b=>b[1]===0x13),false);client.disconnect();});
+
+test('reconnecting the same authorized screen resumes saved Wi-Fi without credential writes or a picker',async()=>{
+ const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});
+ await client.connect();await client.configure('home','test-password');client.disconnect();p.writes.length=0;
+ client.bluetooth.requestDevice=()=>{throw new Error('unexpected device picker');};
+ await client.connect(p.device);await client.resumeWifi();
+ assert.deepEqual(p.writes.map(bytes=>bytes[1]),[0x38,0x3a]);assert.equal(client.lastStatus,true);client.disconnect();
+});
