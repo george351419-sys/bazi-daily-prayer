@@ -1,6 +1,6 @@
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer} from './transfer-status.js?v=20261101-sync-v7';
+import {renderTransfer} from './transfer-status.js?v=20261101-journey-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));

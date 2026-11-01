@@ -1,12 +1,14 @@
 <view class="page">
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
   <text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
+  <button wx:if="{{syncState.phase==='connect'||(syncState.phase==='waiting'&&!paired)}}" class="primary spaced" bindtap="connectScreen">去链接神物 / 检查连接</button>
+  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
   <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">① 内容就绪</text><text class="{{syncState.step>=2?'complete':''}}">② 下载中</text><text class="{{syncState.step>=3?'complete':''}}">③ 已保存</text><text class="{{syncState.step>=4?'complete':''}}">④ 已刷新</text></view>
   <text class="note">{{syncState.step>=3?'现在可在画屏 Home 选择“画面”，按画屏确认键进入。':'请等待“内容已保存”后，再在画屏选择“画面”并按确认键查看新画。'}}</text>
   <text wx:if="{{status.deviceReport.firmwareVersion}}" class="note">运行固件：{{status.deviceReport.firmwareVersion}}</text>
   <text wx:if="{{status.deviceReport.lastSeen}}" class="note">最近设备回报：{{syncLastSeen}}（北京时间）。休眠时不会持续联网。</text>
   <button class="secondary spaced" bindtap="syncNow" disabled="{{!paired||busy}}">立即检查同步（需蓝牙）</button>
-  <text class="note">此功能需要 ritual.6 固件；旧固件可到网页“链接神物”通过 Wi-Fi 升级。该按钮只检查内容，不会遥控离开 Home。</text>
+  <text class="note">此功能需要 ritual.6 固件；旧固件可到网页“链接神物”打开固件升级并核验版本。该按钮只检查内容，不会遥控离开 Home。</text>
  </view>
 
  <text class="kicker">MAKE IT YOURS / 04</text>

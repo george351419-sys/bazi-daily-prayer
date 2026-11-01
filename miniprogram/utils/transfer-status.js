@@ -1,12 +1,20 @@
-// Generated from public/transfer-status.js; shared delivery semantics.
 // Derive progress only from the requested plan and its device report.
 function transferStatus(result = {}, artworkId = null) {
  const state = (phase, title, detail, step = 0, percent = null) => ({phase, title, detail, step, percent});
  if (result.syncConfigured === undefined) return state('checking', '正在确认画屏连接', '画作已完成，正在读取同步状态。');
- if (!result.syncConfigured) return state('unbound', '画作已完成 · 请先绑定画屏', '在「链接神物」连接并绑定设备后，即可同步画面。');
- if (result.plan?.contentMode === 'photo') return state('photo', '当前画屏使用自定义照片', '若要显示新祈福画，请在「自定义」切换为祈福图并保存。');
+ if(!result.syncConfigured&&!result.plan)return state('unbound','先许愿，生成你的祈福图','先在「许愿池」填写生辰与心愿；画屏内容准备完成后，再连接设备。');
+ if (artworkId && result.plan?.contentMode === 'photo') return state('photo', '当前画屏使用自定义照片', '若要显示新祈福画，请在「自定义」切换为祈福图并保存。');
  if (artworkId && !result.plan?.artworkIds?.includes(artworkId)) return state('preparing', '正在准备这幅画的同步内容', '正在将新画作加入两日画屏计划。');
- if (result.build?.status === 'retrying') return state('retrying', '内容准备暂未成功 · 后台正在重试', '画屏会保留已下载的内容，恢复后继续同步。');
+ if (result.preparation?.stage === 'retrying' || (!result.preparation && result.build?.status === 'retrying')) return state('retrying', '内容准备暂未成功 · 后台正在重试', '画屏会保留已下载的内容，恢复后继续同步。');
+ const prep=result.preparation;
+ if(prep&&!prep.ready){
+  const stages={queued:['等待后台准备内容','画作已完成，内容包已排队；准备完成后再连接画屏。'],images:['正在读取两日画作','正在读取画作，随后转换为画屏格式。'],encoding:['正在转换画屏内容','正在制作墨水屏画面与微行动，暂不需要连接蓝牙或 Wi-Fi。'],uploading:['正在保存画屏内容包','正在保存已转换的内容，完成后即可连接画屏。'],retrying:['画屏内容准备暂未成功','后台会重试，暂不需要连接设备。']};
+  const [title,detail]=stages[prep.stage]||stages.queued;
+  const count=prep.progress,percent=prep.stage==='uploading'&&count?.total>0?Math.round(count.completed/count.total*100):null;
+  return {...state('preparing',title+(percent===null?'':' · '+percent+'%'),detail,0,percent),preparation:true,preparationStep:{queued:0,images:0,encoding:1,uploading:2}[prep.stage]||0};
+ }
+ if(!result.syncConfigured)return state(prep?.ready?'connect':'unbound',prep?.ready?'画屏内容已准备好 · 去链接神物':'先许愿，生成你的祈福图',prep?.ready?'现在连接画屏蓝牙和 Wi-Fi，绑定后即可领取已准备的内容。':'先在「许愿池」填写生辰与心愿；画屏内容准备完成后，再连接设备。',prep?.ready?1:0);
+ if(prep?.ready&&(result.pendingUpdate||result.build?.status!=='published'))return state('publishing','画屏内容已就绪 · 正在安排下发','内容已准备完成，正在关联到画屏；无需重新生成或配网。',1);
  if (result.pendingUpdate || result.build?.status !== 'published') return state('preparing', '正在准备画屏内容', '正在准备两日画作与微行动，完成后即可供画屏领取。');
  const report = result.deviceReport;
  if (report?.firmwareUpdateRequired) return state('firmware', '请先更新画屏固件', '当前固件不能接收这份内容，请到「链接神物」更新固件。', 1);
@@ -30,5 +38,14 @@ function transferStatus(result = {}, artworkId = null) {
  return state('confirming', '画屏已联网 · 正在确认同步结果', '云端内容已就绪，但当前内容包的下载或刷新回执尚不完整；如画屏已显示新画，无需重复推送。', 1);
 }
 
+
+// BLE download replies carry no package hash: require a current cloud target first.
+function withLiveDownload(state,result,live,now=Date.now()){
+ if(!live||now-live.receivedAt>6000||result?.pendingUpdate||result?.build?.status!=='published'||!result.build.sha256||result.device?.id!==live.deviceId||result.deviceReport?.targetSha!==result.build.sha256||result.deviceReport?.stale||Date.parse(result.deviceReport?.lastSeen)<Date.parse(result.build.publishedAt)||!['downloading','confirming','waiting'].includes(state.phase))return state;
+ if(live.state!==1||!Number.isFinite(live.progress))return state;
+ const percent=Math.max(0,Math.min(100,live.progress));
+ return {...state,phase:'downloading',title:'正在传输到画屏 · '+percent+'%',detail:'设备通过蓝牙回报的下载进度，请保持画屏联网。',step:2,percent};
+}
+
 function receiptTime(value){const stamp=Date.parse(value);return Number.isFinite(stamp)?new Date(stamp+8*3600000).toISOString().slice(0,19).replace('T',' '):'';}
-module.exports={transferStatus,receiptTime};
+module.exports={transferStatus,receiptTime,withLiveDownload};

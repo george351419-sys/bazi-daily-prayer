@@ -1,14 +1,22 @@
 <view class="page">
- <text class="kicker">A WISH OF YOUR OWN / 02</text>
+ <text class="kicker">A WISH OF YOUR OWN / 01</text>
  <text class="title">许愿池</text>
- <text class="subtitle">你的生辰、心愿和画册，都在这里。</text>
+ <text class="subtitle">生辰入画，心愿成象。今天的画，从这里开始。</text>
  <view class="error" role="alert">{{error}}</view>
  <view class="notice" wx:if="{{message}}">{{message}}</view>
 
+ <view wx:if="{{user&&syncState}}" class="paper sync-panel">
+  <button wx:if="{{prepareFailed}}" bindtap="retryPreparation" disabled="{{busy}}" class="secondary">重试准备画屏内容</button>
+  <text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
+  <button wx:if="{{syncState.phase==='connect'||(syncState.phase==='waiting'&&!paired)}}" class="primary spaced" bindtap="connectScreen">去链接神物 / 检查连接</button>
+  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
+  <text class="note">切换页面会保留蓝牙连接；下载完成后可在画屏选择“画面”查看。</text>
+ </view>
+
  <view class="paper" wx:if="{{!user}}">
   <text class="kicker">WECHAT ACCOUNT</text>
-  <text class="section-title">让画册跟着你走</text>
-  <text class="note">点击微信登录，会自动建立账户。生辰、愿望和画面只保存在你的账户中。</text>
+  <text class="section-title">把每一次心愿，留在自己的画册里</text>
+  <text class="note">微信登录后自动建立账户。生辰、心愿和画作只保存在你的账户中。</text>
   <button class="primary spaced wide" bindtap="wechatAuth" loading="{{busy}}" disabled="{{busy||!agreed||!wechatEnabled}}">微信一键登录</button>
   <text class="note" wx:if="{{!wechatEnabled}}">服务端还需配置小程序 AppID 与 AppSecret，当前不会伪造登录成功。</text>
   <button class="text-button" bindtap="legacy">{{authMode==='legacy'?'返回微信登录':'使用已有网页账户'}}</button>
@@ -40,7 +48,7 @@
   </view>
 
   <view class="paper">
-   <text class="section-title">生辰信息</text>
+   <text class="section-title">你的生辰</text>
    <text class="label">性别</text>
    <view class="choice-row">
     <button class="choice {{profile.gender==='female'?'selected':''}}" data-field="gender" data-value="female" bindtap="choose">女</button>
@@ -69,19 +77,19 @@
   </view>
 
   <view class="paper">
-   <text class="section-title">此刻的心愿</text>
+   <text class="section-title">今日心愿</text>
    <view wx:for="{{groups}}" wx:key="name" class="wish-group">
     <text class="label">{{item.name}}</text>
     <text wx:for="{{item.items}}" wx:for-item="wish" wx:key="id" class="pill {{wish.selected?'selected':''}}" data-id="{{wish.id}}" bindtap="wish">{{wish.label}}</text>
    </view>
-   <text class="section-title art-style-heading">画面风格</text><view wx:for="{{artStyles}}" wx:key="id" class="art-style-row"><button class="choice {{(profile.artStyle||'cute')===item.id?'selected':''}}" data-field="artStyle" data-value="{{item.id}}" bindtap="choose" disabled="{{busy}}"><text>{{item.label}}</text><text class="note">{{item.description}}</text></button><button class="text-button" data-id="{{item.id}}" bindtap="previewArtStyle">查看示例</button></view><text class="note">示意图仅供风格参考；保存后用于新生成的画面，已完成作品保持原样。</text><button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">保存生辰与祈愿</button>
+   <text class="section-title art-style-heading">画面风格</text><view wx:for="{{artStyles}}" wx:key="id" class="art-style-row"><button class="choice {{(profile.artStyle||'cute')===item.id?'selected':''}}" data-field="artStyle" data-value="{{item.id}}" bindtap="choose" disabled="{{busy}}"><text>{{item.label}}</text><text class="note">{{item.description}}</text></button><button class="text-button" data-id="{{item.id}}" bindtap="previewArtStyle">查看示例</button></view><text class="note">示意图仅供风格参考；保存后用于新生成的画面，已完成作品保持原样。</text><button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">保存生辰与心愿</button>
    <text class="note">保存资料不会触发画面生成。</text>
    <view class="rule"></view>
-   <text class="section-title">为今天，留一幅画</text>
-   <text class="note">生成会调用模型并使用服务额度，通常需要等待一至两分钟。完成后会保存到账户画册。</text>
-   <button class="secondary spaced wide" bindtap="generate" disabled="{{busy||!agreed}}" loading="{{busy}}">{{jobReady?'继续绘制已归档解读':'生成今日祈福画'}}</button>
+   <text class="section-title">为今天，留一幅造像</text>
+   <text class="note">生辰为底，心愿为笔。生成通常需要一至两分钟，完成后会保存到账户画册。</text>
+   <button class="secondary spaced wide" bindtap="generate" disabled="{{busy||!agreed}}" loading="{{busy}}">{{jobReady?'继续完成今日造像':'生成今日造像'}}</button>
    <text class="note" wx:if="{{generation}}">{{generation}}</text>
-   <button class="text-button" bindtap="companion" disabled="{{busy}}">到「解读陪伴」读画面、微行动与答案之数</button>
+   <button class="text-button" bindtap="companion" disabled="{{busy}}">到「解读陪伴」看画面、做小事、收下一个答案</button>
    <button class="text-button" bindtap="screen" disabled="{{busy}}">到画屏选择展示内容</button>
   </view>
  </view>
@@ -93,7 +101,7 @@
   </view>
   <button class="text-button" bindtap="privacy">{{privacyOpen?'收起说明':'查看数据用途与权限'}}</button>
   <view wx:if="{{privacyOpen}}">
-   <text class="note">生辰、城市与愿望用于保存个人资料及祈福服务；照片仅上传到 playmath.cn 的私有账户。选择照片前会请求相册/相机权限；Wi-Fi 密码只通过蓝牙发给你选择的设备，不上传后台，不保存到本地。微信登录凭证只由服务端用于建立账户，不保存 session_key。登录会话保存在本机，退出后清除。无需通讯录或定位权限。运营主体、隐私联系渠道及正式隐私保护指引须在提交审核前核实。</text>
+    <text class="note">生辰、城市与心愿用于保存个人资料及造像与解读服务；照片仅上传到 playmath.cn 的私有账户。选择照片前会请求相册/相机权限；Wi-Fi 密码只通过蓝牙发给你选择的设备，不上传后台，不保存到本地。微信登录凭证只由服务端用于建立账户，不保存 session_key。登录会话保存在本机，退出后清除。无需通讯录或定位权限。运营主体、隐私联系渠道及正式隐私保护指引须在提交审核前核实。</text>
    <button class="text-button" bindtap="openPrivacy">微信隐私保护指引</button>
   </view>
  </view>

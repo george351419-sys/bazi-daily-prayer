@@ -2,7 +2,8 @@
  <view class="row"><text class="kicker">YOUR DAILY COMPANION / 03</text><text class="date">{{date}}</text></view>
  <text class="title">解读陪伴</text>
  <text class="subtitle">一幅画，一件小事，一个答案，都在这里读完。</text>
- <view wx:if="{{!sample&&syncState}}" class="paper"><text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text><text class="note">{{syncState.step>=3?'可以在画屏选择“画面”，按画屏确认键进入。':'请等待内容保存后再进入画屏画面；无需重复生成。'}}</text></view>
+ <view wx:if="{{!sample&&syncState}}" class="paper"><text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
+  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/><text class="note">{{syncState.step>=3?'可以在画屏选择“画面”，按画屏确认键进入。':'请等待内容保存后再进入画屏画面；无需重复生成。'}}</text></view>
  <view class="loading" wx:if="{{loading}}">正在载入今日内容…</view>
  <view class="error" role="alert">{{error}}</view>
 

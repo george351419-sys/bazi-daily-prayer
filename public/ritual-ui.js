@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withLiveDownload} from './transfer-status.js?v=20261101-sync-v7';
+import {transferStatus,renderTransfer,withLiveDownload} from './transfer-status.js?v=20261101-journey-v1';
 import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
@@ -220,7 +220,6 @@ export function setupRitual({request,fetchImage,getUser}){
  async function prepare(){
   if(preparing||!getUser())return false;
   let status;try{status=await request('/api/account/ritual');updateTransfer(status);}catch{updateTransfer(null,{phase:'unavailable',title:'暂时无法准备传输',detail:'请检查网络，稍后重新查看同步状态。',step:0,percent:null});return false;}
-  if(!status.syncConfigured)return false;
   ensureShell();host.hidden=false;preparing=true;prepareFailure=null;updateTransfer(null,{phase:'preparing',title:'正在准备次日画作',detail:'今日画作已完成；需补齐明日画作后，才能更新两日画屏内容并开始 Wi-Fi 传输。',step:0,percent:null});shell.status.textContent='正在检查两日画作；缺少次日画作时会为你补齐。';
   if(status.plan?.contentMode==='photo'){
    shell.status.textContent='当前使用你的照片计划，不会自动替换为次日祈福画。需要祈福模式时请在上方手动切换。';
@@ -243,7 +242,6 @@ export function setupRitual({request,fetchImage,getUser}){
   if(!getUser())return {needsLogin:true};
   const result=await request('/api/account/ritual/device',{deviceId});
   await refresh();
-  await prepare();
   return result;
  }
  function showGeneratedArtwork(job){

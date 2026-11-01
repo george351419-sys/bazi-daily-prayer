@@ -12,14 +12,15 @@ import {accountRepository,accountsEnabled} from '../lib/account-store.mjs';
 import {getArtwork,privateImage} from '../lib/accounts.mjs';
 import {configureRitual,ritualArtworkReady,ritualPublication,ritualPhotoPair} from '../lib/ritual.mjs';
 import {answers} from '../content/ritual-content.mjs';
-import {publishRitualPackage} from '../lib/ritual-upload.mjs';
-import {listRitualDeviceLinks} from '../lib/ritual-device.mjs';
+import {stageRitualPackage,commitRitualPackage} from '../lib/ritual-upload.mjs';
+import {listRitualWork} from '../lib/ritual-worker-bridge.mjs';
+import {ritualDeviceForAccount} from '../lib/ritual-device.mjs';
 import {personalizeActionOptions} from '../lib/action-personalization.mjs';
 const c={...process.env},repo=accountRepository(c),exec=promisify(execFile),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 if(!accountsEnabled(c))throw new Error('Configure ACCOUNT_STORAGE in the private worker environment');
 let stop=false;const abort=new AbortController();for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{stop=true;abort.abort();});
 do{
- const links=await listRitualDeviceLinks(c);
+ const links=await listRitualWork(c);
  for(const [id,mac] of Object.entries(links)){
   let tmp,plan;try{
    plan=await repo.get('ritual/'+id);
@@ -50,16 +51,27 @@ do{
    const personalized=records.map((record,index)=>personalizeActionOptions(record.mapping)[index]);
    const manifest={...plan,actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-balanced-v4':'prayer-overlay-balanced-v4',artworkIds:records.map(r=>r.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((r,i)=>({date:r.date,artworkId:r.id,actions:personalized[i]}))};
    const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),state=await repo.get('ritual-build/'+id);
-   if(ritualPublication(state)?.signature===signature){if(state.status!=='published')await repo.put('ritual-build/'+id,{...state,status:'published',nextAttemptAt:null});continue;}
-   tmp=await mkdtemp(path.join(os.tmpdir(),'ritual-compile-'));
-   await writeFile(path.join(tmp,'plan.json'),JSON.stringify(manifest),{mode:0o600});await writeFile(path.join(tmp,'answers.json'),JSON.stringify({answers}),{mode:0o600});
-   for(let i=0;i<2;i++){const image=await privateImage(c,{id},records[i]);await writeFile(path.join(tmp,`day-${i}.png`),image.bytes,{mode:0o600});}
-   await exec(c.PRAYER_TEST_PYTHON||'/opt/homebrew/bin/python3',[path.join(root,'tools/build-ritual-package.py'),'--plan',path.join(tmp,'plan.json'),'--images',path.join(tmp,'day-0.png'),path.join(tmp,'day-1.png'),'--answers',path.join(tmp,'answers.json'),'--out',path.join(tmp,'ritual.bin'),...(c.RITUAL_FONT?['--font',c.RITUAL_FONT]:[])],{timeout:120000,maxBuffer:100000});
-   const result=await publishRitualPackage(c,mac,await readFile(path.join(tmp,'ritual.bin')),{beforeCommit:async()=>JSON.stringify(await repo.get('ritual/'+id))===JSON.stringify(plan)});
+   if(mac&&ritualPublication(state)?.signature===signature){if(state.status!=='published')await repo.put('ritual-build/'+id,{...state,status:'published',nextAttemptAt:null});continue;}
+   let prepared=state?.prepared?.signature===signature?state.prepared:null;
+   async function save(next){if((await repo.get('ritual/'+id))?.revision!==plan.revision)return false;await repo.put('ritual-build/'+id,next);return true;}
+   async function progress(stage,counts=null){if(!await save({...state,status:'preparing',stage,progress:counts,attemptedRevision:plan.revision}))throw new Error('Ritual plan superseded');}
+   if(!prepared){
+    await progress('images',{completed:0,total:2});
+    tmp=await mkdtemp(path.join(os.tmpdir(),'ritual-compile-'));
+    await writeFile(path.join(tmp,'plan.json'),JSON.stringify(manifest),{mode:0o600});await writeFile(path.join(tmp,'answers.json'),JSON.stringify({answers}),{mode:0o600});
+    for(let i=0;i<2;i++){const image=await privateImage(c,{id},records[i]);await writeFile(path.join(tmp,`day-${i}.png`),image.bytes,{mode:0o600});await progress('images',{completed:i+1,total:2});}
+    await progress('encoding');
+    await exec(c.PRAYER_TEST_PYTHON||'/opt/homebrew/bin/python3',[path.join(root,'tools/build-ritual-package.py'),'--plan',path.join(tmp,'plan.json'),'--images',path.join(tmp,'day-0.png'),path.join(tmp,'day-1.png'),'--answers',path.join(tmp,'answers.json'),'--out',path.join(tmp,'ritual.bin'),...(c.RITUAL_FONT?['--font',c.RITUAL_FONT]:[])],{timeout:120000,maxBuffer:100000});
+    const staged=await stageRitualPackage(c,await readFile(path.join(tmp,'ritual.bin')),{onProgress:counts=>progress('uploading',counts)});
+    prepared={...staged,signature,manifest,preparedAt:new Date().toISOString()};
+    if(!await save({...state,prepared,status:'ready',stage:'ready',progress:null,attemptedRevision:plan.revision}))continue;
+   }
+   if(!mac)continue;
+   const result=await commitRitualPackage(c,mac,prepared,{beforeCommit:async()=>JSON.stringify(await repo.get('ritual/'+id))===JSON.stringify(plan)&&(await ritualDeviceForAccount(c,id))?.deviceId===mac});
    if(result.superseded)continue;
-   await repo.put('ritual-build/'+id,{previousPublication:ritualPublication(state)?.sha256!==result.sha256?ritualPublication(state):state?.previousPublication,publication:{signature,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString()},signature,status:'published',mode:plan.mode,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString(),note:'waiting_for_device_storage_receipt'});
+   await save({previousPublication:ritualPublication(state)?.sha256!==result.sha256?ritualPublication(state):state?.previousPublication,prepared,publication:{signature,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString()},signature,status:'published',stage:'ready',mode:plan.mode,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString(),note:'waiting_for_device_storage_receipt'});
    console.log('Two-day ritual package published; awaiting device receipt.');
-  }catch{const state=await repo.get('ritual-build/'+id).catch(()=>null),failures=state?.attemptedRevision===(plan?.revision||plan?.updatedAt)?(state?.failures||0)+1:1;await repo.put('ritual-build/'+id,{...state,status:'retrying',failures,attemptedRevision:plan?.revision||plan?.updatedAt,lastAttempt:new Date().toISOString(),nextAttemptAt:new Date(Date.now()+Math.min(900000,15000*2**Math.min(failures-1,6))).toISOString(),note:'Content compiler or device service unavailable; previous device cache retained'}).catch(()=>{});console.error('Ritual compilation/publication deferred; retrying later.');}
+  }catch{const state=await repo.get('ritual-build/'+id).catch(()=>null),failures=state?.attemptedRevision===(plan?.revision||plan?.updatedAt)?(state?.failures||0)+1:1;if((await repo.get('ritual/'+id))?.revision===plan?.revision)await repo.put('ritual-build/'+id,{...state,status:'retrying',stage:'retrying',progress:null,failures,attemptedRevision:plan?.revision||plan?.updatedAt,lastAttempt:new Date().toISOString(),nextAttemptAt:new Date(Date.now()+Math.min(900000,15000*2**Math.min(failures-1,6))).toISOString(),note:'Content compiler or device service unavailable; previous device cache retained'}).catch(()=>{});console.error('Ritual compilation/publication deferred; retrying later.');}
   finally{if(tmp)await rm(tmp,{recursive:true,force:true});}
  }
  if(stop||process.argv.includes('--once'))break;

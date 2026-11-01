@@ -1,13 +1,13 @@
 {
   "pages": [
-    "pages/network/index",
     "pages/mine/index",
+    "pages/network/index",
     "pages/today/index",
     "pages/screen/index",
     "pages/answers/index"
   ],
   "window": {
-    "navigationBarTitleText": "今日祈愿",
+    "navigationBarTitleText": "生辰造像馆",
     "navigationBarBackgroundColor": "#F6F1E7",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#F6F1E7"
@@ -16,12 +16,12 @@
     "custom": true,
     "list": [
       {
-        "pagePath": "pages/network/index",
-        "text": "链接神物"
-      },
-      {
         "pagePath": "pages/mine/index",
         "text": "许愿池"
+      },
+      {
+        "pagePath": "pages/network/index",
+        "text": "链接神物"
       },
       {
         "pagePath": "pages/today/index",

@@ -1,3 +1,4 @@
+import {transferStatus,renderTransfer} from './transfer-status.js?v=20261101-journey-v1';
 import {preparePhoto} from './photo-upload.js';
 
 export function setupCustomPhoto({request,fetchImage,getUser}){
@@ -5,10 +6,11 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
  if(!root)return {refresh(){},reset(){}};
  const description=document.querySelector('#custom .section-top p');if(description)description.textContent='先上传自己的图片，再安排每日轮播；是否附加微行动也由你决定。';
  const node=(tag,text)=>{const item=document.createElement(tag);if(text)item.textContent=text;return item;};
+ let syncTimer=null,syncHost=null;
  let mode='prayer',rotationStart='',position=0,showActions=true,selected=[],artworks=[],cursor=null,busy=false,message='',rootPlan=null,urls=new Map();
 
  function clearUrls(){for(const url of urls.values())URL.revokeObjectURL(url);urls.clear();}
- function reset(){mode='prayer';rotationStart='';position=0;showActions=true;selected=[];artworks=[];cursor=null;busy=false;message='';rootPlan=null;clearUrls();root.replaceChildren();}
+ function reset(){clearTimeout(syncTimer);syncHost=null;mode='prayer';rotationStart='';position=0;showActions=true;selected=[];artworks=[];cursor=null;busy=false;message='';rootPlan=null;clearUrls();root.replaceChildren();}
  function photoPosition(plan){
   const ids=plan?.artworkIds||[];if(plan?.contentMode!=='photo'||!ids.length)return 0;
   const start=/^\d{4}-\d{2}-\d{2}$/.test(plan.rotationStartDate||'')?Date.parse(plan.rotationStartDate+'T00:00:00Z'):NaN;
@@ -55,7 +57,7 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
   form.append(state,buttons,node('small','确认后会保存账户内容并交给画框同步；实际显示以设备回执为准。'));
   choose.onclick=()=>void uploadFiles(file);
   form.onsubmit=event=>{event.preventDefault();void savePlan();};
-  settings.append(form);root.append(settings);
+  settings.append(form);root.append(settings);syncHost=node('div');syncHost.setAttribute('role','status');root.append(syncHost);if(rootPlan)void pollSync();
  }
  async function uploadFiles(file){
   if(busy||!getUser())return;const files=[...file.files],room=6-selected.length;if(!files.length){message='请先选择图片。';render();return;}if(room<1){message='轮播已满 6 张，请先移除一张再添加。';render();return;}
@@ -85,10 +87,16 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
   }catch(error){message=error.message;}
   finally{busy=false;render();}
  }
+ async function pollSync(){
+  clearTimeout(syncTimer);if(!getUser()||!syncHost)return;const owner=getUser().id;
+  try{const result=await request('/api/account/ritual');if(getUser()?.id!==owner||!syncHost)return;if(rootPlan?.revision&&result.plan?.revision!==rootPlan.revision){syncTimer=setTimeout(pollSync,2000);return;}renderTransfer(syncHost,transferStatus(result));document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state:transferStatus(result)}}));}
+  catch(error){if(syncHost)syncHost.textContent='同步状态暂不可用：'+error.message;}
+  if(getUser()?.id===owner&&syncHost)syncTimer=setTimeout(pollSync,2000);
+ }
  async function savePlan(){
   if(busy||!getUser())return;if(!selected.length){message='请先上传并选择至少一张自己的图片。';render();return;}
   busy=true;message=mode==='photo'?'正在保存并更新轮播…':'正在切换为我的作品…';render();
-  try{const status=await request('/api/account/ritual',{mode:'daily',contentMode:'photo',showActions,artworkIds:selected.slice()});rootPlan=status.plan||rootPlan;mode='photo';position=photoPosition(rootPlan);message=status.syncConfigured?'已保存并交给画框同步；实际显示以设备回执为准。':'已保存到账户；绑定画屏后才会编译并下发。';}
+  try{const status=await request('/api/account/ritual',{mode:'daily',contentMode:'photo',showActions,artworkIds:selected.slice()});rootPlan=status.plan||rootPlan;mode='photo';position=photoPosition(rootPlan);message='已确认切换为自己的作品，正在准备画屏内容；准备完成后会提示是否需要连接设备。';}
   catch(error){message=error.message;}
   finally{busy=false;render();}
  }

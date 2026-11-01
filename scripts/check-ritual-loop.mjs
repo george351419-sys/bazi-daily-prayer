@@ -59,6 +59,16 @@ try{
  const prayerHeartbeat=await fetcher('https://playmath.cn/api/v1/device/heartbeat?device_id='+deviceId+'&ritual_v=3',{headers:{authorization:'Bearer '+token}});
  const prayerReply=await prayerHeartbeat.json(),prayerPacket=Buffer.from(await(await fetcher(prayerReply.data.commands[0].params.url)).arrayBuffer());
  validateRitual(prayerPacket);assert.equal(prayerPacket.readUInt32LE(36),3);assert.equal(prayerPacket.readUInt32LE(60),3);
+ // Prepare a new revision while unbound, then bind and commit exactly those chunks.
+ await configureRitual(c,account,{mode:'test',contentMode:'prayer',showActions:true,artworkIds:ids});
+ process.env.RITUAL_DEVICE_LINKS='{}';
+ const deviceBefore=JSON.parse(decryptAccountData(env,map.get('devices/'+deviceId))).ritualSha;
+ await import('./run-ritual-worker.mjs?prebind=stage');
+ const staged=await repo.get('ritual-build/'+account.id);assert.equal(staged.status,'ready');assert.ok(staged.prepared.chunks.length>0);
+ assert.equal(JSON.parse(decryptAccountData(env,map.get('devices/'+deviceId))).ritualSha,deviceBefore,'preparation must not alter any device');
+ Object.assign(process.env,c);const beforeBinding=calls;
+ await import('./run-ritual-worker.mjs?prebind=commit');
+ const bound=await repo.get('ritual-build/'+account.id);assert.equal(bound.status,'published');assert.equal(bound.sha256,staged.prepared.sha256);assert.equal(calls-beforeBinding,1,'binding commits the existing package without reconversion or re-upload');
  console.log('PASS: private account plan -> real Python six-colour compiler -> signed chunk publication -> compatible heartbeat -> exact download; unchanged plan deduplicates. Failure preserves publication, retry backs off, a new revision bypasses backoff. No live requests.');
 }finally{
  globalThis.fetch=originalFetch;for(const key of Object.keys(process.env))if(!(key in oldEnv))delete process.env[key];Object.assign(process.env,oldEnv);process.argv.splice(0,process.argv.length,...oldArgs);await rm(tmp,{recursive:true,force:true});

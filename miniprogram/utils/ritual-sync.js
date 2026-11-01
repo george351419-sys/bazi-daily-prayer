@@ -21,7 +21,6 @@ async function syncPrayerPair({mode='daily',request=api.request}={}){
 
 async function syncGeneratedPrayer({request=api.request}={}){
  const current=await request('/api/account/ritual');
- if(!current.syncConfigured)return {status:current,needed:false,reason:'unbound'};
  if(current.plan&&current.plan.contentMode==='photo')return {status:current,needed:false,reason:'photo'};
  const mode=current.plan&&current.plan.mode==='test'?'test':'daily',synced=await syncPrayerPair({mode,request});
  return {...synced,needed:true,reason:'ready'};
