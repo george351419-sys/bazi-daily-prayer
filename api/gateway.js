@@ -73,7 +73,7 @@ export async function handleRequest(req,res,config){
    if(route==='account/ritual/device'&&req.method==='POST'){const result=await bindRitualDevice(config,account,body.deviceId);return send(res,200,{ok:true,device:{id:result.binding.deviceId,status:result.binding.status},ritual:await ritualStatus(config,account)});}
    if(route==='account/ritual/device/unbind'&&req.method==='POST')return send(res,200,{...await unbindRitualDevice(config,account),ritual:await ritualStatus(config,account)});
    if(route==='account/ritual/prepare'&&req.method==='POST'){
-    const prepared=await prepareRitualPair(config,account,{mode:body.mode});
+    const prepared=await prepareRitualPair({...config,ANALYSIS_BUDGET_MS:Math.max(1000,100000-(Date.now()-startedAt))},account,{mode:body.mode});
     return send(res,200,{status:prepared.status,artworkIds:prepared.artworkIds||null,job:prepared.record?accountJob(config,account,prepared.record):null});
    }
    if(route==='account/answers'&&req.method==='GET'){

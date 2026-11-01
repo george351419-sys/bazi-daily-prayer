@@ -1,5 +1,5 @@
 export async function readAPIResponse(response, path) {
- const stage = path.includes('/analyze') ? '生辰解读' : /\/jobs\/.+\/image/.test(path) ? '画面生成' : '服务';
+ const stage = path.includes('/ritual/prepare') ? '次日画作准备' : path.includes('/analyze') ? '生辰解读' : /\/jobs\/.+\/image/.test(path) ? '画面生成' : '服务';
  let data;
  try { data = await response.json(); }
  catch {

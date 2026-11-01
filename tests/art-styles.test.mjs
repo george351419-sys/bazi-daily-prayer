@@ -15,7 +15,7 @@ test('相同画面不同风格不复用；底部留位写入提示词',()=>{
  const fingerprints=['folk','cute','spirit'].map(art_style=>visualMapping({...mapping,art_style}).fingerprint);
  assert.equal(new Set(fingerprints).size,3);
  assert.notEqual(visualMapping(mapping).fingerprint,visualMapping({...mapping,art_style_version:'new'}).fingerprint);
- for(const art_style of ['folk','cute','spirit']){const prompt=buildImagePrompt({...mapping,art_style});assert.ok(prompt.startsWith('[PRAYER_STYLE:'+art_style+']'));assert.match(prompt,/宽480×高720/);assert.match(prompt,/底部/);assert.match(prompt,/2:3竖图/);assert.match(prompt,/次要云卷/);assert.ok(!prompt.includes('像素横图'));}
+ for(const art_style of ['folk','cute','spirit']){const prompt=buildImagePrompt({...mapping,art_style});assert.ok(prompt.startsWith('[PRAYER_STYLE:'+art_style+']'));assert.match(prompt,/宽480×高720/);assert.match(prompt,/底部/);assert.match(prompt,/2:3竖图/);assert.match(prompt,/次要云卷/);assert.match(prompt,/y=540至719/);assert.match(prompt,/不能出现人物、坐骑/);assert.ok(!prompt.includes('像素横图'));}
 });
 test('每日自动生成快照和配置指纹包含风格',()=>{
  const a=generationSettings({}, {...input,artStyle:'cute'}),b=generationSettings({}, {...input,artStyle:'spirit'});

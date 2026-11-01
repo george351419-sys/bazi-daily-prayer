@@ -31,9 +31,9 @@ export function setupRitual({request,fetchImage,getUser}){
   if(mapping.reading){container.append(node('h4','生辰与画面解析'));const caption=node('p','这是一份传统取象解释，读到这里就好；不必把它当成对现实结果的保证。');caption.className='reading-caption';const copy=node('div');copy.className='consumer-reading';renderConsumerReading(copy,mapping);container.append(caption,copy);}
   if(mapping.reading||mapping.overview){const row=node('div');row.className='ritual-reading-actions';const download=node('button','保存画面解读 ↗');download.type='button';download.className='text-button';download.onclick=()=>{const text=readingMarkdown(mapping,date,title);const link=URL.createObjectURL(new Blob([text],{type:'text/markdown;charset=utf-8'})),anchor=document.createElement('a');anchor.href=link;anchor.download='今日造像解读-'+(date||'')+'.md';anchor.click();setTimeout(()=>URL.revokeObjectURL(link),1000);};row.append(download);container.append(row);}
  }
- let transferPending=false,active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,answers=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null,latestGenerated=null;
+ let transferPending=false,active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,answers=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null,latestGenerated=null,prepareFailure=null;
  function pause(){active=false;epoch++;clearTimeout(timer);timer=null;}
- function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;answers=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell?.settings.remove();shell=null;renderedKey=null;latestGenerated=null;host.replaceChildren();host.hidden=true;const transfer=document.querySelector('#artwork-transfer');if(transfer){transfer.replaceChildren();transfer.hidden=true;}}
+ function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;answers=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell?.settings.remove();shell=null;renderedKey=null;latestGenerated=null;prepareFailure=null;host.replaceChildren();host.hidden=true;const transfer=document.querySelector('#artwork-transfer');if(transfer){transfer.replaceChildren();transfer.hidden=true;}}
  function alive(life){return life===lifecycle&&!!getUser();}
  function schedule(result){if(!active)return;clearTimeout(timer);const next=Date.parse(result?.scheduledPosition?.nextAt||result?.position?.nextAt);timer=setTimeout(refresh,Number.isFinite(next)?Math.max(1000,Math.min(latestGenerated&&transferPending?5000:30000,next-Date.now()+200)):(latestGenerated&&transferPending?5000:30000));}
  function ensureShell(){
@@ -179,11 +179,14 @@ export function setupRitual({request,fetchImage,getUser}){
   list.append(all);
  }
  function updateTransfer(result,override){
-  const state=override||transferStatus(result,latestGenerated?.id);
+  const completedPlan=latestGenerated&&result?.plan?.artworkIds?.includes(latestGenerated.id);
+  if(completedPlan)prepareFailure=null;
+  const state=override||(!preparing&&prepareFailure&&!completedPlan?prepareFailure:transferStatus(result,latestGenerated?.id));
   transferPending=!['rendered','unbound','photo','firmware'].includes(state.phase);
   if(shell)renderTransfer(shell.transfer,state);
   const besideImage=document.querySelector('#artwork-transfer');
   if(besideImage&&(latestGenerated||!besideImage.hidden))renderTransfer(besideImage,state);
+  if(state.phase==='retrying'){for(const target of [shell?.transfer,besideImage].filter(Boolean)){const retry=node('button','重试同步');retry.type='button';retry.className='secondary';retry.onclick=()=>void prepare();target.append(retry);}}
  }
  async function refresh(){
   if(saving||uploading)return;active=true;const turn=++epoch,life=lifecycle;clearTimeout(timer);if(!getUser()){reset();return;}
@@ -211,7 +214,7 @@ export function setupRitual({request,fetchImage,getUser}){
   if(preparing||!getUser())return false;
   let status;try{status=await request('/api/account/ritual');updateTransfer(status);}catch{updateTransfer(null,{phase:'unavailable',title:'暂时无法准备传输',detail:'请检查网络，稍后重新查看同步状态。',step:0,percent:null});return false;}
   if(!status.syncConfigured)return false;
-  ensureShell();host.hidden=false;preparing=true;shell.status.textContent='正在检查两日画作；缺少次日画作时会为你补齐。';
+  ensureShell();host.hidden=false;preparing=true;prepareFailure=null;updateTransfer(null,{phase:'preparing',title:'正在准备次日画作',detail:'今日画作已完成；需补齐明日画作后，才能更新两日画屏内容并开始 Wi-Fi 传输。',step:0,percent:null});shell.status.textContent='正在检查两日画作；缺少次日画作时会为你补齐。';
   if(status.plan?.contentMode==='photo'){
    shell.status.textContent='当前使用你的照片计划，不会自动替换为次日祈福画。需要祈福模式时请在上方手动切换。';
    preparing=false;return false;
@@ -226,7 +229,7 @@ export function setupRitual({request,fetchImage,getUser}){
    await refresh();
    shell.status.textContent='两日祈福内容已提交后台；设备联网领取并回报后才能显示设备实际画面。';
    return true;
-  }catch(error){if(shell)shell.status.textContent='两日内容准备暂未完成：'+error.message;updateTransfer(null,{phase:'retrying',title:'画屏内容准备暂未完成',detail:error.message,step:0,percent:null});return false;}
+  }catch(error){if(shell)shell.status.textContent='两日内容准备暂未完成：'+error.message;prepareFailure={phase:'retrying',title:'画屏内容准备暂未完成',detail:error.message,step:0,percent:null};updateTransfer(null,prepareFailure);return false;}
   finally{preparing=false;}
  }
  async function bindDevice(deviceId){

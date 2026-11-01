@@ -1,7 +1,7 @@
-import {readAPIResponse} from './api-response.js?v=20261030-timeout-v1';
+import {readAPIResponse} from './api-response.js?v=20261101-safe-bottom-v3';
 import {setupNetwork} from './ark-network.js?v=20261030-frame-film-parity-v5';
-import './art-style-ui.js?v=20261101-portrait-v1';
-import {setupAccounts} from './account-ui.js?v=20261031-editorial-v2';
+import './art-style-ui.js?v=20261101-safe-bottom-v3';
+import {setupAccounts} from './account-ui.js?v=20261101-safe-bottom-v3';
 import {WISH_GROUPS} from './wishes.js';
 import {normalizeBirthDate} from './date-input.js?v=20261017-solar';
 import {setupBirthInputs} from './birth-picker.js?v=20261017-solar';

@@ -1,4 +1,4 @@
-import {setupRitual} from './ritual-ui.js?v=20261031-editorial-v2';
+import {setupRitual} from './ritual-ui.js?v=20261101-safe-bottom-v3';
 import {setupDevices} from './device-ui.js';
 import {setupCustomPhoto} from './custom-photo.js?v=20261030-photo-rotation-v1';
 export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUserChange,onOpenArtwork,isBusy}){
