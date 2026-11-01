@@ -1,1 +1,3 @@
 .device{display:flex;justify-content:space-between;align-items:center;background:#eef0e5;border:1rpx solid #ccd1bd;padding:18rpx;margin-top:16rpx;font-size:24rpx;line-height:1.6;text-align:left}.draft{width:100%;height:340rpx;margin-top:24rpx;background:#f6f1e7}.photo-canvas{position:fixed;left:-2000px;top:0;width:1440px;height:1440px;pointer-events:none}
+
+.sync-steps{display:flex;flex-wrap:wrap;gap:16rpx;margin:20rpx 0;color:#888}.sync-steps .complete{color:#415B48;font-weight:600}.sync-panel .note{display:block;margin:12rpx 0}

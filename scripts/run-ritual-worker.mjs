@@ -48,7 +48,7 @@ do{
     if(pair.every(Boolean)){records=pair;startsAt=previous+'T01:00:00+08:00';}
    }
    const personalized=records.map((record,index)=>personalizeActionOptions(record.mapping)[index]);
-   const manifest={...plan,actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-five-v3':'prayer-overlay-five-v3',artworkIds:records.map(r=>r.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((r,i)=>({date:r.date,artworkId:r.id,actions:personalized[i]}))};
+   const manifest={...plan,actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-balanced-v4':'prayer-overlay-balanced-v4',artworkIds:records.map(r=>r.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((r,i)=>({date:r.date,artworkId:r.id,actions:personalized[i]}))};
    const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),state=await repo.get('ritual-build/'+id);
    if(ritualPublication(state)?.signature===signature){if(state.status!=='published')await repo.put('ritual-build/'+id,{...state,status:'published',nextAttemptAt:null});continue;}
    tmp=await mkdtemp(path.join(os.tmpdir(),'ritual-compile-'));

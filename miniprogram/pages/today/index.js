@@ -1,3 +1,4 @@
+const {transferStatus}=require('../../utils/transfer-status');
 const api=require('../../utils/api');
 const {answers}=require('../../utils/content');
 const {daysFor,progress}=require('../../utils/ritual-view');
@@ -26,7 +27,7 @@ Page({
    const cachedImage=artworkPath&&artworkPath===this.artworkImageKey?this.data.image:'';
    const currentAnswer=status.answer||this.manualAnswer||null;
    if(!artworkPath)this.artworkImageKey='';
-   this.setData({user,sample:false,status,days,progress:progress(status),image:cachedImage,loading:false,readings:reading.sections||[],intro:reading.intro||mapping.overview||'',overview:mapping.overview||'',elements:Array.isArray(mapping.elements)?mapping.elements:[],blessing:mapping.blessing||'',artworkTitle:(status.artwork&&status.artwork.title)||'',currentAnswer,answerNo:answerNumber(currentAnswer),answerSource:status.answer?'device':this.manualAnswer?'phone':''});
+   this.setData({user,sample:false,status,days,syncState:transferStatus(status),progress:progress(status),image:cachedImage,loading:false,readings:reading.sections||[],intro:reading.intro||mapping.overview||'',overview:mapping.overview||'',elements:Array.isArray(mapping.elements)?mapping.elements:[],blessing:mapping.blessing||'',artworkTitle:(status.artwork&&status.artwork.title)||'',currentAnswer,answerNo:answerNumber(currentAnswer),answerSource:status.answer?'device':this.manualAnswer?'phone':''});
    let previewsChanged=false;
    for(const day of days){
     if(!day.image||day.preview)continue;
@@ -37,7 +38,7 @@ Page({
     try{const image=await api.image(artworkPath);if(!this.active||run!==this.run)return;this.artworkImageKey=artworkPath;this.setData({image});}catch{}
    }
   }catch(e){if(this.active&&run===this.run){api.error(this,e);this.setData({loading:false});}}
-  finally{if(this.active&&run===this.run&&getApp().globalData.user)this.timer=setTimeout(()=>this.refresh(),60000);}
+  finally{if(this.active&&run===this.run&&getApp().globalData.user)this.timer=setTimeout(()=>this.refresh(),this.data.syncState?.phase==='rendered'?30000:5000);}
  },
  drawAnswer(){
   if(this.data.drawing)return;

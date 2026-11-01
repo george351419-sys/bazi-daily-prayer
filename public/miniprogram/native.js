@@ -1332,6 +1332,46 @@
     }
   });
 
+  // miniprogram/utils/transfer-status.js
+  var require_transfer_status = __commonJS({
+    "miniprogram/utils/transfer-status.js"(exports, module) {
+      function transferStatus(result = {}, artworkId = null) {
+        const state = (phase, title, detail, step = 0, percent = null) => ({ phase, title, detail, step, percent });
+        if (result.syncConfigured === void 0) return state("checking", "\u6B63\u5728\u786E\u8BA4\u753B\u5C4F\u8FDE\u63A5", "\u753B\u4F5C\u5DF2\u5B8C\u6210\uFF0C\u6B63\u5728\u8BFB\u53D6\u540C\u6B65\u72B6\u6001\u3002");
+        if (!result.syncConfigured) return state("unbound", "\u753B\u4F5C\u5DF2\u5B8C\u6210 \xB7 \u8BF7\u5148\u7ED1\u5B9A\u753B\u5C4F", "\u5728\u300C\u94FE\u63A5\u795E\u7269\u300D\u8FDE\u63A5\u5E76\u7ED1\u5B9A\u8BBE\u5907\u540E\uFF0C\u5373\u53EF\u540C\u6B65\u753B\u9762\u3002");
+        if (result.plan?.contentMode === "photo") return state("photo", "\u5F53\u524D\u753B\u5C4F\u4F7F\u7528\u81EA\u5B9A\u4E49\u7167\u7247", "\u82E5\u8981\u663E\u793A\u65B0\u7948\u798F\u753B\uFF0C\u8BF7\u5728\u300C\u81EA\u5B9A\u4E49\u300D\u5207\u6362\u4E3A\u7948\u798F\u56FE\u5E76\u4FDD\u5B58\u3002");
+        if (artworkId && !result.plan?.artworkIds?.includes(artworkId)) return state("preparing", "\u6B63\u5728\u51C6\u5907\u8FD9\u5E45\u753B\u7684\u540C\u6B65\u5185\u5BB9", "\u6B63\u5728\u5C06\u65B0\u753B\u4F5C\u52A0\u5165\u4E24\u65E5\u753B\u5C4F\u8BA1\u5212\u3002");
+        if (result.build?.status === "retrying") return state("retrying", "\u5185\u5BB9\u51C6\u5907\u6682\u672A\u6210\u529F \xB7 \u540E\u53F0\u6B63\u5728\u91CD\u8BD5", "\u753B\u5C4F\u4F1A\u4FDD\u7559\u5DF2\u4E0B\u8F7D\u7684\u5185\u5BB9\uFF0C\u6062\u590D\u540E\u7EE7\u7EED\u540C\u6B65\u3002");
+        if (result.pendingUpdate || result.build?.status !== "published") return state("preparing", "\u6B63\u5728\u51C6\u5907\u753B\u5C4F\u5185\u5BB9", "\u6B63\u5728\u51C6\u5907\u4E24\u65E5\u753B\u4F5C\u4E0E\u5FAE\u884C\u52A8\uFF0C\u5B8C\u6210\u540E\u5373\u53EF\u4F9B\u753B\u5C4F\u9886\u53D6\u3002");
+        const report = result.deviceReport;
+        if (report?.firmwareUpdateRequired) return state("firmware", "\u8BF7\u5148\u66F4\u65B0\u753B\u5C4F\u56FA\u4EF6", "\u5F53\u524D\u56FA\u4EF6\u4E0D\u80FD\u63A5\u6536\u8FD9\u4EFD\u5185\u5BB9\uFF0C\u8BF7\u5230\u300C\u94FE\u63A5\u795E\u7269\u300D\u66F4\u65B0\u56FA\u4EF6\u3002", 1);
+        if (!report) return state("waiting", "\u5185\u5BB9\u5DF2\u5C31\u7EEA \xB7 \u7B49\u5F85\u8BBE\u5907\u8054\u7F51\u68C0\u67E5", "\u8BF7\u5524\u9192\u753B\u5C4F\u5E76\u8FDE\u63A5 Wi-Fi\uFF0C\u6216\u5728\u84DD\u7259\u8FDE\u63A5\u540E\u70B9\u51FB\u201C\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\u201D\u3002\u84DD\u7259\u8FDE\u63A5\u6210\u529F\u4E0D\u7B49\u4E8E\u65B0\u5185\u5BB9\u5DF2\u4E0B\u8F7D\u3002", 1);
+        const knownTarget = !!result.build?.sha256;
+        const matchesTarget = !knownTarget || report.targetSha === result.build.sha256;
+        const samePackage = knownTarget && matchesTarget;
+        const fresh = !report.stale && !(Date.parse(report.lastSeen) < Date.parse(result.build?.publishedAt));
+        if (samePackage && report.renderedCurrent && report.renderReport) return state("rendered", "\u5F53\u524D\u5185\u5BB9\u5DF2\u56DE\u62A5\u5237\u65B0", "\u5F53\u524D\u5305\u5DF2\u6267\u884C\u753B\u9762\u5237\u65B0\uFF1B\u5982\u4F60\u505C\u5728 Home\uFF0C\u53EF\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002\u8BBE\u5907\u4F11\u7720\u4E0D\u64A4\u9500\u8FD9\u6B21\u6210\u529F\u8BB0\u5F55\u3002", 4);
+        if (samePackage && report.stored) return state("stored", "\u5185\u5BB9\u5DF2\u4FDD\u5B58 \xB7 \u73B0\u5728\u53EF\u4EE5\u8FDB\u5165\u753B\u9762", "\u8BF7\u5728\u753B\u5C4F Home \u9009\u62E9\u201C\u753B\u9762\u201D\uFF0C\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002\u540E\u53F0\u4E0B\u8F7D\u4E0D\u4F1A\u6253\u65AD Home \u6216\u8BBE\u7F6E\u9875\uFF1B\u6B63\u5728\u7B49\u5F85\u8BE5\u5185\u5BB9\u7684\u5237\u65B0\u56DE\u6267\u3002", 3);
+        if (!fresh) return state("waiting", "\u5185\u5BB9\u5DF2\u5C31\u7EEA \xB7 \u7B49\u5F85\u6700\u65B0\u8BBE\u5907\u68C0\u67E5", "\u5C1A\u65E0\u5F53\u524D\u5185\u5BB9\u7684\u8FD1\u671F\u56DE\u6267\u3002\u8BF7\u5524\u9192\u753B\u5C4F\uFF0C\u4FDD\u6301 Wi-Fi \u8054\u7F51\uFF0C\u5E76\u5728\u84DD\u7259\u8FDE\u63A5\u540E\u70B9\u51FB\u201C\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\u201D\uFF1B\u65E0\u9700\u91CD\u65B0\u751F\u6210\u753B\u4F5C\u3002", 1);
+        if (matchesTarget && report.stored && !report.showingPrevious && report.renderReport) return state("rendered", "\u4F20\u8F93\u5B8C\u6210 \xB7 \u753B\u5C4F\u5DF2\u56DE\u62A5\u5237\u65B0", "\u8BBE\u5907\u5DF2\u56DE\u62A5\u5237\u65B0\uFF1BHome \u4E2D\u53EF\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u786E\u8BA4\u952E\u67E5\u770B\u3002", 4);
+        if (matchesTarget && report.stored) return state("stored", "\u5185\u5BB9\u5DF2\u4FDD\u5B58 \xB7 \u73B0\u5728\u53EF\u4EE5\u8FDB\u5165\u753B\u9762", "\u8BF7\u5728\u753B\u5C4F Home \u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\uFF0C\u7F51\u9875\u6B63\u5728\u7B49\u5F85\u5237\u65B0\u56DE\u6267\u3002", 3);
+        if (!matchesTarget) return state("confirming", "\u753B\u5C4F\u5DF2\u8054\u7F51 \xB7 \u6B63\u5728\u786E\u8BA4\u5F53\u524D\u5185\u5BB9", "\u6700\u8FD1\u56DE\u62A5\u5BF9\u5E94\u5176\u4ED6\u5185\u5BB9\u5305\uFF0C\u6B63\u5728\u7B49\u5F85\u5F53\u524D\u5185\u5BB9\u7684\u4E0B\u8F7D\u6216\u5237\u65B0\u56DE\u6267\u3002", 1);
+        if (report.downloadState === 2) return state("confirming", "\u8BBE\u5907\u5DF2\u56DE\u62A5\u4E0B\u8F7D\u5B8C\u6210 \xB7 \u7B49\u5F85\u5185\u5BB9\u6838\u9A8C", "\u6B63\u5728\u786E\u8BA4\u5F53\u524D\u5185\u5BB9\u5305\u7684\u4FDD\u5B58\u4E0E\u5237\u65B0\u7ED3\u679C\uFF1B\u5982\u753B\u5C4F\u5DF2\u663E\u793A\u65B0\u753B\uFF0C\u65E0\u9700\u91CD\u590D\u63A8\u9001\u3002", 2);
+        if (report.downloadState === 3) return state("retrying", "\u4F20\u8F93\u6682\u672A\u6210\u529F \xB7 \u7B49\u5F85\u91CD\u8BD5", "\u8BF7\u68C0\u67E5\u753B\u5C4F Wi-Fi \u5E76\u4FDD\u6301\u5F00\u673A\uFF0C\u8BBE\u5907\u5C06\u91CD\u65B0\u9886\u53D6\u5185\u5BB9\u3002", 1);
+        if (report.downloadState === 1) {
+          const percent = Number.isFinite(report.downloadProgress) ? Math.max(0, Math.min(100, report.downloadProgress)) : null;
+          return state("downloading", "\u6B63\u5728\u4F20\u8F93\u5230\u753B\u5C4F" + (percent === null ? "" : " \xB7 " + percent + "%"), "\u8FD9\u662F\u8BBE\u5907\u6700\u8FD1\u56DE\u62A5\u7684\u4E0B\u8F7D\u8FDB\u5EA6\uFF0C\u8BF7\u4FDD\u6301\u753B\u5C4F\u8054\u7F51\u3002", 2, percent);
+        }
+        return state("confirming", "\u753B\u5C4F\u5DF2\u8054\u7F51 \xB7 \u6B63\u5728\u786E\u8BA4\u540C\u6B65\u7ED3\u679C", "\u4E91\u7AEF\u5185\u5BB9\u5DF2\u5C31\u7EEA\uFF0C\u4F46\u5F53\u524D\u5185\u5BB9\u5305\u7684\u4E0B\u8F7D\u6216\u5237\u65B0\u56DE\u6267\u5C1A\u4E0D\u5B8C\u6574\uFF1B\u5982\u753B\u5C4F\u5DF2\u663E\u793A\u65B0\u753B\uFF0C\u65E0\u9700\u91CD\u590D\u63A8\u9001\u3002", 1);
+      }
+      function receiptTime(value) {
+        const stamp = Date.parse(value);
+        return Number.isFinite(stamp) ? new Date(stamp + 8 * 36e5).toISOString().slice(0, 19).replace("T", " ") : "";
+      }
+      module.exports = { transferStatus, receiptTime };
+    }
+  });
+
   // miniprogram/utils/api.js
   var require_api = __commonJS({
     "miniprogram/utils/api.js"(exports, module) {
@@ -1682,6 +1722,11 @@
             this.busy = false;
           }
         }
+        async syncNow() {
+          if (!this.id) throw new Error("\u8BF7\u5148\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u3002");
+          await this.write(56, [], this.epoch);
+          this.state("\u5DF2\u8BF7\u6C42\u68C0\u67E5\u4E91\u7AEF\u66F4\u65B0\uFF1B\u7B49\u5F85\u5185\u5BB9\u4FDD\u5B58\u56DE\u6267\u540E\uFF0C\u53EF\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u786E\u8BA4\u952E\u8FDB\u5165\u3002\u9700\u8981 ritual.6 \u56FA\u4EF6\u3002", true);
+        }
         async disconnect() {
           this.epoch++;
           await this.stopScan();
@@ -1734,6 +1779,7 @@
   // miniprogram/pages/network/index.js
   var require_network = __commonJS({
     "miniprogram/pages/network/index.js"() {
+      var { transferStatus, receiptTime } = require_transfer_status();
       var api = require_api();
       var { preparePhoto, authorize } = require_photos();
       var { ArkBLE } = require_ble();
@@ -1757,6 +1803,7 @@
           if (this.data.user) this.load();
         },
         onHide() {
+          clearTimeout(this.syncTimer);
           this.active = false;
           this.run++;
           this.photo = null;
@@ -1766,6 +1813,32 @@
         onUnload() {
           this.onHide();
         },
+        async pollSync() {
+          clearTimeout(this.syncTimer);
+          if (!this.active || !this.data.user) return;
+          const run = this.run;
+          try {
+            const status = await api.request("/api/account/ritual");
+            if (!this.active || run !== this.run) return;
+            this.setData({ status, syncState: transferStatus(status), syncLastSeen: receiptTime(status.deviceReport?.lastSeen) });
+          } catch (e) {
+            if (this.active && run === this.run) this.setData({ syncState: { phase: "unavailable", title: "\u540C\u6B65\u72B6\u6001\u6682\u4E0D\u53EF\u7528", detail: "\u6B63\u5728\u91CD\u65B0\u8BFB\u53D6\u8BBE\u5907\u56DE\u62A5\uFF0C\u8BF7\u7A0D\u5019\u3002", step: 0 } });
+          }
+          if (this.active && run === this.run) this.syncTimer = setTimeout(() => this.pollSync(), this.data.syncState?.phase === "rendered" ? 3e4 : 5e3);
+        },
+        async syncNow() {
+          if (!this.data.paired) {
+            api.error(this, new Error("\u8BF7\u5148\u8FDE\u63A5\u9644\u8FD1\u753B\u5C4F\u84DD\u7259\u3002"));
+            return;
+          }
+          try {
+            await this.ble.syncNow();
+            this.setData({ message: "\u5DF2\u8BF7\u6C42\u753B\u5C4F\u91CD\u65B0\u68C0\u67E5\u5185\u5BB9\u3002\u4E0B\u8F7D\u6210\u529F\u4E0D\u7B49\u4E8E\u5DF2\u663E\u793A\uFF0C\u8BF7\u770B\u4E0B\u65B9\u540C\u6B65\u9636\u6BB5\u3002" });
+            await this.pollSync();
+          } catch (e) {
+            api.error(this, e);
+          }
+        },
         async load() {
           const run = this.run;
           try {
@@ -1774,6 +1847,7 @@
             const s = results[0], plan2 = s.plan;
             this.setData({ status: s, syncConfigured: s.syncConfigured === true, catalog: results[1].items.concat((s.plannedDays || []).filter((x) => !results[1].items.some((y) => y.id === x.artworkId)).map((x) => Object.assign({}, x, { id: x.artworkId, status: "complete", image: "/api/account/artworks/" + x.artworkId + "/image" }))), cursor: results[1].cursor, contentMode: plan2 ? plan2.contentMode : "prayer", showActions: plan2 ? plan2.showActions : true, mode: plan2 ? plan2.mode : "test" });
             this.populate(plan2 && plan2.artworkIds);
+            void this.pollSync();
           } catch (e) {
             if (this.active && run === this.run) api.error(this, e);
           }
@@ -1910,6 +1984,7 @@
             } catch (e) {
               message = "\u753B\u5C4F\u5DF2\u7ED1\u5B9A\uFF1B\u4E24\u65E5\u5185\u5BB9\u6682\u672A\u5C31\u7EEA\uFF1A" + e.message;
             }
+            if (this.data.paired) await this.ble.syncNow();
             this.setData({ message });
           } catch (e) {
             api.error(this, e);
@@ -2184,14 +2259,8 @@
         return (status.days && status.days.length ? status.days : [{ title: "\u901A\u7528\u53C2\u8003", actions: status.actionGuide || [] }]).map((day, index) => Object.assign({}, day, { label: index ? "\u660E\u65E5" : "\u4ECA\u65E5", actions: (day.actions || []).map((action, i) => Object.assign({}, action, { key: index + "-" + i, range: String(action.hour).padStart(2, "0") + ":00\u2013" + String(Number(action.hour) + 2).padStart(2, "0") + ":00", options: [action].concat(action.alternatives || []) })) }));
       }
       function progress(status) {
-        const report = status.deviceReport;
-        if (status.deviceLinked && !status.syncConfigured) return "\u753B\u5C4F\u5DF2\u5173\u8054\uFF0C\u4F46\u5F53\u524D\u7531\u53E6\u4E00\u8D26\u6237\u4F7F\u7528\u3002\u8FDE\u63A5\u753B\u5C4F\u540E\u53EF\u5C06\u672C\u8D26\u6237\u8BBE\u4E3A\u5F53\u524D\u8D26\u6237\u3002";
-        if (!status.syncConfigured) return "\u5C1A\u672A\u7ED1\u5B9A\u753B\u5C4F\u3002\u8D26\u6237\u5185\u5BB9\u5DF2\u4FDD\u5B58\uFF0C\u7ED1\u5B9A\u540E\u624D\u4F1A\u7F16\u8BD1\u5E76\u4E0B\u53D1\u3002";
-        if (report && report.renderReport) return "\u8BBE\u5907\u9A71\u52A8\u5DF2\u56DE\u62A5\u4E0A\u5C4F\u8BF7\u6C42\uFF1B\u5B9E\u9645\u5C4F\u5E55\u6548\u679C\u4ECD\u9700\u9A8C\u6536\u3002";
-        if (report && report.stored) return "\u5185\u5BB9\u5DF2\u4FDD\u5B58\u5230\u8BBE\u5907\uFF0C\u7B49\u5F85\u4E0A\u5C4F\u56DE\u62A5\u3002";
-        if (status.build && status.build.status === "published") return "\u5185\u5BB9\u5DF2\u51C6\u5907\uFF0C\u7B49\u5F85\u8BBE\u5907\u8054\u7F51\u9886\u53D6\u3002";
-        if (status.build && status.build.status === "retrying") return "\u5185\u5BB9\u51C6\u5907\u6682\u672A\u6210\u529F\uFF0C\u540E\u53F0\u6B63\u5728\u91CD\u8BD5\u3002";
-        return "\u8BA1\u5212\u5DF2\u4FDD\u5B58\uFF0C\u7B49\u5F85\u5185\u5BB9\u51C6\u5907\u4E0E\u8BBE\u5907\u56DE\u6267\u3002";
+        const state = require_transfer_status().transferStatus(status);
+        return state.title + "\u3002" + state.detail;
       }
       function rotationIndex(startDate, count, now = Date.now()) {
         const size = Math.max(0, Number(count) || 0);
@@ -2208,6 +2277,7 @@
   // miniprogram/pages/today/index.js
   var require_today = __commonJS({
     "miniprogram/pages/today/index.js"() {
+      var { transferStatus } = require_transfer_status();
       var api = require_api();
       var { answers } = require_content();
       var { daysFor, progress } = require_ritual_view();
@@ -2260,7 +2330,7 @@
             const cachedImage = artworkPath && artworkPath === this.artworkImageKey ? this.data.image : "";
             const currentAnswer = status.answer || this.manualAnswer || null;
             if (!artworkPath) this.artworkImageKey = "";
-            this.setData({ user, sample: false, status, days, progress: progress(status), image: cachedImage, loading: false, readings: reading.sections || [], intro: reading.intro || mapping.overview || "", overview: mapping.overview || "", elements: Array.isArray(mapping.elements) ? mapping.elements : [], blessing: mapping.blessing || "", artworkTitle: status.artwork && status.artwork.title || "", currentAnswer, answerNo: answerNumber(currentAnswer), answerSource: status.answer ? "device" : this.manualAnswer ? "phone" : "" });
+            this.setData({ user, sample: false, status, days, syncState: transferStatus(status), progress: progress(status), image: cachedImage, loading: false, readings: reading.sections || [], intro: reading.intro || mapping.overview || "", overview: mapping.overview || "", elements: Array.isArray(mapping.elements) ? mapping.elements : [], blessing: mapping.blessing || "", artworkTitle: status.artwork && status.artwork.title || "", currentAnswer, answerNo: answerNumber(currentAnswer), answerSource: status.answer ? "device" : this.manualAnswer ? "phone" : "" });
             let previewsChanged = false;
             for (const day of days) {
               if (!day.image || day.preview) continue;
@@ -2289,7 +2359,7 @@
               this.setData({ loading: false });
             }
           } finally {
-            if (this.active && run === this.run && getApp().globalData.user) this.timer = setTimeout(() => this.refresh(), 6e4);
+            if (this.active && run === this.run && getApp().globalData.user) this.timer = setTimeout(() => this.refresh(), this.data.syncState?.phase === "rendered" ? 3e4 : 5e3);
           }
         },
         drawAnswer() {
@@ -2324,6 +2394,7 @@
   // miniprogram/pages/screen/index.js
   var require_screen = __commonJS({
     "miniprogram/pages/screen/index.js"() {
+      var { transferStatus, receiptTime } = require_transfer_status();
       var api = require_api();
       var { preparePhotos, authorize } = require_photos();
       var { ArkBLE } = require_ble();
@@ -2371,6 +2442,7 @@
           if (this.data.user) await this.load();
         },
         onHide() {
+          clearTimeout(this.syncTimer);
           this.active = false;
           this.run++;
           this.setData({ wifiPassword: "", paired: false, connectedDeviceId: "", bleDevices: [], bleText: "\u84DD\u7259\u672A\u8FDE\u63A5\u3002" });
@@ -2378,6 +2450,32 @@
         },
         onUnload() {
           this.onHide();
+        },
+        async pollSync() {
+          clearTimeout(this.syncTimer);
+          if (!this.active || !this.data.user) return;
+          const run = this.run;
+          try {
+            const status = await api.request("/api/account/ritual");
+            if (!this.active || run !== this.run) return;
+            this.setData({ status, syncState: transferStatus(status), syncLastSeen: receiptTime(status.deviceReport?.lastSeen) });
+          } catch (e) {
+            if (this.active && run === this.run) this.setData({ syncState: { phase: "unavailable", title: "\u540C\u6B65\u72B6\u6001\u6682\u4E0D\u53EF\u7528", detail: "\u6B63\u5728\u91CD\u65B0\u8BFB\u53D6\u8BBE\u5907\u56DE\u62A5\uFF0C\u8BF7\u7A0D\u5019\u3002", step: 0 } });
+          }
+          if (this.active && run === this.run) this.syncTimer = setTimeout(() => this.pollSync(), this.data.syncState?.phase === "rendered" ? 3e4 : 5e3);
+        },
+        async syncNow() {
+          if (!this.data.paired) {
+            api.error(this, new Error("\u8BF7\u5148\u8FDE\u63A5\u9644\u8FD1\u753B\u5C4F\u84DD\u7259\u3002"));
+            return;
+          }
+          try {
+            await this.ble.syncNow();
+            this.setData({ message: "\u5DF2\u8BF7\u6C42\u753B\u5C4F\u91CD\u65B0\u68C0\u67E5\u5185\u5BB9\u3002\u4E0B\u8F7D\u6210\u529F\u4E0D\u7B49\u4E8E\u5DF2\u663E\u793A\uFF0C\u8BF7\u770B\u4E0B\u65B9\u540C\u6B65\u9636\u6BB5\u3002" });
+            await this.pollSync();
+          } catch (e) {
+            api.error(this, e);
+          }
         },
         async load() {
           const run = this.run;
@@ -2392,6 +2490,7 @@
             this.setData({ status, syncConfigured: status.syncConfigured === true, catalog: catalog2, cursor: results[1].cursor || null, photoMode: plan2 && plan2.contentMode === "photo", showActions: plan2 ? plan2.showActions !== false : true, rotationPosition });
             this.rebuildPhotos();
             await this.hydratePhotos(run);
+            void this.pollSync();
           } catch (e) {
             if (this.active && run === this.run) api.error(this, e);
           }
@@ -2604,9 +2703,19 @@
 
   // mini-review-entry.js
   window.MINI_START_TAB = "network";
-  window.MINI_TEMPLATES = { "network": { "wxml": `<view class="page"><text class="kicker">CONNECT YOUR COMPANION / 01</text><text class="title">\u94FE\u63A5\u795E\u7269</text><text class="subtitle">\u4ECE\u4E00\u6B21\u8FDE\u63A5\u5F00\u59CB\uFF0C\u8BA9\u597D\u610F\u6BCF\u5929\u62B5\u8FBE\u3002</text><view class="error">{{error}}</view><view wx:if="{{message}}" class="notice">{{message}}</view><view class="paper"><text class="kicker">01 / \u8FDE\u63A5\u753B\u5C4F</text><text class="section-title">\u5148\u8BA9\u5B83\u8FDE\u4E0A\u7F51\u7EDC</text><text class="note">\u5524\u9192\u753B\u5C4F\uFF0C\u5F00\u542F\u624B\u673A\u84DD\u7259\u3002\u8BF7\u9009\u540D\u79F0\u4EE5 FRAMEFILMARK \u5F00\u5934\u7684\u8BBE\u5907\u3002</text><button class="secondary spaced" bindtap="scan" disabled="{{busy}}">\u641C\u7D22\u9644\u8FD1\u753B\u5C4F</button><button class="device" wx:for="{{bleDevices}}" wx:key="id" data-id="{{item.id}}" bindtap="connect" disabled="{{busy}}"><text>{{item.name}}</text><text class="muted">\u8FDE\u63A5</text></button><text class="note">{{bleText}}</text><view wx:if="{{paired}}"><text class="label">2.4 GHz Wi-Fi \u540D\u79F0</text><input class="field" value="{{ssid}}" data-field="ssid" bindinput="input" maxlength="32"/><text class="label">Wi-Fi \u5BC6\u7801</text><input class="field" value="{{wifiPassword}}" data-field="wifiPassword" bindinput="input" password maxlength="63"/><text class="note">\u5BC6\u7801\u4EC5\u7ECF\u84DD\u7259\u53D1\u7ED9\u6240\u9009\u753B\u5C4F\uFF0C\u4E0D\u4E0A\u4F20\u540E\u53F0\u3002</text><button class="primary spaced" bindtap="wifi" disabled="{{busy}}" loading="{{busy}}">\u53D1\u9001 Wi-Fi \u8BBE\u7F6E</button><button class="text-button" bindtap="disconnect" disabled="{{busy}}">\u65AD\u5F00\u84DD\u7259</button></view></view>
+  window.MINI_TEMPLATES = { "network": { "wxml": `<view class="page">
+ <view wx:if="{{user&&syncState}}" class="paper sync-panel">
+  <text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
+  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">\u2460 \u5185\u5BB9\u5C31\u7EEA</text><text class="{{syncState.step>=2?'complete':''}}">\u2461 \u4E0B\u8F7D\u4E2D</text><text class="{{syncState.step>=3?'complete':''}}">\u2462 \u5DF2\u4FDD\u5B58</text><text class="{{syncState.step>=4?'complete':''}}">\u2463 \u5DF2\u5237\u65B0</text></view>
+  <text class="note">{{syncState.step>=3?'\u73B0\u5728\u53EF\u5728\u753B\u5C4F Home \u9009\u62E9\u201C\u753B\u9762\u201D\uFF0C\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002':'\u8BF7\u7B49\u5F85\u201C\u5185\u5BB9\u5DF2\u4FDD\u5B58\u201D\u540E\uFF0C\u518D\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u786E\u8BA4\u952E\u67E5\u770B\u65B0\u753B\u3002'}}</text>
+  <text wx:if="{{status.deviceReport.firmwareVersion}}" class="note">\u8FD0\u884C\u56FA\u4EF6\uFF1A{{status.deviceReport.firmwareVersion}}</text>
+  <text wx:if="{{status.deviceReport.lastSeen}}" class="note">\u6700\u8FD1\u8BBE\u5907\u56DE\u62A5\uFF1A{{syncLastSeen}}\uFF08\u5317\u4EAC\u65F6\u95F4\uFF09\u3002\u4F11\u7720\u65F6\u4E0D\u4F1A\u6301\u7EED\u8054\u7F51\u3002</text>
+  <button class="secondary spaced" bindtap="syncNow" disabled="{{!paired||busy}}">\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\uFF08\u9700\u84DD\u7259\uFF09</button>
+  <text class="note">\u6B64\u529F\u80FD\u9700\u8981 ritual.6 \u56FA\u4EF6\uFF1B\u65E7\u56FA\u4EF6\u53EF\u5230\u7F51\u9875\u201C\u94FE\u63A5\u795E\u7269\u201D\u901A\u8FC7 Wi-Fi \u5347\u7EA7\u3002\u8BE5\u6309\u94AE\u53EA\u68C0\u67E5\u5185\u5BB9\uFF0C\u4E0D\u4F1A\u9065\u63A7\u79BB\u5F00 Home\u3002</text>
+ </view>
+<text class="kicker">CONNECT YOUR COMPANION / 01</text><text class="title">\u94FE\u63A5\u795E\u7269</text><text class="subtitle">\u4ECE\u4E00\u6B21\u8FDE\u63A5\u5F00\u59CB\uFF0C\u8BA9\u597D\u610F\u6BCF\u5929\u62B5\u8FBE\u3002</text><view class="error">{{error}}</view><view wx:if="{{message}}" class="notice">{{message}}</view><view class="paper"><text class="kicker">01 / \u8FDE\u63A5\u753B\u5C4F</text><text class="section-title">\u5148\u8BA9\u5B83\u8FDE\u4E0A\u7F51\u7EDC</text><text class="note">\u5524\u9192\u753B\u5C4F\uFF0C\u5F00\u542F\u624B\u673A\u84DD\u7259\u3002\u8BF7\u9009\u540D\u79F0\u4EE5 FRAMEFILMARK \u5F00\u5934\u7684\u8BBE\u5907\u3002</text><button class="secondary spaced" bindtap="scan" disabled="{{busy}}">\u641C\u7D22\u9644\u8FD1\u753B\u5C4F</button><button class="device" wx:for="{{bleDevices}}" wx:key="id" data-id="{{item.id}}" bindtap="connect" disabled="{{busy}}"><text>{{item.name}}</text><text class="muted">\u8FDE\u63A5</text></button><text class="note">{{bleText}}</text><view wx:if="{{paired}}"><text class="label">2.4 GHz Wi-Fi \u540D\u79F0</text><input class="field" value="{{ssid}}" data-field="ssid" bindinput="input" maxlength="32"/><text class="label">Wi-Fi \u5BC6\u7801</text><input class="field" value="{{wifiPassword}}" data-field="wifiPassword" bindinput="input" password maxlength="63"/><text class="note">\u5BC6\u7801\u4EC5\u7ECF\u84DD\u7259\u53D1\u7ED9\u6240\u9009\u753B\u5C4F\uFF0C\u4E0D\u4E0A\u4F20\u540E\u53F0\u3002</text><button class="primary spaced" bindtap="wifi" disabled="{{busy}}" loading="{{busy}}">\u53D1\u9001 Wi-Fi \u8BBE\u7F6E</button><button class="text-button" bindtap="disconnect" disabled="{{busy}}">\u65AD\u5F00\u84DD\u7259</button></view></view>
 <view wx:if="{{user}}"><view class="paper"><text class="section-title">\u8D26\u6237\u4E0E\u753B\u5C4F</text><text wx:if="{{status.device}}" class="note">{{status.device.id}} \xB7 {{status.device.active?'\u5F53\u524D\u4F7F\u7528\u672C\u8D26\u6237':'\u5F53\u524D\u4F7F\u7528\u53E6\u4E00\u5173\u8054\u8D26\u6237'}}{{status.device.memberCount>1?' \xB7 \u5DF2\u5173\u8054 '+status.device.memberCount+' \u4E2A\u8D26\u6237':''}}</text><text wx:else class="note">\u5C1A\u672A\u7ED1\u5B9A\u8BBE\u5907</text><view wx:if="{{status.deviceLinked&&!status.device.active}}" class="notice">\u8FD9\u53F0\u753B\u5C4F\u5DF2\u5173\u8054\u591A\u4E2A\u8D26\u6237\u3002\u8FDE\u63A5\u9644\u8FD1\u753B\u5C4F\u540E\uFF0C\u53EF\u5C06\u5F53\u524D\u8D26\u6237\u8BBE\u4E3A\u5C4F\u5E55\u5185\u5BB9\u7684\u4E0B\u53D1\u8D26\u6237\u3002</view><button wx:if="{{paired && connectedDeviceId}}" class="secondary spaced" bindtap="bind" disabled="{{busy}}">{{status.device.id?'\u5C06\u672C\u8D26\u6237\u8BBE\u4E3A\u5F53\u524D\u753B\u5C4F\u8D26\u6237':'\u7ED1\u5B9A\u5F53\u524D\u84DD\u7259\u753B\u5C4F'}}</button><button wx:if="{{status.device.id}}" class="text-button" bindtap="unbind" disabled="{{busy}}">\u89E3\u9664\u672C\u8D26\u6237\u4E0E\u753B\u5C4F\u7684\u5173\u8054</button><text class="note">\u84DD\u7259\u8FDE\u63A5\u4E0D\u7B49\u4E8E\u8D26\u6237\u7ED1\u5B9A\u3002\u4E0D\u540C\u5FAE\u4FE1\u8D26\u6237\u53EF\u5173\u8054\u540C\u4E00\u53F0\u753B\u5C4F\uFF0C\u4F46\u540C\u4E00\u65F6\u95F4\u53EA\u4F7F\u7528\u4E00\u4E2A\u8D26\u6237\u7684\u5185\u5BB9\u3002</text></view></view><button wx:else class="primary" bindtap="login">\u5FAE\u4FE1\u767B\u5F55\u540E\u7ED1\u5B9A\u6211\u7684\u753B\u5C4F</button></view>
-`, "css": ".device{display:flex;justify-content:space-between;align-items:center;background:#eef0e5;border:calc(1 * var(--rpx)) solid #ccd1bd;padding:calc(18 * var(--rpx));margin-top:calc(16 * var(--rpx));font-size:calc(24 * var(--rpx));line-height:1.6;text-align:left}.draft{width:100%;height:calc(340 * var(--rpx));margin-top:calc(24 * var(--rpx));background:#f6f1e7}.photo-canvas{position:fixed;left:-2000px;top:0;width:1440px;height:1440px;pointer-events:none}\n" }, "mine": { "wxml": `<view class="page">
+`, "css": ".device{display:flex;justify-content:space-between;align-items:center;background:#eef0e5;border:calc(1 * var(--rpx)) solid #ccd1bd;padding:calc(18 * var(--rpx));margin-top:calc(16 * var(--rpx));font-size:calc(24 * var(--rpx));line-height:1.6;text-align:left}.draft{width:100%;height:calc(340 * var(--rpx));margin-top:calc(24 * var(--rpx));background:#f6f1e7}.photo-canvas{position:fixed;left:-2000px;top:0;width:1440px;height:1440px;pointer-events:none}\n\n.sync-steps{display:flex;flex-wrap:wrap;gap:calc(16 * var(--rpx));margin:calc(20 * var(--rpx)) 0;color:#888}.sync-steps .complete{color:#415B48;font-weight:600}.sync-panel .note{display:block;margin:calc(12 * var(--rpx)) 0}\n" }, "mine": { "wxml": `<view class="page">
  <text class="kicker">A WISH OF YOUR OWN / 02</text>
  <text class="title">\u8BB8\u613F\u6C60</text>
  <text class="subtitle">\u4F60\u7684\u751F\u8FB0\u3001\u5FC3\u613F\u548C\u753B\u518C\uFF0C\u90FD\u5728\u8FD9\u91CC\u3002</text>
@@ -2710,6 +2819,7 @@
  <view class="row"><text class="kicker">YOUR DAILY COMPANION / 03</text><text class="date">{{date}}</text></view>
  <text class="title">\u89E3\u8BFB\u966A\u4F34</text>
  <text class="subtitle">\u4E00\u5E45\u753B\uFF0C\u4E00\u4EF6\u5C0F\u4E8B\uFF0C\u4E00\u4E2A\u7B54\u6848\uFF0C\u90FD\u5728\u8FD9\u91CC\u8BFB\u5B8C\u3002</text>
+ <view wx:if="{{!sample&&syncState}}" class="paper"><text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text><text class="note">{{syncState.step>=3?'\u53EF\u4EE5\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\uFF0C\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002':'\u8BF7\u7B49\u5F85\u5185\u5BB9\u4FDD\u5B58\u540E\u518D\u8FDB\u5165\u753B\u5C4F\u753B\u9762\uFF1B\u65E0\u9700\u91CD\u590D\u751F\u6210\u3002'}}</text></view>
  <view class="loading" wx:if="{{loading}}">\u6B63\u5728\u8F7D\u5165\u4ECA\u65E5\u5185\u5BB9\u2026</view>
  <view class="error" role="alert">{{error}}</view>
 
@@ -2782,6 +2892,16 @@
  <view class="stack spaced"><button wx:if="{{sample}}" class="primary" bindtap="open">\u767B\u5F55\uFF0C\u5F00\u542F\u6211\u7684\u753B\u5C4F</button><button wx:else class="primary" bindtap="open">\u7BA1\u7406\u6211\u7684\u753B\u5C4F</button></view>
 </view>
 `, "css": '.artwork{position:relative;margin:calc(30 * var(--rpx)) 0 calc(16 * var(--rpx));aspect-ratio:2/3;height:calc((100vw - calc(72 * var(--rpx)))*1.5);max-height:calc(1000 * var(--rpx));background:#fffaf0;border:calc(1 * var(--rpx)) solid #ccc5b4;overflow:hidden}.painting{width:100%;height:100%;position:absolute}.art-title{position:absolute;top:calc(30 * var(--rpx));left:calc(28 * var(--rpx));writing-mode:vertical-rl;letter-spacing:calc(9 * var(--rpx));font-size:calc(25 * var(--rpx));font-family:"Songti SC",serif}.seal{position:absolute;right:calc(26 * var(--rpx));top:calc(30 * var(--rpx));width:calc(50 * var(--rpx));height:calc(56 * var(--rpx));border:calc(2 * var(--rpx)) solid #a44b3f;color:#a44b3f;text-align:center;line-height:calc(50 * var(--rpx));font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx))}.art-action{position:absolute;bottom:0;left:0;right:0;padding:calc(26 * var(--rpx)) calc(28 * var(--rpx)) calc(32 * var(--rpx));background:rgba(255,250,240,.95);border-top:calc(1 * var(--rpx)) solid #d2cdbf}.action-label{display:block;font-size:calc(22 * var(--rpx));letter-spacing:calc(3 * var(--rpx));color:#716e64}.action-text{font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx));display:block;margin-top:calc(8 * var(--rpx));line-height:1.5}.blank{padding:calc(180 * var(--rpx)) calc(34 * var(--rpx))}.photo .painting{background:#fffaf0}\n\n.day-previews{display:flex;gap:calc(20 * var(--rpx));margin:calc(28 * var(--rpx)) 0}.day-preview{width:calc(50% - calc(10 * var(--rpx)))}.day-preview image{width:100%;height:calc(260 * var(--rpx));background:#fffcf5}.action-item{border-top:calc(1 * var(--rpx)) solid #dcd7cb;padding:calc(18 * var(--rpx)) 0}.action-option{display:block;margin-top:calc(20 * var(--rpx))}\n' }, "screen": { "wxml": `<view class="page">
+ <view wx:if="{{user&&syncState}}" class="paper sync-panel">
+  <text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
+  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">\u2460 \u5185\u5BB9\u5C31\u7EEA</text><text class="{{syncState.step>=2?'complete':''}}">\u2461 \u4E0B\u8F7D\u4E2D</text><text class="{{syncState.step>=3?'complete':''}}">\u2462 \u5DF2\u4FDD\u5B58</text><text class="{{syncState.step>=4?'complete':''}}">\u2463 \u5DF2\u5237\u65B0</text></view>
+  <text class="note">{{syncState.step>=3?'\u73B0\u5728\u53EF\u5728\u753B\u5C4F Home \u9009\u62E9\u201C\u753B\u9762\u201D\uFF0C\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002':'\u8BF7\u7B49\u5F85\u201C\u5185\u5BB9\u5DF2\u4FDD\u5B58\u201D\u540E\uFF0C\u518D\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u786E\u8BA4\u952E\u67E5\u770B\u65B0\u753B\u3002'}}</text>
+  <text wx:if="{{status.deviceReport.firmwareVersion}}" class="note">\u8FD0\u884C\u56FA\u4EF6\uFF1A{{status.deviceReport.firmwareVersion}}</text>
+  <text wx:if="{{status.deviceReport.lastSeen}}" class="note">\u6700\u8FD1\u8BBE\u5907\u56DE\u62A5\uFF1A{{syncLastSeen}}\uFF08\u5317\u4EAC\u65F6\u95F4\uFF09\u3002\u4F11\u7720\u65F6\u4E0D\u4F1A\u6301\u7EED\u8054\u7F51\u3002</text>
+  <button class="secondary spaced" bindtap="syncNow" disabled="{{!paired||busy}}">\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\uFF08\u9700\u84DD\u7259\uFF09</button>
+  <text class="note">\u6B64\u529F\u80FD\u9700\u8981 ritual.6 \u56FA\u4EF6\uFF1B\u65E7\u56FA\u4EF6\u53EF\u5230\u7F51\u9875\u201C\u94FE\u63A5\u795E\u7269\u201D\u901A\u8FC7 Wi-Fi \u5347\u7EA7\u3002\u8BE5\u6309\u94AE\u53EA\u68C0\u67E5\u5185\u5BB9\uFF0C\u4E0D\u4F1A\u9065\u63A7\u79BB\u5F00 Home\u3002</text>
+ </view>
+
  <text class="kicker">MAKE IT YOURS / 04</text>
  <text class="title">\u81EA\u5B9A\u4E49</text>
  <text class="subtitle">\u5148\u4E0A\u4F20\u81EA\u5DF1\u7684\u56FE\u7247\uFF0C\u518D\u5B89\u6392\u6BCF\u5929\u51FA\u73B0\u7684\u90A3\u4E00\u5F20\u3002</text>
@@ -2860,7 +2980,7 @@
  </view>
  <canvas type="2d" id="photo-canvas" class="photo-canvas"></canvas>
 </view>
-`, "css": ".mode-banner{display:flex;align-items:center;justify-content:space-between;gap:calc(20 * var(--rpx));background:#e9ecdf;border:calc(1 * var(--rpx)) solid #b9c1b0;border-left:calc(8 * var(--rpx)) solid #415b48;padding:calc(24 * var(--rpx)) calc(26 * var(--rpx));margin:calc(28 * var(--rpx)) 0}.mode-banner .section-title{margin:calc(6 * var(--rpx)) 0 0}.photo-list{display:flex;flex-direction:column;gap:calc(16 * var(--rpx));margin-top:calc(24 * var(--rpx))}.photo-row{display:grid;grid-template-columns:calc(116 * var(--rpx)) minmax(0,1fr);gap:calc(16 * var(--rpx));padding:calc(16 * var(--rpx));border:calc(1 * var(--rpx)) solid #ddd8ca;background:#fff}.photo-thumb{position:relative;width:calc(116 * var(--rpx));height:calc(94 * var(--rpx));background:#e9e4d8}.photo-thumb image{width:100%;height:100%}.photo-thumb>text{position:absolute;left:calc(6 * var(--rpx));top:calc(6 * var(--rpx));min-width:calc(34 * var(--rpx));padding:calc(2 * var(--rpx)) calc(8 * var(--rpx));background:rgba(65,91,72,.92);color:#fffdf6;text-align:center;font-family:Georgia,serif;font-size:calc(21 * var(--rpx))}.photo-copy{min-width:0;display:flex;flex-direction:column;justify-content:center}.photo-name{display:block;font-size:calc(27 * var(--rpx));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.order-row{grid-column:1/-1;display:flex;justify-content:flex-end;gap:calc(12 * var(--rpx))}.mini-button{min-width:calc(68 * var(--rpx));min-height:calc(58 * var(--rpx));padding:calc(4 * var(--rpx)) calc(14 * var(--rpx));border:calc(1 * var(--rpx)) solid #cbc6b8;background:#fff;color:#415b48;font-size:calc(24 * var(--rpx));line-height:1.4}.mini-button.remove{min-width:calc(104 * var(--rpx))}.action-row{border-top:calc(1 * var(--rpx)) solid #e0dbcf;border-bottom:calc(1 * var(--rpx)) solid #e0dbcf;margin-top:calc(24 * var(--rpx))}.action-row .note{margin-top:calc(4 * var(--rpx))}.available-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(16 * var(--rpx));margin-top:calc(20 * var(--rpx))}.available-item{display:flex;flex-direction:column;align-items:stretch;gap:calc(10 * var(--rpx));padding:calc(12 * var(--rpx));border:calc(1 * var(--rpx)) solid #ddd8ca;background:#fff;text-align:left;color:#272e28}.available-item image{width:100%;aspect-ratio:4/3;background:#eee9de}.available-item>text{font-size:calc(24 * var(--rpx));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.available-item .add-label{color:#415b48;font-size:calc(22 * var(--rpx))}.action-buttons{margin-top:calc(30 * var(--rpx))}.photo-canvas{position:fixed;left:-2000px;top:0;width:1440px;height:1440px;pointer-events:none}\n" } };
+`, "css": ".mode-banner{display:flex;align-items:center;justify-content:space-between;gap:calc(20 * var(--rpx));background:#e9ecdf;border:calc(1 * var(--rpx)) solid #b9c1b0;border-left:calc(8 * var(--rpx)) solid #415b48;padding:calc(24 * var(--rpx)) calc(26 * var(--rpx));margin:calc(28 * var(--rpx)) 0}.mode-banner .section-title{margin:calc(6 * var(--rpx)) 0 0}.photo-list{display:flex;flex-direction:column;gap:calc(16 * var(--rpx));margin-top:calc(24 * var(--rpx))}.photo-row{display:grid;grid-template-columns:calc(116 * var(--rpx)) minmax(0,1fr);gap:calc(16 * var(--rpx));padding:calc(16 * var(--rpx));border:calc(1 * var(--rpx)) solid #ddd8ca;background:#fff}.photo-thumb{position:relative;width:calc(116 * var(--rpx));height:calc(94 * var(--rpx));background:#e9e4d8}.photo-thumb image{width:100%;height:100%}.photo-thumb>text{position:absolute;left:calc(6 * var(--rpx));top:calc(6 * var(--rpx));min-width:calc(34 * var(--rpx));padding:calc(2 * var(--rpx)) calc(8 * var(--rpx));background:rgba(65,91,72,.92);color:#fffdf6;text-align:center;font-family:Georgia,serif;font-size:calc(21 * var(--rpx))}.photo-copy{min-width:0;display:flex;flex-direction:column;justify-content:center}.photo-name{display:block;font-size:calc(27 * var(--rpx));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.order-row{grid-column:1/-1;display:flex;justify-content:flex-end;gap:calc(12 * var(--rpx))}.mini-button{min-width:calc(68 * var(--rpx));min-height:calc(58 * var(--rpx));padding:calc(4 * var(--rpx)) calc(14 * var(--rpx));border:calc(1 * var(--rpx)) solid #cbc6b8;background:#fff;color:#415b48;font-size:calc(24 * var(--rpx));line-height:1.4}.mini-button.remove{min-width:calc(104 * var(--rpx))}.action-row{border-top:calc(1 * var(--rpx)) solid #e0dbcf;border-bottom:calc(1 * var(--rpx)) solid #e0dbcf;margin-top:calc(24 * var(--rpx))}.action-row .note{margin-top:calc(4 * var(--rpx))}.available-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(16 * var(--rpx));margin-top:calc(20 * var(--rpx))}.available-item{display:flex;flex-direction:column;align-items:stretch;gap:calc(10 * var(--rpx));padding:calc(12 * var(--rpx));border:calc(1 * var(--rpx)) solid #ddd8ca;background:#fff;text-align:left;color:#272e28}.available-item image{width:100%;aspect-ratio:4/3;background:#eee9de}.available-item>text{font-size:calc(24 * var(--rpx));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.available-item .add-label{color:#415b48;font-size:calc(22 * var(--rpx))}.action-buttons{margin-top:calc(30 * var(--rpx))}.photo-canvas{position:fixed;left:-2000px;top:0;width:1440px;height:1440px;pointer-events:none}\n\n.sync-steps{display:flex;flex-wrap:wrap;gap:calc(16 * var(--rpx));margin:calc(20 * var(--rpx)) 0;color:#888}.sync-steps .complete{color:#415B48;font-weight:600}.sync-panel .note{display:block;margin:calc(12 * var(--rpx)) 0}\n" } };
   window.MINI_WISHES = [{ "name": "\u8D22\u8FD0\u4E30\u8DB3", "items": [{ "id": "W01", "label": "\u4E00\u591C\u66B4\u5BCC" }, { "id": "W02", "label": "\u8D22\u6E90\u5E7F\u8FDB" }, { "id": "W03", "label": "\u751F\u610F\u5174\u65FA" }, { "id": "W04", "label": "\u503A\u52A1\u7ED3\u6E05" }, { "id": "W05", "label": "\u6295\u8D44\u987A\u5229" }, { "id": "W06", "label": "\u8863\u98DF\u65E0\u5FE7" }] }, { "name": "\u4E8B\u4E1A\u5411\u524D", "items": [{ "id": "W07", "label": "\u4E0A\u5CB8\u8003\u7F16" }, { "id": "W08", "label": "\u9762\u8BD5\u62FF offer" }, { "id": "W09", "label": "\u5347\u804C\u52A0\u85AA" }, { "id": "W10", "label": "\u521B\u4E1A\u987A\u5229" }, { "id": "W11", "label": "\u804C\u573A\u907F\u5C0F\u4EBA" }, { "id": "W12", "label": "\u6B65\u6B65\u9AD8\u5347" }] }, { "name": "\u5B66\u4E1A\u7CBE\u8FDB", "items": [{ "id": "W13", "label": "\u91D1\u699C\u9898\u540D" }, { "id": "W14", "label": "\u9022\u8003\u5FC5\u8FC7" }, { "id": "W15", "label": "\u8003\u7814\u8003\u8BC1\u4E0A\u5CB8" }, { "id": "W16", "label": "\u5B66\u4E1A\u8FDB\u6B65" }, { "id": "W17", "label": "\u8BBA\u6587\u987A\u5229" }] }, { "name": "\u5065\u5EB7\u5E73\u5B89", "items": [{ "id": "W18", "label": "\u8EAB\u4F53\u5EB7\u5065" }, { "id": "W19", "label": "\u65E9\u65E5\u5EB7\u590D" }, { "id": "W20", "label": "\u5BB6\u4EBA\u5B89\u5EB7" }, { "id": "W21", "label": "\u8001\u4EBA\u957F\u5BFF" }, { "id": "W22", "label": "\u6D88\u707E\u907F\u7978" }, { "id": "W23", "label": "\u51FA\u5165\u5E73\u5B89" }] }, { "name": "\u59FB\u7F18\u5BB6\u5EAD", "items": [{ "id": "W24", "label": "\u9047\u6B63\u7F18" }, { "id": "W25", "label": "\u8131\u5355" }, { "id": "W26", "label": "\u5A5A\u59FB\u548C\u7766" }, { "id": "W27", "label": "\u8FDC\u79BB\u70C2\u6843\u82B1" }, { "id": "W28", "label": "\u6C42\u5B50\u597D\u5B55" }, { "id": "W29", "label": "\u5BB6\u5EAD\u548C\u987A" }] }, { "name": "\u4EBA\u9645\u76F8\u4F34", "items": [{ "id": "W30", "label": "\u8D35\u4EBA\u6276\u6301" }, { "id": "W31", "label": "\u5316\u89E3\u53E3\u820C\u77DB\u76FE" }, { "id": "W32", "label": "\u4FEE\u590D\u4EB2\u53CB\u6216\u4EB2\u5B50\u5173\u7CFB" }] }, { "name": "\u5FC3\u5883\u8FCE\u65B0", "items": [{ "id": "W33", "label": "\u65F6\u6765\u8FD0\u8F6C" }, { "id": "W34", "label": "\u7834\u9664\u9709\u8FD0" }, { "id": "W35", "label": "\u5185\u5FC3\u5B89\u5B81" }, { "id": "W36", "label": "\u653E\u4E0B\u6267\u5FF5" }] }];
   var style = document.createElement("style");
   style.id = "native-style";

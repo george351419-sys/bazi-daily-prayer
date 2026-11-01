@@ -5,19 +5,43 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageChops
 MAGIC=b'RITUAL1\0'; FRAME=172832; STRIP=7680; ANSWER=4800
 COLORS=[(0,0,0),(255,255,255),(255,255,0),(255,0,0),(0,0,255),(0,255,0)]
-def text_bitmap(lines, size, font_path, action=False):
- im=Image.new('1',size,0);d=ImageDraw.Draw(im)
- y=8
+def text_layout(lines,size,font_path,action=False):
+ probe=ImageDraw.Draw(Image.new('1',size));rows=[];margin=48 if action else 20
  for text,px in lines:
-  f=ImageFont.truetype(font_path,px)
-  # Explicit wrapping preserves all copy, including conditions.
-  line=''
+  font=ImageFont.truetype(font_path,px);line='';start=len(rows)
   for ch in text:
-   if d.textlength(line+ch,font=f)>size[0]-(96 if action else 40):
-    d.text((48 if action else 20,y),line,font=f,fill=1);y+=px+6;line=''
-   line+=ch
-  d.text((48 if action else 20,y),line,font=f,fill=1);y+=px+10
- if y>size[1]+8:raise ValueError('Copy overflows: '+str(lines))
+   if ch=='\n' or (line and probe.textlength(line+ch,font=font)>size[0]-2*margin):
+    if line:rows.append((line,font,font.getbbox(line)))
+    line='' if ch=='\n' else ch
+   else:line+=ch
+  if line:rows.append((line,font,font.getbbox(line)))
+  section=rows[start:]
+  if '\n' not in text and len(section)>1 and probe.textlength(section[-1][0],font=font)<(size[0]-2*margin)*0.35:
+   # Avoid a final orphan character while retaining exactly the original copy.
+   remaining=text;balanced=[]
+   for i in range(len(section)):
+    count=(len(remaining)+len(section)-i-1)//(len(section)-i)
+    while count>1 and probe.textlength(remaining[:count],font=font)>size[0]-2*margin:count-=1
+    chunk=remaining[:count] if i<len(section)-1 else remaining
+    balanced.append((chunk,font,font.getbbox(chunk)));remaining=remaining[len(chunk):]
+   if all(probe.textlength(row[0],font=font)<=size[0]-2*margin for row in balanced):rows[start:]=balanced
+ if not rows:return []
+ top,bottom=(12,110) if action else (6,size[1]-6)
+ heights=[box[3]-box[1] for _,_,box in rows];available=bottom-top
+ # Keep glyphs legible; reject overflow instead of silently clipping the last row.
+ minimum_gap=5 if action else 4
+ if sum(heights)+minimum_gap*(len(rows)-1)>available:raise ValueError('Copy overflows: '+str(lines))
+ gap=min(22 if action else 12,(available-sum(heights))/(len(rows)-1)) if len(rows)>1 else 0
+ y=top+(available-sum(heights)-gap*(len(rows)-1))/2
+ result=[]
+ for (text,font,box),height in zip(rows,heights):
+  result.append((text,font,margin-box[0],round(y-box[1]),round(y),round(y+height)))
+  y+=height+gap
+ return result
+
+def text_bitmap(lines,size,font_path,action=False):
+ im=Image.new('1',size,0);d=ImageDraw.Draw(im)
+ for text,font,x,y,_,_ in text_layout(lines,size,font_path,action):d.text((x,y),text,font=font,fill=1)
  return im.tobytes()
 def portrait(film):
  if len(film)!=FRAME or struct.unpack_from('<IHH',film)!=(172800,720,480) or film[8:16]!=bytes([6,0,0,0,0,0,0,0]) or film[16:32]!=bytes([0,255,252,224,3,28]+[0]*10):raise ValueError('Only validated Ark v1 six-colour Film is supported')

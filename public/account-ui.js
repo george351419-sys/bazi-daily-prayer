@@ -1,4 +1,4 @@
-import {setupRitual} from './ritual-ui.js?v=20261101-safe-bottom-v3';
+import {setupRitual} from './ritual-ui.js?v=20261101-sync-v6';
 import {setupDevices} from './device-ui.js';
 import {setupCustomPhoto} from './custom-photo.js?v=20261030-photo-rotation-v1';
 export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUserChange,onOpenArtwork,isBusy}){
@@ -14,7 +14,7 @@ export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUs
   if(!user){if(manual)open('login',bindPairedDevice);return;}
   if(bindingDevice)return;
   bindingDevice=true;button.disabled=true;state.textContent='已识别画屏，正在自动绑定到当前账户…';
-  try{await ritual.bindDevice(device.deviceId);state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';}
+  try{await ritual.bindDevice(device.deviceId);document.dispatchEvent(new CustomEvent('prayer:ark-sync'));state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';}
   catch(e){state.textContent='绑定暂未完成：'+e.message;}
   finally{bindingDevice=false;button.disabled=false;}
  }

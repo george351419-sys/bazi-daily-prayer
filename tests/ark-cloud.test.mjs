@@ -40,6 +40,9 @@ test('ritual chunks commit atomically, old firmware keeps Film, new firmware rec
  r=await(await invoke(c,hb+'&ritual_v=1',{headers:{authorization}})).json();assert.equal(r.data.commands[0].cmd,'download_ritual');const url=new URL(r.data.commands[0].params.url);
  const downloaded=await invoke(c,url.pathname+url.search);assert.equal(downloaded.status,200);assert.equal(hash(Buffer.from(await downloaded.arrayBuffer())),sha256);
  r=await(await invoke(c,hb+'&ritual_v=1&cloud_stored_sha='+sha256,{headers:{authorization}})).json();assert.deepEqual(r.data.commands.map(c=>c.cmd),['set_config']);
+ r=await(await invoke(c,hb+'&ritual_v=1&cloud_stored_sha='+sha256+'&store_seq=9&render_seq=12',{headers:{authorization}})).json();assert.equal(r.data.ack_stored_sha,sha256);assert.equal(r.data.ack_store_seq,9);assert.equal(r.data.ack_render_seq,null);
+ r=await(await invoke(c,hb+'&ritual_v=1&cloud_stored_sha='+sha256+'&store_seq=9',{headers:{authorization,'x-ark-dry-run':'1'}})).json();assert.equal(r.data.ack_store_seq,undefined);
+
  assert.equal((await provision(c,{type:'ritual_commit',deviceId,sha256:'f'.repeat(64),chunks})).status,400);
  assert.equal(JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId))).ritualSha,sha256);
  assert.equal((await provision(c,{type:'ritual_disable',deviceId})).status,200);assert.equal((await invoke(c,url.pathname+url.search)).status,403);

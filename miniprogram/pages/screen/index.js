@@ -1,3 +1,4 @@
+const {transferStatus,receiptTime}=require('../../utils/transfer-status');
 const api=require('../../utils/api');
 const {preparePhotos,authorize}=require('../../utils/photos');
 const {ArkBLE}=require('../../utils/ble');
@@ -12,8 +13,14 @@ Page({
  },
  onLoad(){this.ble=new ArkBLE((bleText,paired)=>{if(this.active)this.setData({bleText,paired});},bleDevices=>{if(this.active)this.setData({bleDevices});});},
  async onShow(){this.active=true;this.run=(this.run||0)+1;api.tab(this,3);await getApp().ready;if(!this.active)return;this.setData({user:getApp().globalData.user,busy:false});if(this.data.user)await this.load();},
- onHide(){this.active=false;this.run++;this.setData({wifiPassword:'',paired:false,connectedDeviceId:'',bleDevices:[],bleText:'蓝牙未连接。'});this.ble.disconnect();},
+ onHide(){clearTimeout(this.syncTimer);this.active=false;this.run++;this.setData({wifiPassword:'',paired:false,connectedDeviceId:'',bleDevices:[],bleText:'蓝牙未连接。'});this.ble.disconnect();},
  onUnload(){this.onHide();},
+ async pollSync(){
+  clearTimeout(this.syncTimer);if(!this.active||!this.data.user)return;const run=this.run;
+  try{const status=await api.request('/api/account/ritual');if(!this.active||run!==this.run)return;this.setData({status,syncState:transferStatus(status),syncLastSeen:receiptTime(status.deviceReport?.lastSeen)});}catch(e){if(this.active&&run===this.run)this.setData({syncState:{phase:'unavailable',title:'同步状态暂不可用',detail:'正在重新读取设备回报，请稍候。',step:0}});}
+  if(this.active&&run===this.run)this.syncTimer=setTimeout(()=>this.pollSync(),this.data.syncState?.phase==='rendered'?30000:5000);
+ },
+ async syncNow(){if(!this.data.paired){api.error(this,new Error('请先连接附近画屏蓝牙。'));return;}try{await this.ble.syncNow();this.setData({message:'已请求画屏重新检查内容。下载成功不等于已显示，请看下方同步阶段。'});await this.pollSync();}catch(e){api.error(this,e);}},
  async load(){
   const run=this.run;
   try{
@@ -26,7 +33,7 @@ Page({
    const rotationPosition=rotationIndex(this.rotationStartDate,this.photoSelection.length);
    this.setData({status,syncConfigured:status.syncConfigured===true,catalog,cursor:results[1].cursor||null,photoMode:plan&&plan.contentMode==='photo',showActions:plan?plan.showActions!==false:true,rotationPosition});
    this.rebuildPhotos();
-   await this.hydratePhotos(run);
+   await this.hydratePhotos(run);void this.pollSync();
   }catch(e){if(this.active&&run===this.run)api.error(this,e);}
  },
  rebuildPhotos(){

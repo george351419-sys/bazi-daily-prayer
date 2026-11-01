@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer} from './transfer-status.js?v=20261101-receipts-v2';
+import {transferStatus,renderTransfer} from './transfer-status.js?v=20261101-sync-v6';
 import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
@@ -203,7 +203,7 @@ export function setupRitual({request,fetchImage,getUser}){
    const effective=generated?{...result,planDays:planDays.map((day,index)=>index===0?{...day,title:generated.mapping.title,artworkId:generated.id,image:generated.image,mapping:generated.mapping,actions:personalizeActions(day.actions||[],generated.mapping,0)}:day)}:result;
    shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+(generated&&result.plan?.artworkIds?.[0]!==generated.id?' 网页已显示刚完成的今日画；设备仍在领取上一版两日内容。':'');
    shell.settingsState.textContent=shell.status.textContent;
-   shell.report.textContent=r?'设备最近联网：'+new Date(r.lastSeen).toLocaleString('zh-CN')+(r.stale?'（回报较早，设备可能离线）':'')+'；'+(r.renderReport?'最近上屏请求：第 '+(r.renderReport.day+1)+' 天'+(r.answerId?' · '+r.answerId:r.renderReport.action>=0?' · 第 '+(r.renderReport.action%8+1)+' 时段 · 备选 '+(Math.floor(r.renderReport.action/8)+1):' · 祈福图')+(r.showingPrevious?'（新内容仍在同步）':''):'尚未收到当前内容的上屏回报')+'。实屏效果待验收。':'';
+   shell.report.textContent=r?'设备最近联网：'+new Date(r.lastSeen).toLocaleString('zh-CN')+(r.stale?'（回报较早，设备可能离线）':'')+(r.firmwareVersion?'；固件：'+r.firmwareVersion:'')+'；'+(r.renderReport?'最近上屏请求：第 '+(r.renderReport.day+1)+' 天'+(r.answerId?' · '+r.answerId:r.renderReport.action>=0?' · 第 '+(r.renderReport.action%8+1)+' 时段 · 备选 '+(Math.floor(r.renderReport.action/8)+1):' · 祈福图')+(r.showingPrevious?'（新内容仍在同步）':''):'尚未收到当前内容的上屏回报')+'。实屏效果待验收。':'';
    updateContent(effective);updateActions(effective);schedule(effective);
    if(!artworks){const page=await request('/api/account/artworks');if(turn!==epoch||!alive(life))return;artworks=page.items;cursor=page.cursor||null;}
    updateSettings(result);

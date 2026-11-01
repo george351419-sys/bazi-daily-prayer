@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const html=await readFile(new URL('../public/firmware-upgrade.html',import.meta.url),'utf8');
 const source=html.split('<script type="module">')[1].split('</script>')[0].replace(/^\s*import [^\n]+\n/,'');
-const target={version:'3.2.5-ritual.5',file:'frame_film_ark-3.2.5-ritual.5.bin',bytes:1927936,sha256:'a'.repeat(64),elfSha256:'b'.repeat(64)};
+const target={version:'3.2.5-ritual.6',file:'frame_film_ark-3.2.5-ritual.6.bin',bytes:1927936,sha256:'a'.repeat(64),elfSha256:'b'.repeat(64)};
 const old={version:'3.2.5-ritual.3',sha:'f6aff2f33116c98fbdcc5a12b00bca057776f6a33b32821995f4e65497b57f92'};
 async function setup(initial=old,connectionError){
  const elements=new Map();const document={querySelector(key){if(!elements.has(key))elements.set(key,{disabled:false,textContent:'',className:''});return elements.get(key);}};
@@ -25,3 +25,5 @@ test('unexpected old fingerprint cannot initiate an update',async()=>{const x=aw
 test('unreachable device never receives an OTA command',async()=>{const x=await setup(old,'Bluetooth Device is no longer in range.');await x.elements.get('#connect').onclick();assert.equal(x.starts(),0);assert.match(x.elements.get('#state').textContent,/no longer in range/);});
 
 test('a sleeping device can reconnect on a later attempt and start once',async()=>{const x=await setup(old,['Bluetooth Device is no longer in range.','Bluetooth Device is no longer in range.',null]);await x.elements.get('#connect').onclick();assert.equal(x.starts(),1);assert.match(x.elements.get('#state').textContent,/升级成功并已核验/);});
+
+test('verified ritual.5 can upgrade directly to ritual.6',async()=>{const x=await setup({version:'3.2.5-ritual.5',sha:'59972da4d66db28b4d2d60929026e0304e1599e9408e65db8678b1a23aa2b69b'});await x.elements.get('#connect').onclick();assert.equal(x.starts(),1);});

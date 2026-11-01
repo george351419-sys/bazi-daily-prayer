@@ -163,7 +163,7 @@ export function setupNetwork(){
   const note=document.createElement('small');note.textContent='绑定后会检查今日与次日两幅祈福画；缺少次日画作时会自动补齐。网页只有收到设备上屏回报后才会展示设备实际画面。';
   binding.append(bindingState,bind,note);state.after(binding);
  }
- let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false;
+ let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false,announcedDevice=null;
  const password=form.elements.wifiPassword;
  const downloadState=document.createElement('p');downloadState.className='network-state download-state';downloadState.hidden=true;downloadState.setAttribute('role','status');
  const firmwareBox=document.createElement('details');firmwareBox.className='firmware-update';
@@ -180,7 +180,7 @@ export function setupNetwork(){
   binding.hidden=!status.deviceId;bind.disabled=!status.deviceId;
   if(status.deviceId)bindingState.textContent='当前画屏：'+status.deviceName+' · 设备编号 '+status.deviceId;
   else if(status.paired)bindingState.textContent='这台画屏的名称中没有可用的设备编号，暂时无法绑定。';
-  window.dispatchEvent(new CustomEvent('prayer:ark-device',{detail:connectedDevice}));
+  if((connectedDevice?.deviceId||null)!==announcedDevice){announcedDevice=connectedDevice?.deviceId||null;document.dispatchEvent(new CustomEvent('prayer:ark-device',{detail:connectedDevice}));}
   password.placeholder=status.connected?'••••••••（密码已保存在画屏）':'输入 Wi-Fi 密码';
   form.classList.toggle('network-connected',status.connected);
   if(status.connected&&!downloadTimer){void pollDownload();downloadTimer=setInterval(pollDownload,2000);}
@@ -199,7 +199,7 @@ export function setupNetwork(){
  firmwareButton.onclick=async()=>{
   if(firmwareButton.disabled)return;firmwareButton.disabled=true;firmwareStatus.textContent='正在读取固件清单和画屏已保存的 Wi‑Fi…';
   try{
-   const manifest=await fetch('/firmware/ritual-5.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('固件清单不可用');return r.json();});
+   const manifest=await fetch('/firmware/ritual-6.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('固件清单不可用');return r.json();});
    await client.startWifiOta(new URL('/firmware/'+manifest.file,location.origin).href,manifest.bytes,manifest.sha256);
    firmwareStatus.textContent='固件已应用，画屏正在重启。';
   }catch(error){firmwareStatus.textContent='固件升级失败：'+error.message;}
@@ -208,9 +208,13 @@ export function setupNetwork(){
  if(!window.isSecureContext||!navigator.bluetooth){
   connect.disabled=true;state.textContent='此浏览器暂不支持蓝牙配网。请用电脑 Chrome / Edge 或 Android Chrome，在 HTTPS 页面打开；iPhone 请先用支持蓝牙的电脑完成配网。';return;
  }
+ document.addEventListener('prayer:ark-sync',async()=>{
+  if(!client.characteristic){state.textContent='请先连接附近画屏蓝牙，再点击立即检查同步。';location.hash='network-onboarding';root.scrollIntoView({behavior:'smooth'});return;}
+  try{await client.write(0x38,[],client.epoch);state.textContent='已请求画屏检查云端内容。请保持联网，等待“内容已保存”后在画屏进入“画面”。旧固件若仍无回报，请先更新到 ritual.6。';}catch(error){state.textContent='检查同步未启动：'+error.message;}
+ });
  connect.onclick=async()=>{connect.disabled=true;try{await client.connect();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{connect.disabled=false;}};
  disconnect.onclick=()=>client.disconnect();
- bind.onclick=()=>window.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
+ bind.onclick=()=>document.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
  form.onsubmit=async event=>{event.preventDefault();busy=true;send.disabled=true;connect.disabled=true;
   for(const control of form.elements)control.disabled=true;
   try{await client.configure(form.elements.ssid.value,form.elements.wifiPassword.value);}catch(e){state.textContent=e.message;}

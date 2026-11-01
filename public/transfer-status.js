@@ -9,14 +9,17 @@ export function transferStatus(result = {}, artworkId = null) {
  if (result.pendingUpdate || result.build?.status !== 'published') return state('preparing', '正在准备画屏内容', '正在准备两日画作与微行动，完成后即可供画屏领取。');
  const report = result.deviceReport;
  if (report?.firmwareUpdateRequired) return state('firmware', '请先更新画屏固件', '当前固件不能接收这份内容，请到「链接神物」更新固件。', 1);
- if (!report || report.stale) return state('waiting', '内容已就绪 · 等待最新设备回报', '尚未收到近期同步回报；如画屏已显示新画，无需重复推送，网页会在回报更新后确认。', 1);
+ if (!report) return state('waiting', '内容已就绪 · 等待设备联网检查', '请唤醒画屏并连接 Wi-Fi，或在蓝牙连接后点击“立即检查同步”。蓝牙连接成功不等于新内容已下载。', 1);
  const knownTarget = !!result.build?.sha256;
  const matchesTarget = !knownTarget || report.targetSha === result.build.sha256;
- if (report.renderedCurrent && report.renderReport) return state('rendered', '传输完成 · 画屏已回报刷新', '设备已回报当前内容包的刷新状态，现在可以查看画屏画面。', 4);
- if ((!knownTarget || !matchesTarget) && Date.parse(report.lastSeen) < Date.parse(result.build?.publishedAt)) return state('waiting', '内容已就绪 · 等待最新设备回报', '当前回报早于内容发布，正在等待新回执；画屏已显示新画时无需重复推送。', 1);
- if (matchesTarget && report.stored && !report.showingPrevious && report.renderReport) return state('rendered', '传输完成 · 画屏已回报刷新', '现在可以查看画屏上的画面；刷新完成时间以设备实际显示为准。', 4);
- if (matchesTarget && report.stored) return state('stored', '传输完成 · 等待画屏刷新', '画面内容已保存到设备，画屏将刷新显示；正在等待刷新回报。', 3);
- if (!matchesTarget) return state('confirming', '画屏已联网 · 正在确认当前内容', '最近回报对应其他内容包，正在等待当前内容的下载或刷新回执；无需重新生成图片。', 1);
+ const samePackage = knownTarget && matchesTarget;
+ const fresh = !report.stale && !(Date.parse(report.lastSeen)<Date.parse(result.build?.publishedAt));
+ if (samePackage && report.renderedCurrent && report.renderReport) return state('rendered', '当前内容已回报刷新', '当前包已执行画面刷新；如你停在 Home，可选择“画面”并按画屏确认键进入。设备休眠不撤销这次成功记录。', 4);
+ if (samePackage && report.stored) return state('stored', '内容已保存 · 现在可以进入画面', '请在画屏 Home 选择“画面”，按画屏确认键进入。后台下载不会打断 Home 或设置页；正在等待该内容的刷新回执。', 3);
+ if (!fresh) return state('waiting', '内容已就绪 · 等待最新设备检查', '尚无当前内容的近期回执。请唤醒画屏，保持 Wi-Fi 联网，并在蓝牙连接后点击“立即检查同步”；无需重新生成画作。', 1);
+ if (matchesTarget && report.stored && !report.showingPrevious && report.renderReport) return state('rendered', '传输完成 · 画屏已回报刷新', '设备已回报刷新；Home 中可选择“画面”并按确认键查看。', 4);
+ if (matchesTarget && report.stored) return state('stored', '内容已保存 · 现在可以进入画面', '请在画屏 Home 选择“画面”并按画屏确认键进入，网页正在等待刷新回执。', 3);
+ if (!matchesTarget) return state('confirming', '画屏已联网 · 正在确认当前内容', '最近回报对应其他内容包，正在等待当前内容的下载或刷新回执。', 1);
  if (report.downloadState === 2) return state('confirming', '设备已回报下载完成 · 等待内容核验', '正在确认当前内容包的保存与刷新结果；如画屏已显示新画，无需重复推送。', 2);
  if (report.downloadState === 3) return state('retrying', '传输暂未成功 · 等待重试', '请检查画屏 Wi-Fi 并保持开机，设备将重新领取内容。', 1);
  if (report.downloadState === 1) {
@@ -34,6 +37,8 @@ export function renderTransfer(host, state) {
  const heading = document.createElement('strong');heading.textContent = state.title;
  const detail = document.createElement('p');detail.textContent = state.detail;
  host.append(heading, detail);
+ const guidance=document.createElement('p');guidance.className='note';guidance.textContent=state.step>=3?'可以按画屏确认键进入“画面”；网页按钮不会遥控跳转。':'请等待“内容已保存”后，再在画屏选择“画面”并按确认键查看新内容。';host.append(guidance);
+ const check=document.createElement('button');check.type='button';check.className='secondary';check.textContent='立即检查同步（需蓝牙）';check.onclick=()=>document.dispatchEvent(new CustomEvent('prayer:ark-sync'));host.append(check);
  const steps = document.createElement('ol');steps.setAttribute('aria-label', '画面同步阶段');
  for (const [index, label] of ['内容就绪', '设备下载', '传输完成', '画屏刷新'].entries()) {
   const item = document.createElement('li');item.textContent = label;item.classList.toggle('complete', index < state.step);
