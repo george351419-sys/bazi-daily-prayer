@@ -8,7 +8,8 @@
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
   <button wx:if="{{prepareFailed}}" bindtap="retryPreparation" disabled="{{busy}}" class="secondary">重试准备画屏内容</button>
   <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
-  <button wx:if="{{syncState.phase==='connect'||syncState.phase==='waiting'}}" class="primary spaced" bindtap="connectScreen">去链接神物 / 检查连接</button>
+  <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'配置画屏 Wi-Fi':'去链接神物并同步'}}</button>
+  <button wx:if="{{syncState.action==='check'}}" class="secondary spaced" bindtap="syncNow" disabled="{{busy}}">重新检查同步</button>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
 
  </view>

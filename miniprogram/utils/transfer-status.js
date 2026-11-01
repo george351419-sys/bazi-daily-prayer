@@ -136,6 +136,28 @@ function transferStatus(result = {}, artworkId = null) {
  return copyState('S25','confirming',1);
 }
 
+function transferAction(state){
+ if(state.action!==undefined)return state.action;
+ if(state.step<1||state.preparation)return null;
+ if(['connect','waiting'].includes(state.phase))return 'connect';
+ if(state.phase==='retrying')return 'connect';
+ return null;
+}
+
+// Live Wi-Fi confirmation is connectivity evidence, not a content-storage receipt.
+function withConnection(state,result,connection,now=Date.now()){
+ state=state.connectionBase||state;
+ if(!connection?.paired||!Number.isFinite(connection.receivedAt)||now-connection.receivedAt>6000||!result?.device?.id||connection.deviceId!==result.device.id)return {...state,action:transferAction(state)};
+ if(state.step<1||state.preparation||['stored','rendered','firmware','publishing'].includes(state.phase))return {...state,action:transferAction(state)};
+ if(['waiting','syncing'].includes(state.phase)){
+  if(!connection.wifiConnected)return {...state,connectionBase:state,phase:'wifi',title:'蓝牙已连接 · 请连接画屏 Wi-Fi',detail:'请在「链接神物」填写 Wi-Fi 信息；已保存的网络会优先自动连接。',action:'wifi'};
+  const requested=connection.requestedSha===result.build?.sha256&&connection.syncRequestedAt;
+  const overdue=requested&&now-requested>=20000;
+  return {...state,connectionBase:state,phase:'syncing',title:overdue?'画屏已联网 · 尚未收到本次内容回报':'画屏已联网 · 正在检查新内容',detail:overdue?'请点击重新检查同步；无需重新连接蓝牙或填写 Wi-Fi。':'正在自动检查并同步本次内容，请稍候。',action:overdue?'check':null};
+ }
+ return {...state,action:state.phase==='retrying'?'check':null};
+}
+
 // BLE download replies carry no package hash: require a current cloud target first.
 function withLiveDownload(state,result,live,now=Date.now()){
  if(!live||now-live.receivedAt>6000||result?.pendingUpdate||result?.build?.status!=='published'||!result.build.sha256||result.device?.id!==live.deviceId||result.deviceReport?.targetSha!==result.build.sha256||result.deviceReport?.stale||Date.parse(result.deviceReport?.lastSeen)<Date.parse(result.build.publishedAt)||!['downloading','confirming','waiting'].includes(state.phase))return state;
@@ -145,4 +167,4 @@ function withLiveDownload(state,result,live,now=Date.now()){
 }
 
 function receiptTime(value){const stamp=Date.parse(value);return Number.isFinite(stamp)?new Date(stamp+8*3600000).toISOString().slice(0,19).replace('T',' '):'';}
-module.exports={transferStatus,receiptTime,withLiveDownload};
+module.exports={transferStatus,receiptTime,withLiveDownload,withConnection,transferAction};

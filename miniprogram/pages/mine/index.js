@@ -101,6 +101,7 @@ Page({
   finally{this.setData({busy:false});}
  },
  async retryPreparation(){if(this.data.busy)return;this.setData({busy:true});this.prepareFailure=null;this.preparingPair=true;try{await syncGeneratedPrayer();}catch(e){this.prepareFailure=e.message;}finally{this.preparingPair=false;this.setData({busy:false});void this.pollSync();}},
+ async syncNow(){try{await this.connection.syncNow();await this.pollSync();}catch(e){api.error(this,e);}},
  connectScreen(){wx.switchTab({url:'/pages/network/index'});},
  screen(){wx.switchTab({url:'/pages/screen/index'});},
  companion(){wx.switchTab({url:'/pages/today/index'});},

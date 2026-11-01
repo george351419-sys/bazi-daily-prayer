@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withLiveDownload} from './transfer-status.js?v=20261101-approved-copy-v1';
+import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261101-connected-sync-v1';
 import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
@@ -178,7 +178,8 @@ export function setupRitual({request,fetchImage,getUser}){
   }
   list.append(all);
  }
- let lastTransferResult=null,liveDownload=null;
+ let lastTransferResult=null,liveDownload=null,connection=null;
+ document.addEventListener('prayer:ark-connection',event=>{connection=event.detail;if(lastTransferResult)updateTransfer(lastTransferResult);});
  document.addEventListener('prayer:ark-download',event=>{
   liveDownload={...event.detail,receivedAt:Date.now()};
   if(lastTransferResult)updateTransfer(lastTransferResult);
@@ -187,13 +188,13 @@ export function setupRitual({request,fetchImage,getUser}){
   lastTransferResult=result||null;
   const completedPlan=latestGenerated&&result?.plan?.artworkIds?.includes(latestGenerated.id);
   if(completedPlan)prepareFailure=null;
-  const state=override||(!preparing&&prepareFailure&&!completedPlan?prepareFailure:withLiveDownload(transferStatus(result,latestGenerated?.id),result,liveDownload));
+  const state=withConnection(override||(!preparing&&prepareFailure&&!completedPlan?prepareFailure:withLiveDownload(transferStatus(result,latestGenerated?.id),result,liveDownload)),result,connection);
   document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state}}));
   transferPending=!['rendered','unbound','photo','firmware'].includes(state.phase);
   if(shell)renderTransfer(shell.transfer,state);
   const besideImage=document.querySelector('#artwork-transfer');
   if(besideImage&&(latestGenerated||!besideImage.hidden))renderTransfer(besideImage,state);
-  if(state.phase==='retrying'){for(const target of [shell?.transfer,besideImage].filter(Boolean)){const retry=node('button','重试同步');retry.type='button';retry.className='secondary';retry.onclick=()=>void prepare();target.append(retry);}}
+  if(state.phase==='retrying'&&state.step===0){for(const target of [shell?.transfer,besideImage].filter(Boolean)){const retry=node('button','重试同步');retry.type='button';retry.className='secondary';retry.onclick=()=>void prepare();target.append(retry);}}
  }
  async function refresh(){
   if(saving||uploading)return;active=true;const turn=++epoch,life=lifecycle;clearTimeout(timer);if(!getUser()){reset();return;}

@@ -4,7 +4,7 @@ function session(){
  class BLE{
   constructor(state,found,download){this.state=state;this.found=found;this.download=download;this.commands=[];this.epoch=0;}
   async connect(id){this.id=id;this.state('蓝牙已连接',true);}
-  async resumeWifi(){this.commands.push('resume-saved-wifi');}
+  async resumeWifi(){this.commands.push('resume-saved-wifi');this.status=true;this.state('Wi-Fi 已连接',true);}
   async syncNow(){this.commands.push('check-sync');}
   async write(channel){this.commands.push(channel);}
   async queryDownload(){this.download({state:1,progress:57});}
@@ -68,4 +68,10 @@ test('an unexpected connection loss reconnects only the same screen using saved 
  const retry=[...env.timers.values()].find(t=>t.ms===3000);assert.ok(retry);await retry.fn();
  assert.equal(c.client.id,'native-id');assert.equal(c.snapshot.connectedDeviceId,'aabbccddeeff');
  assert.equal(c.client.commands.filter(v=>v==='resume-saved-wifi').length,2);assert.equal(c.client.commands.includes('configure'),false);
+});
+test('automatic sync waits for Wi-Fi confirmation instead of consuming the request while offline',async()=>{
+ const env=session(),c=await connected(env);c.current=ready();c.client.status=false;
+ await c.syncPublished();assert.equal(c.syncSha,null);assert.equal(c.client.commands.includes('check-sync'),false);
+ c.client.status=true;c.client.state('Wi-Fi 已连接',true);await c.syncPublished();
+ assert.equal(c.syncSha,'new');assert.equal(c.client.commands.filter(v=>v==='check-sync').length,1);assert.equal(c.stateFor({...ready(),deviceReport:null}).phase,'syncing');
 });

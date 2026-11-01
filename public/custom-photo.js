@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer} from './transfer-status.js?v=20261101-approved-copy-v1';
+import {transferStatus,renderTransfer,withConnection} from './transfer-status.js?v=20261101-connected-sync-v1';
 import {preparePhoto} from './photo-upload.js';
 
 export function setupCustomPhoto({request,fetchImage,getUser}){
@@ -6,11 +6,13 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
  if(!root)return {refresh(){},reset(){}};
  const description=document.querySelector('#custom .section-top p');if(description)description.textContent='先上传自己的图片，再安排每日轮播；是否附加微行动也由你决定。';
  const node=(tag,text)=>{const item=document.createElement(tag);if(text)item.textContent=text;return item;};
- let syncTimer=null,syncHost=null;
+ let syncTimer=null,syncHost=null,connection=null,lastSyncResult=null;
+ function renderSync(result){const state=withConnection(transferStatus(result),result,connection);renderTransfer(syncHost,state);document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state}}));}
+ document.addEventListener('prayer:ark-connection',event=>{connection=event.detail;if(syncHost&&lastSyncResult)renderSync(lastSyncResult);});
  let mode='prayer',rotationStart='',position=0,showActions=true,selected=[],artworks=[],cursor=null,busy=false,message='',rootPlan=null,urls=new Map();
 
  function clearUrls(){for(const url of urls.values())URL.revokeObjectURL(url);urls.clear();}
- function reset(){clearTimeout(syncTimer);syncHost=null;mode='prayer';rotationStart='';position=0;showActions=true;selected=[];artworks=[];cursor=null;busy=false;message='';rootPlan=null;clearUrls();root.replaceChildren();}
+ function reset(){clearTimeout(syncTimer);syncHost=null;lastSyncResult=null;mode='prayer';rotationStart='';position=0;showActions=true;selected=[];artworks=[];cursor=null;busy=false;message='';rootPlan=null;clearUrls();root.replaceChildren();}
  function photoPosition(plan){
   const ids=plan?.artworkIds||[];if(plan?.contentMode!=='photo'||!ids.length)return 0;
   const start=/^\d{4}-\d{2}-\d{2}$/.test(plan.rotationStartDate||'')?Date.parse(plan.rotationStartDate+'T00:00:00Z'):NaN;
@@ -89,7 +91,7 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
  }
  async function pollSync(){
   clearTimeout(syncTimer);if(!getUser()||!syncHost)return;const owner=getUser().id;
-  try{const result=await request('/api/account/ritual');if(getUser()?.id!==owner||!syncHost)return;if(rootPlan?.revision&&result.plan?.revision!==rootPlan.revision){syncTimer=setTimeout(pollSync,2000);return;}renderTransfer(syncHost,transferStatus(result));document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state:transferStatus(result)}}));}
+  try{const result=await request('/api/account/ritual');if(getUser()?.id!==owner||!syncHost)return;if(rootPlan?.revision&&result.plan?.revision!==rootPlan.revision){syncTimer=setTimeout(pollSync,2000);return;}lastSyncResult=result;renderSync(result);}
   catch(error){if(syncHost)syncHost.textContent='同步状态暂不可用：'+error.message;}
   if(getUser()?.id===owner&&syncHost)syncTimer=setTimeout(pollSync,2000);
  }

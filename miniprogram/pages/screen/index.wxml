@@ -1,10 +1,10 @@
 <view class="page">
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
   <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
-  <button wx:if="{{syncState.phase==='connect'||syncState.phase==='waiting'}}" class="primary spaced" bindtap="connectScreen">去链接神物 / 检查连接</button>
+  <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'配置画屏 Wi-Fi':'去链接神物并同步'}}</button>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
   <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">① 内容就绪</text><text class="{{syncState.step>=2?'complete':''}}">② 下载中</text><text class="{{syncState.step>=3?'complete':''}}">③ 已保存</text><text class="{{syncState.step>=4?'complete':''}}">④ 已刷新</text></view>
-  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.step>=1&&syncState.phase!=='connect'&&syncState.phase!=='preparing'}}" disabled="{{!paired||busy}}">立即检查同步（需蓝牙）</button>
+  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'}}" disabled="{{!paired||busy}}">重新检查同步</button>
  </view>
  <text class="kicker">MAKE IT YOURS / 04</text>
  <text class="title">自定义</text>

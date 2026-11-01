@@ -1,6 +1,6 @@
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer} from './transfer-status.js?v=20261101-approved-copy-v1';
+import {renderTransfer,withConnection} from './transfer-status.js?v=20261101-connected-sync-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -31,7 +31,7 @@ export class ArkNetwork {
   const epoch=++this.epoch;
   if(this.characteristic&&this.listener)this.characteristic.removeEventListener('characteristicvaluechanged',this.listener);
   if(this.device&&this.lost)this.device.removeEventListener('gattserverdisconnected',this.lost);
-  this.characteristic=null;this.device=null;this.deviceId=null;
+  this.characteristic=null;this.device=null;this.deviceId=null;this.lastStatus=null;
   this.state('正在扫描画屏…');
   let device;
   try{
@@ -181,7 +181,7 @@ export class ArkNetwork {
   for(const pending of this.pendingResponses.values())pending.reject(new Error('蓝牙已断开'));this.pendingResponses.clear();
   if(this.characteristic&&this.listener)this.characteristic.removeEventListener('characteristicvaluechanged',this.listener);
   if(this.device){this.device.removeEventListener('gattserverdisconnected',this.lost);if(this.device.gatt.connected)this.device.gatt.disconnect();}
-  this.characteristic=null;this.device=null;this.deviceId=null;this.state(message);
+  this.characteristic=null;this.device=null;this.deviceId=null;this.lastStatus=null;this.state(message);
  }
 }
 export function setupNetwork(){
@@ -196,7 +196,8 @@ export function setupNetwork(){
   binding.append(bindingState,bind,note);state.after(binding);
  }
  let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false,announcedDevice=null;
- let reconnectTimer=null,reconnectAttempts=0,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false;
+ let reconnectTimer=null,reconnectAttempts=0,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null;
+ function announceConnection(){connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt:Date.now(),syncRequestedAt,requestedSha};document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection));}
  const networkGrid=root.querySelector('.network-grid');
  function updateConnectionControls(){const ready=latestTransferState?.step>=1;if(networkGrid)networkGrid.hidden=!ready;state.hidden=!ready;binding.hidden=!ready||!connectedDevice;}
  updateConnectionControls();
@@ -211,6 +212,7 @@ export function setupNetwork(){
 
  let buildChecked=false;
  const client=new ArkNetwork({bluetooth:navigator.bluetooth,onState:status=>{
+  if(!status.connected){syncSha=null;syncRequestedAt=null;requestedSha=null;}
   state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;firmwareButton.disabled=!status.paired||busy;
   connectedDevice=status.deviceId?{deviceId:status.deviceId,deviceName:status.deviceName}:null;
   binding.hidden=!status.deviceId;bind.disabled=!status.deviceId;updateConnectionControls();
@@ -222,6 +224,8 @@ export function setupNetwork(){
   if(status.paired&&!downloadTimer){downloadTimer=setInterval(pollDownload,2000);}
   else if(!status.paired&&downloadTimer){clearInterval(downloadTimer);downloadTimer=null;}
   if(status.paired&&!buildChecked){buildChecked=true;void client.readBuildInfo().then(info=>{firmwareVersion.textContent='当前固件：'+(info.version||'未知版本');}).catch(()=>{firmwareVersion.textContent='当前固件版本暂时无法读取。';});}
+  announceConnection();
+  if(status.connected)void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});
   if(!status.paired){
    buildChecked=false;syncSha=null;
    if(allowReconnect&&rememberedDevice&&!reconnectTimer&&reconnectAttempts<3){
@@ -242,19 +246,20 @@ export function setupNetwork(){
  async function pollDownload(){
   if(!client.characteristic||downloadBusy||busy)return;downloadBusy=true;
   try{await client.write(0x3a,[]);await client.queryDownload();}
-  catch(error){document.dispatchEvent(new CustomEvent('prayer:ark-download',{detail:{deviceId:client.deviceId,unavailable:true,error:error.message}}));}
+  catch(error){if(client.characteristic)state.textContent='正在确认画屏连接状态，请稍候。';document.dispatchEvent(new CustomEvent('prayer:ark-download',{detail:{deviceId:client.deviceId,unavailable:true,error:error.message}}));}
   finally{downloadBusy=false;}
+  await syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});
  }
  firmwareButton.textContent='打开固件升级与版本核验';
  firmwareButton.onclick=()=>{location.href='/firmware-upgrade.html?fix=ota-compat-v1';};
  async function syncPublished(){
   const sha=latestStatus?.build?.sha256;
-  if(busy||syncBusy||!client.characteristic||!sha||syncSha===sha||latestStatus.pendingUpdate||latestStatus.build.status!=='published'||latestStatus.device?.id!==client.deviceId)return;
-  syncBusy=true;try{await client.resumeWifi();syncSha=sha;}finally{syncBusy=false;}
+  if(busy||downloadBusy||syncBusy||!client.characteristic||client.lastStatus!==true||!sha||syncSha===sha||latestStatus.pendingUpdate||latestStatus.build.status!=='published'||latestStatus.device?.id!==client.deviceId)return;
+  syncBusy=true;try{await client.resumeWifi();if(client.lastStatus===true){syncSha=sha;requestedSha=sha;syncRequestedAt=Date.now();announceConnection();}}finally{syncBusy=false;}
  }
  document.addEventListener('prayer:transfer-status',event=>{
   latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();
-  renderTransfer(transfer,event.detail.state);
+  renderTransfer(transfer,withConnection(event.detail.state,latestStatus,connection));
   void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});
  });
  if(!window.isSecureContext||!navigator.bluetooth){
@@ -262,7 +267,7 @@ export function setupNetwork(){
  }
  document.addEventListener('prayer:ark-sync',async()=>{
   if(!client.characteristic){state.textContent='请先连接附近画屏蓝牙，再点击立即检查同步。';location.hash='network-onboarding';root.scrollIntoView({behavior:'smooth'});return;}
-  try{await client.resumeWifi();state.textContent='已请求画屏检查云端内容。请保持联网，等待“内容已保存”后在画屏进入“画面”。旧固件若仍无回报，请先更新到 ritual.6。';}catch(error){state.textContent='检查同步未启动：'+error.message;}
+  try{await client.resumeWifi();requestedSha=latestStatus?.build?.sha256;syncRequestedAt=Date.now();announceConnection();state.textContent='已请求画屏检查云端内容。请保持联网，等待“内容已保存”后在画屏进入“画面”。旧固件若仍无回报，请先更新到 ritual.6。';}catch(error){state.textContent='检查同步未启动：'+error.message;}
  });
  connect.onclick=async()=>{connect.disabled=true;try{allowReconnect=true;reconnectAttempts=0;clearTimeout(reconnectTimer);reconnectTimer=null;await client.connect();rememberedDevice=client.device;await client.resumeWifi();await syncPublished();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{connect.disabled=false;}};
  disconnect.onclick=()=>{allowReconnect=false;clearTimeout(reconnectTimer);reconnectTimer=null;client.disconnect();};
@@ -270,7 +275,7 @@ export function setupNetwork(){
  form.onsubmit=async event=>{event.preventDefault();busy=true;send.disabled=true;connect.disabled=true;
   for(const control of form.elements)control.disabled=true;
   try{await client.configure(form.elements.ssid.value,form.elements.wifiPassword.value);}catch(e){state.textContent=e.message;}
-  finally{form.elements.wifiPassword.value='';for(const control of form.elements)control.disabled=false;busy=false;send.disabled=!client.characteristic;connect.disabled=false;}
+  finally{form.elements.wifiPassword.value='';for(const control of form.elements)control.disabled=false;busy=false;send.disabled=!client.characteristic;connect.disabled=false;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}
  };
  root.querySelector('[data-show-password]').onchange=event=>{form.elements.wifiPassword.type=event.target.checked?'text':'password';};
  window.addEventListener('pagehide',()=>{form.elements.wifiPassword.value='';allowReconnect=false;clearTimeout(reconnectTimer);client.disconnect();});

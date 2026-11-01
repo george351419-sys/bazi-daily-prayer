@@ -1,3 +1,4 @@
+const {observeConnection,stopObserving}=require('../../utils/screen-connection');
 const {transferStatus}=require('../../utils/transfer-status');
 const api=require('../../utils/api');
 const {answers}=require('../../utils/content');
@@ -5,8 +6,8 @@ const {daysFor,progress}=require('../../utils/ritual-view');
 function answerNumber(answer){const match=/(\d+)\s*$/.exec((answer&&answer.id)||'');return match?Number(match[1]):null;}
 Page({
  data:{loading:true,error:'',user:null,status:null,image:'',sample:true,date:'',readings:[],days:[],allActions:false,progress:'',overview:'',elements:[],blessing:'',artworkTitle:'',currentAnswer:null,answerNo:null,answerSource:'',drawing:false},
- onShow(){this.active=true;this.run=(this.run||0)+1;api.tab(this,2);this.refresh();},
- onHide(){this.active=false;this.run++;clearTimeout(this.timer);},onUnload(){this.onHide();},
+ onShow(){this.active=true;observeConnection(this);this.run=(this.run||0)+1;api.tab(this,2);this.refresh();},
+ onHide(){this.active=false;stopObserving(this);this.run++;clearTimeout(this.timer);},onUnload(){this.onHide();},
  async refresh(){
   const run=this.run;
   clearTimeout(this.timer);
@@ -20,6 +21,7 @@ Page({
    if(!user){this.previews.clear();this.artworkImageKey='';this.manualAnswer=null;this.setData({user,sample:true,status:null,days:[],progress:'',image:'/assets/prayer-example.jpg',loading:false,readings:[],overview:'',elements:[],blessing:'',artworkTitle:'',currentAnswer:null,answerNo:null,answerSource:''});return;}
    const status=await api.request('/api/account/ritual');
    if(!this.active||run!==this.run)return;
+   this.connection.acceptStatus(status);
    const days=daysFor(status).map(day=>{const preview=day.image&&this.previews.get(day.image);return preview?Object.assign({},day,{preview}):day;});
    const mapping=(status.artwork&&status.artwork.mapping)||{};
    const reading=mapping.reading||{};
@@ -27,7 +29,7 @@ Page({
    const cachedImage=artworkPath&&artworkPath===this.artworkImageKey?this.data.image:'';
    const currentAnswer=status.answer||this.manualAnswer||null;
    if(!artworkPath)this.artworkImageKey='';
-   this.setData({user,sample:false,status,days,syncState:transferStatus(status),progress:progress(status),image:cachedImage,loading:false,readings:reading.sections||[],intro:reading.intro||mapping.overview||'',overview:mapping.overview||'',elements:Array.isArray(mapping.elements)?mapping.elements:[],blessing:mapping.blessing||'',artworkTitle:(status.artwork&&status.artwork.title)||'',currentAnswer,answerNo:answerNumber(currentAnswer),answerSource:status.answer?'device':this.manualAnswer?'phone':''});
+   this.setData({user,sample:false,status,days,syncState:this.connection.stateFor(status),progress:progress(status),image:cachedImage,loading:false,readings:reading.sections||[],intro:reading.intro||mapping.overview||'',overview:mapping.overview||'',elements:Array.isArray(mapping.elements)?mapping.elements:[],blessing:mapping.blessing||'',artworkTitle:(status.artwork&&status.artwork.title)||'',currentAnswer,answerNo:answerNumber(currentAnswer),answerSource:status.answer?'device':this.manualAnswer?'phone':''});
    let previewsChanged=false;
    for(const day of days){
     if(!day.image||day.preview)continue;

@@ -1,14 +1,15 @@
 // One connection for the mini program, shared across tab pages.
 const {ArkBLE}=require('./ble');
-const {transferStatus,withLiveDownload}=require('./transfer-status');
+const {transferStatus,withLiveDownload,withConnection}=require('./transfer-status');
 class ScreenConnection{
  constructor(){
   this.listeners=new Set();this.snapshot={bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,bleDevices:[],connectedDeviceId:''};
-  this.foreground=true;this.allowed=false;this.attempts=0;this.busy=false;this.live=null;this.current=null;this.syncSha=null;
+  this.foreground=true;this.allowed=false;this.attempts=0;this.busy=false;this.live=null;this.current=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
   this.client=new ArkBLE((bleText,paired)=>{
    const lost=this.snapshot.paired&&!paired;
-   this.snapshot={...this.snapshot,bleText,paired,connectedDeviceId:paired?this.hardwareId||'':''};
-   if(lost){this.live=null;this.syncSha=null;this.reconnect();}
+   if(!paired||this.client?.status!==true){this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;}
+   this.snapshot={...this.snapshot,bleText,paired,wifiConnected:paired&&this.client?.status===true,receivedAt:Date.now(),connectedDeviceId:paired?this.hardwareId||'':''};
+   if(lost){this.live=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;this.reconnect();}
    this.emit();
   },bleDevices=>{this.snapshot={...this.snapshot,bleDevices};this.emit();},value=>{
    this.live={...value,deviceId:this.hardwareId,receivedAt:Date.now()};this.emit();
@@ -16,14 +17,14 @@ class ScreenConnection{
  }
  emit(){for(const listener of this.listeners)listener(this.snapshot);}
  subscribe(listener){this.listeners.add(listener);listener(this.snapshot);return ()=>this.listeners.delete(listener);}
- stateFor(status,artworkId){return withLiveDownload(transferStatus(status,artworkId),status,this.live);}
+ stateFor(status,artworkId){return withConnection(withLiveDownload(transferStatus(status,artworkId),status,this.live),status,{...this.snapshot,deviceId:this.hardwareId,syncRequestedAt:this.syncRequestedAt,requestedSha:this.requestedSha});}
  acceptStatus(status){this.current=status;void this.syncPublished().catch(error=>this.notice('自动检查同步暂未成功：'+error.message));}
  notice(bleText){this.snapshot={...this.snapshot,bleText};this.emit();}
  async scan(){this.allowed=false;clearTimeout(this.retryTimer);this.live=null;this.hardwareId='';await this.client.scan();}
  async connect(id){
   if(this.busy)return;
   const device=this.snapshot.bleDevices.find(item=>item.id===id),match=device&&/^FRAMEFILMARK[-_ ]?([a-f0-9]{12})$/i.exec(device.name);
-  this.hardwareId=match?match[1].toLowerCase():'';this.target=id;this.allowed=false;clearTimeout(this.retryTimer);this.attempts=0;this.live=null;this.syncSha=null;
+  this.hardwareId=match?match[1].toLowerCase():'';this.target=id;this.allowed=false;clearTimeout(this.retryTimer);this.attempts=0;this.live=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
   await this.connectTarget();this.allowed=true;this.start();
  }
  async connectTarget(){
@@ -40,11 +41,11 @@ class ScreenConnection{
   },3000);
  }
  async configure(ssid,password){if(this.busy)throw new Error('画屏正在通信，请稍候。');this.busy=true;try{return await this.client.configure(ssid,password);}finally{this.busy=false;}}
- async syncNow(){if(this.busy)throw new Error('画屏正在通信，请稍候。');this.busy=true;try{return await this.client.syncNow();}finally{this.busy=false;}}
+ async syncNow(){if(this.busy)throw new Error('画屏正在通信，请稍候。');this.busy=true;try{const result=await this.client.syncNow();if(this.client.status===true){this.syncRequestedAt=Date.now();this.requestedSha=this.current?.build?.sha256;this.emit();}return result;}finally{this.busy=false;}}
  async syncPublished(){
   const s=this.current,sha=s&&s.build&&s.build.sha256;
-  if(this.busy||!this.foreground||!this.client.id||!sha||sha===this.syncSha||s.pendingUpdate||s.build.status!=='published'||!s.device||s.device.id!==this.hardwareId)return;
-  await this.syncNow();this.syncSha=sha;
+  if(this.busy||!this.foreground||!this.client.id||this.client.status!==true||!sha||sha===this.syncSha||s.pendingUpdate||s.build.status!=='published'||!s.device||s.device.id!==this.hardwareId)return;
+  await this.syncNow();if(this.client.status===true)this.syncSha=sha;
  }
  async poll(){
   if(!this.foreground||!this.client.id||this.busy)return;
@@ -61,7 +62,7 @@ class ScreenConnection{
   this.backgroundTimer=setTimeout(()=>{this.backgroundTimer=null;void this.client.disconnect();},60000);
  }
  async disconnect(){
-  this.allowed=false;this.target=null;this.hardwareId='';this.live=null;this.current=null;this.syncSha=null;
+  this.allowed=false;this.target=null;this.hardwareId='';this.live=null;this.current=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
   clearTimeout(this.retryTimer);this.retryTimer=null;clearTimeout(this.backgroundTimer);clearInterval(this.pollTimer);this.pollTimer=null;
   await this.client.disconnect();
  }

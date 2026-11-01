@@ -57,3 +57,16 @@ test('live BLE progress requires a fresh matching device and published package',
  assert.equal(withLiveDownload(state,{...result,deviceReport:{...result.deviceReport,targetSha:'old'}},live),state);
  assert.equal(withLiveDownload(state,{...result,deviceReport:{...result.deviceReport,stale:true}},live),state);
 });
+test('live Wi-Fi confirmation replaces stale-cloud connection instructions without claiming download success',async()=>{
+ const {withConnection,transferAction}=await import('../public/transfer-status.js');
+ const now=Date.now(),result={...ready,device:{id:'screen'},build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'old'}};
+ const state=transferStatus(result),connection={paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,requestedSha:'current',syncRequestedAt:now};
+ const checking=withConnection(state,result,connection,now);
+ assert.equal(checking.phase,'syncing');assert.equal(checking.step,1);assert.equal(transferAction(checking),null);assert.doesNotMatch(checking.detail,/请唤醒|重新连接/);
+ const delayed=withConnection(state,result,{...connection,syncRequestedAt:now-21000},now);assert.equal(transferAction(delayed),'check');
+ assert.equal(transferAction(withConnection(state,result,{...connection,paired:false},now)),'connect');
+ assert.equal(withConnection(state,result,{...connection,deviceId:'other'},now).phase,'waiting');
+ assert.equal(withConnection(state,result,{...connection,receivedAt:now-7000},now).phase,'waiting');
+ const preparing=transferStatus({...result,pendingUpdate:true});assert.equal(transferAction(withConnection(preparing,{...result,pendingUpdate:true},connection,now)),null);
+ const stored=transferStatus({...result,deviceReport:{...ready.deviceReport,stored:true,targetSha:'current'}});assert.equal(withConnection(stored,result,connection,now).phase,'stored');
+});
