@@ -28,3 +28,12 @@ test('灵兽风向图片模型传原创形象参考，其他风格不传',async(
   return Response.json({data:[{url:'https://cdn.example.com/illustration.png'}]});
  },true);
 });
+
+test('底部是连续祥云画面，不能被解释为空白文字页脚；旧画风隔离复用',()=>{
+ for(const art_style of ['folk','cute','spirit']){
+  const prompt=buildImagePrompt({...mapping,art_style});
+  assert.match(prompt,/底部25%.*必须绘满/);assert.match(prompt,/画面最底边/);assert.match(prompt,/不能淡出成空白/);assert.match(prompt,/不将画面分为插画区与页脚区/);
+ }
+ const common={...mapping,art_style:'spirit'};
+ assert.notEqual(visualMapping({...common,art_style_version:'portrait-480x720-safe-bottom25-v3'}).fingerprint,visualMapping({...common,art_style_version:'portrait-480x720-cloud-filled-bottom25-v4'}).fingerprint);
+});
