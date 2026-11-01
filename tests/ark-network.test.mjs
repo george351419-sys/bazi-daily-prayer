@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {ArkNetwork,packet,wifiCredentials,arkDeviceId} from '../public/ark-network.js';
-function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
+function peripheral({status=true,fail=false,wrongSSID=false,capacity=1945600,badBarrier=false,onWrite=()=>{}}={}){
  const writes=[],listeners=new Map(),deviceListeners=new Map();let online=false,ssid=[],connectCalls=0,disconnectCalls=0;
  const characteristic={addEventListener:(key,fn)=>listeners.set(key,fn),removeEventListener:key=>listeners.delete(key),async startNotifications(){},async writeValue(bytes){
   writes.push([...bytes]);onWrite(bytes);if(fail&&bytes[1]===0x34)throw new Error('write failed');
@@ -11,7 +12,8 @@ function peripheral({status=true,fail=false,wrongSSID=false,onWrite=()=>{}}={}){
  if(bytes[1]===0x3a){const reply=packet(0x3a,[+online]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  if(bytes[1]===0x3d){const reply=packet(0x3d,[1,42]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  if(bytes[1]===0x35){const reply=packet(0x35,new TextEncoder().encode('test-password'));listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
- if(bytes[1]===0x56){const info=new Uint8Array(37+16);info[0]=1;info.set(new TextEncoder().encode('3.2.5-ritual.3\0'),37);const reply=packet(0x56,info);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
+ if(bytes[1]===0x42){const reply=packet(0x42,badBarrier?[]:[0,2,208,1,224]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
+ if(bytes[1]===0x56){const info=new Uint8Array(80);info[0]=1;new DataView(info.buffer).setUint32(1,capacity);info.set(new TextEncoder().encode('3.2.5-ritual.3\0frame_film_ark\0'),37);const reply=packet(0x56,info);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  if(bytes[1]===0x51){const status=packet(0x51,[7,100,0,0,0,0,10,0,0,0,10]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(status.buffer)}});}
  if(bytes[1]===0x57||bytes[1]===0x58){const reply=packet(bytes[1],[0]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  }};
@@ -81,3 +83,17 @@ test('disconnect during credential transfer cancels remaining writes',async()=>{
  let client;const p=peripheral({onWrite:bytes=>{if(bytes[1]===0x34)client.disconnect();}});client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();
  await assert.rejects(client.configure('home','test-password'),/断开/);assert.equal(client.configuring,false);assert.equal(p.writes.some(p=>p[1]===0x38),false);
 });
+
+function otaImage(){const b=new Uint8Array(1920);b[0]=0xe9;new DataView(b.buffer).setUint16(12,9,true);new DataView(b.buffer).setUint32(32,0xabcd5432,true);b.set(new TextEncoder().encode('frame_film_ark'),80);return b;}
+const imageHash=b=>createHash('sha256').update(b).digest('hex');
+test('BLE upgrade validates image, uses bounded chunks and processing barriers before commit',async()=>{
+ const p=peripheral(),updates=[],client=new ArkNetwork({bluetooth:p.bluetooth,onOta:s=>updates.push(s),delay:async()=>{}});await client.connect();const b=otaImage();
+ assert.equal(await client.startBleOta(b,imageHash(b)),true);
+ const channels=p.writes.map(b=>b[1]);assert.equal(channels[0],0x56);assert.equal(channels[1],0x10);assert.equal(channels[2],0x42);assert.equal(channels.at(-2),0x42);assert.equal(channels.at(-1),0x13);
+ assert.equal(channels.filter(c=>c===0x11).length,10);assert.equal(channels.filter(c=>c===0x42).length,3);
+ const data=p.writes.filter(b=>b[1]===0x11).flatMap(b=>b.slice(3,-1));assert.deepEqual(data,[...b]);assert.equal(updates.at(-1).progress,100);client.disconnect();
+});
+test('corrupt downloaded firmware cannot start a BLE write',async()=>{const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();await assert.rejects(client.startBleOta(otaImage(),'a'.repeat(64)),/校验失败/);assert.equal(p.writes.some(b=>b[1]===0x10),false);client.disconnect();});
+test('actual device capacity and project are read and checked before erase',async()=>{const p=peripheral({capacity:512}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();assert.equal((await client.readBuildInfo()).project,'frame_film_ark');assert.equal((await client.readBuildInfo()).otaMax,512);const b=otaImage();await assert.rejects(client.startBleOta(b,imageHash(b)),/容量不匹配/);assert.equal(p.writes.some(b=>b[1]===0x10),false);client.disconnect();});
+test('a failed processing barrier never commits or continues firmware data',async()=>{const p=peripheral({badBarrier:true}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();const b=otaImage();await assert.rejects(client.startBleOta(b,imageHash(b)),/处理确认/);assert.equal(p.writes.some(b=>b[1]===0x11||b[1]===0x13),false);client.disconnect();});
+test('a failed data transfer is never followed by the firmware commit command',async()=>{let count=0;const p=peripheral({onWrite:b=>{if(b[1]===0x11&&++count===3)throw Error('write failed');}}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();const b=otaImage();await assert.rejects(client.startBleOta(b,imageHash(b)),/write failed/);assert.equal(p.writes.some(b=>b[1]===0x13),false);client.disconnect();});

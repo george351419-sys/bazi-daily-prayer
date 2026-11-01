@@ -1,5 +1,5 @@
 import {readAPIResponse} from './api-response.js?v=20261101-safe-bottom-v3';
-import {setupNetwork} from './ark-network.js?v=20261101-wifi-form';
+import {setupNetwork} from './ark-network.js?v=20261101-ota-compat';
 import './art-style-ui.js?v=20261101-safe-bottom-v3';
 import {setupAccounts} from './account-ui.js?v=20261101-sync-v6';
 import {WISH_GROUPS} from './wishes.js';

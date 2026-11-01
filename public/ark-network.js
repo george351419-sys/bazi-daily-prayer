@@ -71,9 +71,9 @@ export class ArkNetwork {
    this.state(connected?'画屏已确认连接 Wi-Fi。内容下载与显示进度请查看下方「我的画屏」。':'蓝牙已连接，画屏 Wi-Fi 尚未连接。',connected);
   }
  }
- async write(channel,data,epoch=this.epoch){
+ async write(channel,data,epoch=this.epoch,pace=200){
   if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙已断开，请重新连接。');
-  await this.characteristic.writeValue(packet(channel,data));await this.delay(200);
+  await this.characteristic.writeValue(packet(channel,data));await this.delay(pace);
   if(epoch!==this.epoch)throw new Error('蓝牙已断开，请重新连接。');
  }
  async configure(ssid,password){
@@ -122,8 +122,34 @@ export class ArkNetwork {
   });
  }
  async readBuildInfo(){
-  const data=await this.request(0x56),text=new TextDecoder().decode(data.slice(37)).replace(/\0.*$/,'');
-  return {version:text.split('\0')[0]||'',sha:Array.from(data.slice(5,37)).map(n=>n.toString(16).padStart(2,'0')).join('')};
+  const data=await this.request(0x56);
+  if(data.length<39||data[0]!==1)throw new Error('设备升级能力信息不完整，请重新连接并读取版本。');
+  const fields=new TextDecoder().decode(data.slice(37)).split('\0');
+  return {version:fields[0],project:fields[1]||'',otaMax:new DataView(data.buffer,data.byteOffset+1,4).getUint32(0),sha:Array.from(data.slice(5,37)).map(n=>n.toString(16).padStart(2,'0')).join('')};
+ }
+ async startBleOta(image,sha256){
+  const bytes=image instanceof Uint8Array?image:new Uint8Array(image),info=await this.readBuildInfo();
+  if(!/^[a-f0-9]{64}$/.test(sha256))throw new Error('固件校验信息无效。');
+  if(info.project!=='frame_film_ark'||!info.otaMax||bytes.length>info.otaMax)throw new Error('固件与设备项目或升级分区容量不匹配：文件 '+bytes.length+' 字节，设备容量 '+info.otaMax+' 字节。');
+  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  if(bytes.length<288||bytes[0]!==0xe9||view.getUint16(12,true)!==9||view.getUint32(32,true)!==0xabcd5432||new TextDecoder().decode(bytes.slice(80,112)).replace(/\0.*$/,'')!=='frame_film_ark')throw new Error('固件不是有效的 ESP32-S3 Ark 应用镜像。');
+  const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',bytes));
+  if(Array.from(digest).map(n=>n.toString(16).padStart(2,'0')).join('')!==sha256)throw new Error('固件 SHA-256 校验失败，未写入画屏。');
+  const epoch=this.epoch,head=new Uint8Array(4);new DataView(head.buffer).setUint32(0,bytes.length);
+  const barrier=async()=>{const result=await this.request(0x42,[],15000);if(result.length!==5)throw new Error('未收到画屏固件处理确认，已停止发送。');};
+  try{
+  await this.write(0x10,head,epoch);await barrier();
+  let chunks=0;
+  for(let offset=0;offset<bytes.length;offset+=192){
+   await this.write(0x11,bytes.slice(offset,offset+192),epoch,12);chunks++;
+   if(chunks%8===0)await barrier();
+   const sent=Math.min(offset+192,bytes.length);this.onOta({transport:'ble',state:2,progress:Math.floor(sent*100/bytes.length),received:sent,total:bytes.length});
+  }
+  if(chunks%8!==0)await barrier();
+  }catch(error){throw new Error('蓝牙升级传输已停止：'+error.message+'。请重启画屏后重新连接再试；未发送固件提交命令。');}
+  // Only a complete, drained transfer may request validation and reboot. Never commit on failure.
+  try{await this.write(0x13,[],epoch);}catch(error){if(this.characteristic)throw error;}
+  return true;
  }
  async startWifiOta(url,size,sha256){
   if(!/^[a-f0-9]{64}$/.test(sha256)||!/^https:\/\/playmath\.cn\//.test(url)||!Number.isSafeInteger(size)||size<1)throw new Error('固件地址或校验信息无效。');
@@ -198,15 +224,8 @@ export function setupNetwork(){
  const editWifi=document.createElement('button');editWifi.type='button';editWifi.className='secondary';editWifi.textContent='填写 Wi-Fi 名称和密码';state.after(editWifi);
  editWifi.onclick=()=>{form.scrollIntoView({behavior:'smooth',block:'center'});form.elements.ssid.focus({preventScroll:true});};
  async function pollDownload(){if(!client.characteristic||downloadBusy)return;downloadBusy=true;try{await client.queryDownload();}catch{if(!downloadState.hidden)downloadState.textContent='内容下载：暂时无法读取设备进度。';}finally{downloadBusy=false;}}
- firmwareButton.onclick=async()=>{
-  if(firmwareButton.disabled)return;firmwareButton.disabled=true;firmwareStatus.textContent='正在读取固件清单和画屏已保存的 Wi‑Fi…';
-  try{
-   const manifest=await fetch('/firmware/ritual-6.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('固件清单不可用');return r.json();});
-   await client.startWifiOta(new URL('/firmware/'+manifest.file,location.origin).href,manifest.bytes,manifest.sha256);
-   firmwareStatus.textContent='固件已应用，画屏正在重启。';
-  }catch(error){firmwareStatus.textContent='固件升级失败：'+error.message;}
-  finally{firmwareButton.disabled=!client.characteristic;}
- };
+ firmwareButton.textContent='打开固件升级与版本核验';
+ firmwareButton.onclick=()=>{location.href='/firmware-upgrade.html?fix=ota-compat-v1';};
  if(!window.isSecureContext||!navigator.bluetooth){
   connect.disabled=true;state.textContent='此浏览器暂不支持蓝牙配网。请用电脑 Chrome / Edge 或 Android Chrome，在 HTTPS 页面打开；iPhone 请先用支持蓝牙的电脑完成配网。';return;
  }
