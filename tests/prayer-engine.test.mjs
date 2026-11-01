@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {analyzeMapping} from '../lib/service.mjs';
 import {validateInput,calendarFor,WISHES} from '../lib/domain.mjs';
-import {generateRuleMapping,natalFingerprint,selectStemSymbols,zodiacModels,selectZodiac,PRAYER_ENGINE_VERSION} from '../lib/prayer-engine.mjs';
+import {generateRuleMapping,natalFingerprint,selectStemSymbols,zodiacModels,viableZodiacModels,selectZodiac,validateFoundation,PRAYER_ENGINE_VERSION} from '../lib/prayer-engine.mjs';
 import {relationKey} from '../lib/branch-policy.mjs';
 import {PRAYER_CATALOG} from '../lib/prayer-catalog.mjs';
 import {buildImagePrompt} from '../lib/domain.mjs';
@@ -98,4 +98,19 @@ test('同一天已经生成的主尊记录不改变当天的初始方案',async(
  const f=fixture();const first=await analyzeMapping(f.config,input,calendar,[],f.fetcher);
  const again=await analyzeMapping(f.config,input,calendar,[{date:input.today,deity:first.deity,wish:first.wish_id}],f.fetcher);
  assert.equal(again.deity,first.deity);assert.equal(again.wish_id,first.wish_id);
+});
+
+test('先剔除必定新增刑害的候选，但不以原始冲提前淘汰可能有效的合',()=>{
+ const models=zodiacModels([{id:'natal.month',branch:'寅'},{id:'natal.day',branch:'午'}]);const viable=viableZodiacModels(models);
+ assert.ok(viable.length<models.length);assert.equal(viable[0].added.length,0);
+ assert.ok(viable.some(m=>m.added.join('')==='戌'));
+ assert.ok(!viable.some(m=>m.added.includes('巳'))); // 寅巳害不可由会合自动删除
+});
+test('失败记录保存阶段与具体条件，失败结果不冒充有效档案',async()=>{
+ const f=fixture();await assert.rejects(analyzeMapping(f.config,input,calendar,[],async()=>({ok:true,status:200,json:async()=>({choices:[{message:{content:'{}'}}]})})),e=>e.ruleSection==='foundation');
+ const failure=[...f.records.values()].find(x=>x.reason);assert.equal(failure.section,'foundation');assert.match(failure.reason,/日主月令/);
+});
+
+test('模型把地支放进天干保护字段时明确指出字段与允许值，不能自动猜测转换',()=>{
+ assert.throws(()=>validateFoundation({...foundation,protected_stems:['申','己']},calendar),e=>/protected_stems/.test(e.message)&&/甲乙丙丁戊己庚辛壬癸/.test(e.message)&&/申/.test(e.message));
 });
