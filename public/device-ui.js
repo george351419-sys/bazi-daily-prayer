@@ -100,7 +100,7 @@ export function setupDevices({request,fetchImage,getUser}){
   const statuses={ready:'等待后台处理',running:'后台处理中',complete:'作品已发布，等待画屏联网领取',cancelled:'旧任务已取消',failed:'重试次数已用完',uncertain:'生图结果待核查，已停止自动重试',quota:'已达到生成额度'};
   const stages={queued:'分析',mapped:'绘图',image_ready:'归档',archived:'发布',complete:'完成'};
   jobList.replaceChildren();
-  for(const job of policy.jobs.slice(0,3)){const line=document.createElement('p');line.className='field-hint';line.textContent=job.contentDate+' · '+(statuses[job.status]||'待确认')+' · '+(stages[job.stage]||'')+(job.imageReusedFrom&&['image_ready','archived','complete'].includes(job.stage)?' · 已复用历史图片':'');jobList.append(line);
+  for(const job of policy.jobs.slice(0,3)){const line=document.createElement('p');line.className='field-hint';line.textContent=job.contentDate+' · '+(statuses[job.status]||'待确认')+' · '+(stages[job.stage]||'');jobList.append(line);
    if(job.canRetry){
     const retry=document.createElement('button');retry.type='button';retry.className='text-button';retry.textContent='重试归档与发布';
     retry.onclick=async()=>{const context=current();retry.disabled=true;try{await request('/api/account/automation/retry',{jobId:job.id,expectedVersion:policy.version});if(valid(context))await refresh();}catch(e){if(valid(context))policyState.textContent=e.message;}finally{retry.disabled=false;}};

@@ -41,7 +41,7 @@ test('当前包刷新回执不依赖另一次保存标记，其他包回执不�
 test('当前包的保存和刷新凭据在休眠后仍有效，但不套用到新包',()=>{
  const asleep={...ready,build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'current',stored:true}};
  assert.equal(transferStatus(asleep,'new').phase,'stored');
- assert.match(transferStatus(asleep,'new').detail,/确认键/);
+ assert.match(transferStatus(asleep,'new').detail,/确认/);
  assert.equal(transferStatus({...asleep,deviceReport:{...asleep.deviceReport,renderedCurrent:true,renderReport:{day:0}}},'new').phase,'rendered');
  assert.equal(transferStatus({...asleep,build:{...asleep.build,sha256:'next'}},'new').phase,'waiting');
 });

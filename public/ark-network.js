@@ -1,6 +1,6 @@
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer} from './transfer-status.js?v=20261101-copy-v1';
+import {renderTransfer} from './transfer-status.js?v=20261101-approved-copy-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -196,7 +196,10 @@ export function setupNetwork(){
   binding.append(bindingState,bind,note);state.after(binding);
  }
  let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false,announcedDevice=null;
- let reconnectTimer=null,reconnectAttempts=0,rememberedDevice=null,allowReconnect=false,latestStatus=null,syncSha=null,syncBusy=false;
+ let reconnectTimer=null,reconnectAttempts=0,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false;
+ const networkGrid=root.querySelector('.network-grid');
+ function updateConnectionControls(){const ready=latestTransferState?.step>=1;if(networkGrid)networkGrid.hidden=!ready;state.hidden=!ready;binding.hidden=!ready||!connectedDevice;}
+ updateConnectionControls();
  const password=form.elements.wifiPassword;
  const transfer=document.createElement('div');transfer.hidden=true;state.after(transfer);
  const firmwareBox=document.createElement('details');firmwareBox.className='firmware-update';
@@ -210,7 +213,7 @@ export function setupNetwork(){
  const client=new ArkNetwork({bluetooth:navigator.bluetooth,onState:status=>{
   state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;firmwareButton.disabled=!status.paired||busy;
   connectedDevice=status.deviceId?{deviceId:status.deviceId,deviceName:status.deviceName}:null;
-  binding.hidden=!status.deviceId;bind.disabled=!status.deviceId;
+  binding.hidden=!status.deviceId;bind.disabled=!status.deviceId;updateConnectionControls();
   if(status.deviceId)bindingState.textContent='当前画屏：'+status.deviceName+' · 设备编号 '+status.deviceId;
   else if(status.paired)bindingState.textContent='这台画屏的名称中没有可用的设备编号，暂时无法绑定。';
   if((connectedDevice?.deviceId||null)!==announcedDevice){announcedDevice=connectedDevice?.deviceId||null;document.dispatchEvent(new CustomEvent('prayer:ark-device',{detail:connectedDevice}));}
@@ -244,19 +247,19 @@ export function setupNetwork(){
  }
  firmwareButton.textContent='打开固件升级与版本核验';
  firmwareButton.onclick=()=>{location.href='/firmware-upgrade.html?fix=ota-compat-v1';};
- if(!window.isSecureContext||!navigator.bluetooth){
-  connect.disabled=true;state.textContent='此浏览器暂不支持蓝牙配网。请用电脑 Chrome / Edge 或 Android Chrome，在 HTTPS 页面打开；iPhone 请先用支持蓝牙的电脑完成配网。';return;
- }
  async function syncPublished(){
   const sha=latestStatus?.build?.sha256;
   if(busy||syncBusy||!client.characteristic||!sha||syncSha===sha||latestStatus.pendingUpdate||latestStatus.build.status!=='published'||latestStatus.device?.id!==client.deviceId)return;
   syncBusy=true;try{await client.resumeWifi();syncSha=sha;}finally{syncBusy=false;}
  }
  document.addEventListener('prayer:transfer-status',event=>{
-  latestStatus=event.detail.result;
+  latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();
   renderTransfer(transfer,event.detail.state);
   void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});
  });
+ if(!window.isSecureContext||!navigator.bluetooth){
+  connect.disabled=true;state.textContent='此浏览器暂不支持蓝牙配网。请用电脑 Chrome / Edge 或 Android Chrome，在 HTTPS 页面打开；iPhone 请先用支持蓝牙的电脑完成配网。';return;
+ }
  document.addEventListener('prayer:ark-sync',async()=>{
   if(!client.characteristic){state.textContent='请先连接附近画屏蓝牙，再点击立即检查同步。';location.hash='network-onboarding';root.scrollIntoView({behavior:'smooth'});return;}
   try{await client.resumeWifi();state.textContent='已请求画屏检查云端内容。请保持联网，等待“内容已保存”后在画屏进入“画面”。旧固件若仍无回报，请先更新到 ritual.6。';}catch(error){state.textContent='检查同步未启动：'+error.message;}

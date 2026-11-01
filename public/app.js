@@ -1,7 +1,7 @@
 import {readAPIResponse} from './api-response.js?v=20261101-safe-bottom-v3';
-import {setupNetwork} from './ark-network.js?v=20261101-copy-v1';
+import {setupNetwork} from './ark-network.js?v=20261101-approved-copy-v1';
 import './art-style-ui.js?v=20261101-safe-bottom-v3';
-import {setupAccounts} from './account-ui.js?v=20261101-copy-v1';
+import {setupAccounts} from './account-ui.js?v=20261101-approved-copy-v1';
 import {WISH_GROUPS} from './wishes.js';
 import {normalizeBirthDate} from './date-input.js?v=20261017-solar';
 import {setupBirthInputs} from './birth-picker.js?v=20261017-solar';
@@ -49,7 +49,7 @@ function renderMapping(job){
  setText('#concept-tag',job.source==='upload'?'我的照片':'AI 祈福概念画');show('#result',true);
 }
 async function handle(job,seq,autoImage=true){
- if(seq!==run)return;if(currentJob?.id===job.id)job={...currentJob,...job};currentJob=job;show('#empty-state',false);show('#image-reuse-note',job.status==='complete'&&!!job.imageReuse);if(job.imageReuse)setText('#image-reuse-note','今日画面复用自 '+job.imageReuse.sourceDate+'，今日解读已独立保存。');
+ if(seq!==run)return;if(currentJob?.id===job.id)job={...currentJob,...job};currentJob=job;show('#empty-state',false);
  if(job.mapping)renderMapping(job);
  if(job.status==='analyzing'||job.status==='generating'){renderProgress(job);pollTimer=setTimeout(()=>poll(job.id,seq,autoImage),1800);return;}
  if(job.managedAutomatically&&job.status!=='complete'){show('#progress',false);lock(false);setText('#generation-error','每日画作正在由后台准备，可在“我的画册 → 我的画屏”查看进度和重试归档发布。');show('#generation-error',true);show('#retry-image',false);return;}

@@ -1600,49 +1600,150 @@
   // miniprogram/utils/transfer-status.js
   var require_transfer_status = __commonJS({
     "miniprogram/utils/transfer-status.js"(exports, module) {
+      var STATUS_COPY = {
+        "S01": {
+          "title": "\u6B63\u5728\u8FDE\u63A5\u753B\u5C4F",
+          "detail": "\u7A0D\u7B49\u7247\u523B\u3002"
+        },
+        "S02": {
+          "title": "\u5148\u8BB8\u613F\uFF0C\u751F\u6210\u4F60\u7684\u7948\u798F\u56FE",
+          "detail": ""
+        },
+        "S03": {
+          "title": "\u5F53\u524D\u753B\u5C4F\u6B63\u5728\u4F7F\u7528\u81EA\u5B9A\u4E49\u7167\u7247",
+          "detail": "\u82E5\u8981\u663E\u793A\u65B0\u7948\u798F\u753B\uFF0C\u8BF7\u5728\u300C\u81EA\u5B9A\u4E49\u300D\u5207\u6362\u4E3A\u7948\u798F\u56FE\u5E76\u4FDD\u5B58\u3002"
+        },
+        "S04": {
+          "title": "\u6B63\u5728\u51C6\u5907\u8FD9\u5E45\u753B\u7684\u540C\u6B65\u5185\u5BB9",
+          "detail": "\u8BF7\u8010\u5FC3\u7B49\u5F85\uFF0C\u6682\u4E0D\u9700\u8981\u64CD\u4F5C\u3002"
+        },
+        "S05": {
+          "title": "\u7075\u9B42\u753B\u5E08\u7206\u809D\u4E2D",
+          "detail": "\u753B\u5C4F\u4F1A\u4FDD\u7559\u5DF2\u4E0B\u8F7D\u7684\u5185\u5BB9\uFF0C\u6062\u590D\u540E\u7EE7\u7EED\u540C\u6B65\u3002"
+        },
+        "S06": {
+          "title": "\u7B49\u5F85\u540E\u53F0\u51C6\u5907\u5185\u5BB9",
+          "detail": "\u7B49\u4F1A\u518D\u94FE\u63A5\u753B\u5C4F\uFF0C\u4E0D\u7740\u6025~"
+        },
+        "S07": {
+          "title": "\u6B63\u5728\u8BFB\u53D6\u4E24\u65E5\u753B\u4F5C",
+          "detail": "\u6B63\u5728\u8BFB\u53D6\u753B\u4F5C\uFF0C\u968F\u540E\u8F6C\u6362\u4E3A\u753B\u5C4F\u683C\u5F0F\uFF0C\u7B49\u4F1A\u518D\u94FE\u63A5\u753B\u5C4F\u3002"
+        },
+        "S08": {
+          "title": "\u6B63\u5728\u8F6C\u6362\u753B\u5C4F\u5185\u5BB9",
+          "detail": "\u6B63\u5728\u5236\u4F5C\u58A8\u6C34\u5C4F\u753B\u9762\u4E0E\u5FAE\u884C\u52A8\uFF0C\u7B49\u4F1A\u518D\u94FE\u63A5\u753B\u5C4F\u3002"
+        },
+        "S09": {
+          "title": "\u6B63\u5728\u4FDD\u5B58\u753B\u5C4F\u5185\u5BB9\u5305 \xB7 {percent}%",
+          "detail": "\u6B63\u5728\u4FDD\u5B58\u5DF2\u8F6C\u6362\u7684\u5185\u5BB9\uFF0C\u5B8C\u6210\u540E\u5373\u53EF\u8FDE\u63A5\u753B\u5C4F\u3002"
+        },
+        "S10": {
+          "title": "\u753B\u5C4F\u5185\u5BB9\u5DF2\u51C6\u5907\u597D \xB7 \u53BB\u94FE\u63A5\u795E\u7269\u5427",
+          "detail": "\u70B9\u51FB\u4E0B\u65B9\u6309\u94AE\u524D\u5F80\u300C\u94FE\u63A5\u795E\u7269\u300D\uFF0C\u7ED1\u5B9A\u540E\u5373\u53EF\u9886\u53D6\u5DF2\u51C6\u5907\u7684\u5185\u5BB9\u3002"
+        },
+        "S11": {
+          "title": "\u753B\u5C4F\u5185\u5BB9\u5DF2\u5C31\u7EEA \xB7 \u6B63\u5728\u5B89\u6392\u4E0B\u53D1",
+          "detail": "\u65E0\u9700\u91CD\u65B0\u751F\u6210\u6216\u914D\u7F51\uFF0C\u8BF7\u7B49\u5F85\u201C\u5185\u5BB9\u5DF2\u4FDD\u5B58\u201D\u540E\uFF0C\u518D\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u786E\u8BA4\u952E\u67E5\u770B\u65B0\u5185\u5BB9\u3002"
+        },
+        "S12": {
+          "title": "\u6B63\u5728\u51C6\u5907\u753B\u5C4F\u5185\u5BB9",
+          "detail": "\u8BF7\u8010\u5FC3\u7B49\u5F85\uFF0C\u6682\u4E0D\u9700\u8981\u64CD\u4F5C\u3002"
+        },
+        "S13": {
+          "title": "\u8BF7\u5148\u66F4\u65B0\u753B\u5C4F\u56FA\u4EF6",
+          "detail": "\u5F53\u524D\u56FA\u4EF6\u4E0D\u80FD\u63A5\u6536\u8FD9\u4EFD\u5185\u5BB9\uFF0C\u8BF7\u5230\u300C\u94FE\u63A5\u795E\u7269\u300D\u66F4\u65B0\u56FA\u4EF6\u3002"
+        },
+        "S14": {
+          "title": "\u5185\u5BB9\u5DF2\u5C31\u7EEA \xB7 \u7B49\u5F85\u8BBE\u5907\u8054\u7F51\u68C0\u67E5",
+          "detail": "\u8BF7\u5524\u9192\u753B\u5C4F\u5E76\u8FDE\u63A5 Wi-Fi\uFF0C\u6216\u5728\u84DD\u7259\u8FDE\u63A5\u540E\u70B9\u51FB\u201C\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\u201D\u3002\u84DD\u7259\u8FDE\u63A5\u6210\u529F\u4E0D\u7B49\u4E8E\u65B0\u5185\u5BB9\u5DF2\u4E0B\u8F7D\u3002"
+        },
+        "S15": {
+          "title": "\u5185\u5BB9\u5DF2\u5C31\u7EEA \xB7 \u7B49\u5F85\u6700\u65B0\u8BBE\u5907\u68C0\u67E5",
+          "detail": "\u5C1A\u65E0\u5F53\u524D\u5185\u5BB9\u7684\u8FD1\u671F\u56DE\u6267\u3002\u8BF7\u5524\u9192\u753B\u5C4F\uFF0C\u4FDD\u6301 Wi-Fi \u8054\u7F51\uFF0C\u5E76\u5728\u84DD\u7259\u8FDE\u63A5\u540E\u70B9\u51FB\u201C\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\u201D\uFF1B\u65E0\u9700\u91CD\u65B0\u751F\u6210\u753B\u4F5C\u3002"
+        },
+        "S16": {
+          "title": "\u753B\u5C4F\u5DF2\u8054\u7F51 \xB7 \u6B63\u5728\u786E\u8BA4\u5F53\u524D\u5185\u5BB9",
+          "detail": "\u6B63\u5728\u7B49\u5F85\u5F53\u524D\u5185\u5BB9\u7684\u4E0B\u8F7D\u6216\u5237\u65B0\u56DE\u6267\u3002"
+        },
+        "S17": {
+          "title": "\u6B63\u5728\u4F20\u8F93\u5230\u753B\u5C4F \xB7 {percent}%",
+          "detail": "\u8BF7\u4FDD\u6301\u753B\u5C4F\u8054\u7F51\u3002"
+        },
+        "S18": {
+          "title": "\u6B63\u5728\u4F20\u8F93\u5230\u753B\u5C4F \xB7 {percent}%",
+          "detail": "\u8BBE\u5907\u901A\u8FC7\u84DD\u7259\u56DE\u62A5\u7684\u4E0B\u8F7D\u8FDB\u5EA6\uFF0C\u8BF7\u4FDD\u6301\u753B\u5C4F\u8054\u7F51\u3002"
+        },
+        "S19": {
+          "title": "\u8BBE\u5907\u5DF2\u56DE\u62A5\u4E0B\u8F7D\u5B8C\u6210 \xB7 \u7B49\u5F85\u5185\u5BB9\u6838\u9A8C",
+          "detail": "\u6B63\u5728\u786E\u8BA4\u5F53\u524D\u5185\u5BB9\u5305\u7684\u4FDD\u5B58\u4E0E\u5237\u65B0\u7ED3\u679C\uFF1B"
+        },
+        "S20": {
+          "title": "\u5185\u5BB9\u5DF2\u4FDD\u5B58 \xB7 \u73B0\u5728\u53EF\u4EE5\u8FDB\u5165\u753B\u9762",
+          "detail": "\u8BF7\u901A\u8FC7\u5DE6\u4FA7\u6309\u952E\u70B9\u201CIMG\u201D\uFF0C\u6309\u786E\u8BA4\u8FDB\u5165\u3002"
+        },
+        "S21": {
+          "title": "\u5F53\u524D\u5185\u5BB9\u5DF2\u56DE\u62A5\u5237\u65B0",
+          "detail": "\u5982\u4F60\u505C\u5728 Home\uFF0C\u53EF\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002"
+        },
+        "S22": {
+          "title": "\u5185\u5BB9\u5DF2\u4FDD\u5B58 \xB7 \u73B0\u5728\u53EF\u4EE5\u8FDB\u5165\u753B\u9762",
+          "detail": "\u53EF\u4EE5\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u201C\u753B\u9762\u201D\u3002"
+        },
+        "S23": {
+          "title": "\u4F20\u8F93\u5B8C\u6210 \xB7 \u753B\u5C4F\u5DF2\u56DE\u62A5\u5237\u65B0",
+          "detail": "\u53EF\u4EE5\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u201C\u753B\u9762\u201D\u3002"
+        },
+        "S24": {
+          "title": "\u4F20\u8F93\u6682\u672A\u6210\u529F \xB7 \u7B49\u5F85\u91CD\u8BD5",
+          "detail": "\u8BF7\u68C0\u67E5\u753B\u5C4F Wi-Fi \u5E76\u4FDD\u6301\u5F00\u673A\uFF0C\u8BBE\u5907\u5C06\u91CD\u65B0\u9886\u53D6\u5185\u5BB9\u3002"
+        },
+        "S25": {
+          "title": "\u753B\u5C4F\u5DF2\u8054\u7F51 \xB7 \u6B63\u5728\u786E\u8BA4\u540C\u6B65\u7ED3\u679C",
+          "detail": "\u4E91\u7AEF\u5185\u5BB9\u5DF2\u5C31\u7EEA\uFF0C\u4F46\u5F53\u524D\u5185\u5BB9\u5305\u7684\u4E0B\u8F7D\u6216\u5237\u65B0\u56DE\u6267\u5C1A\u4E0D\u5B8C\u6574\uFF1B\u5982\u753B\u5C4F\u5DF2\u663E\u793A\u65B0\u753B\uFF0C\u65E0\u9700\u91CD\u590D\u63A8\u9001\u3002"
+        }
+      };
+      function copyState(id, phase, step = 0, percent = null) {
+        const text = STATUS_COPY[id], title = text.title.replace(" \xB7 {percent}%", percent === null ? "" : " \xB7 " + percent + "%");
+        return { phase, title, detail: text.detail, step, percent };
+      }
       function transferStatus(result = {}, artworkId = null) {
-        const state = (phase, title, detail, step = 0, percent = null) => ({ phase, title, detail, step, percent });
-        if (result.syncConfigured === void 0) return state("checking", "\u6B63\u5728\u786E\u8BA4\u753B\u5C4F\u8FDE\u63A5", "\u753B\u4F5C\u5DF2\u5B8C\u6210\uFF0C\u6B63\u5728\u8BFB\u53D6\u540C\u6B65\u72B6\u6001\u3002");
-        if (!result.syncConfigured && !result.plan) return state("unbound", "\u5148\u8BB8\u613F\uFF0C\u751F\u6210\u4F60\u7684\u7948\u798F\u56FE", "\u5148\u5728\u300C\u8BB8\u613F\u6C60\u300D\u586B\u5199\u751F\u8FB0\u4E0E\u5FC3\u613F\uFF1B\u753B\u5C4F\u5185\u5BB9\u51C6\u5907\u5B8C\u6210\u540E\uFF0C\u518D\u8FDE\u63A5\u8BBE\u5907\u3002");
-        if (artworkId && result.plan?.contentMode === "photo") return state("photo", "\u5F53\u524D\u753B\u5C4F\u4F7F\u7528\u81EA\u5B9A\u4E49\u7167\u7247", "\u82E5\u8981\u663E\u793A\u65B0\u7948\u798F\u753B\uFF0C\u8BF7\u5728\u300C\u81EA\u5B9A\u4E49\u300D\u5207\u6362\u4E3A\u7948\u798F\u56FE\u5E76\u4FDD\u5B58\u3002");
-        if (artworkId && !result.plan?.artworkIds?.includes(artworkId)) return state("preparing", "\u6B63\u5728\u51C6\u5907\u8FD9\u5E45\u753B\u7684\u540C\u6B65\u5185\u5BB9", "\u6B63\u5728\u5C06\u65B0\u753B\u4F5C\u52A0\u5165\u4E24\u65E5\u753B\u5C4F\u8BA1\u5212\u3002");
-        if (result.preparation?.stage === "retrying" || !result.preparation && result.build?.status === "retrying") return state("retrying", "\u5185\u5BB9\u51C6\u5907\u6682\u672A\u6210\u529F \xB7 \u540E\u53F0\u6B63\u5728\u91CD\u8BD5", "\u753B\u5C4F\u4F1A\u4FDD\u7559\u5DF2\u4E0B\u8F7D\u7684\u5185\u5BB9\uFF0C\u6062\u590D\u540E\u7EE7\u7EED\u540C\u6B65\u3002");
+        if (result.syncConfigured === void 0) return copyState("S01", "checking");
+        if (!result.syncConfigured && !result.plan) return copyState("S02", "unbound");
+        if (artworkId && result.plan?.contentMode === "photo") return copyState("S03", "photo");
+        if (artworkId && !result.plan?.artworkIds?.includes(artworkId)) return copyState("S04", "preparing");
+        if (result.preparation?.stage === "retrying" || !result.preparation && result.build?.status === "retrying") return copyState("S05", "retrying");
         const prep = result.preparation;
         if (prep && !prep.ready) {
-          const stages = { queued: ["\u7B49\u5F85\u540E\u53F0\u51C6\u5907\u5185\u5BB9", "\u753B\u4F5C\u5DF2\u5B8C\u6210\uFF0C\u5185\u5BB9\u5305\u5DF2\u6392\u961F\uFF1B\u51C6\u5907\u5B8C\u6210\u540E\u518D\u8FDE\u63A5\u753B\u5C4F\u3002"], images: ["\u6B63\u5728\u8BFB\u53D6\u4E24\u65E5\u753B\u4F5C", "\u6B63\u5728\u8BFB\u53D6\u753B\u4F5C\uFF0C\u968F\u540E\u8F6C\u6362\u4E3A\u753B\u5C4F\u683C\u5F0F\u3002"], encoding: ["\u6B63\u5728\u8F6C\u6362\u753B\u5C4F\u5185\u5BB9", "\u6B63\u5728\u5236\u4F5C\u58A8\u6C34\u5C4F\u753B\u9762\u4E0E\u5FAE\u884C\u52A8\uFF0C\u6682\u4E0D\u9700\u8981\u8FDE\u63A5\u84DD\u7259\u6216 Wi-Fi\u3002"], uploading: ["\u6B63\u5728\u4FDD\u5B58\u753B\u5C4F\u5185\u5BB9\u5305", "\u6B63\u5728\u4FDD\u5B58\u5DF2\u8F6C\u6362\u7684\u5185\u5BB9\uFF0C\u5B8C\u6210\u540E\u5373\u53EF\u8FDE\u63A5\u753B\u5C4F\u3002"], retrying: ["\u753B\u5C4F\u5185\u5BB9\u51C6\u5907\u6682\u672A\u6210\u529F", "\u540E\u53F0\u4F1A\u91CD\u8BD5\uFF0C\u6682\u4E0D\u9700\u8981\u8FDE\u63A5\u8BBE\u5907\u3002"] };
-          const [title, detail] = stages[prep.stage] || stages.queued;
-          const count = prep.progress, percent = prep.stage === "uploading" && count?.total > 0 ? Math.round(count.completed / count.total * 100) : null;
-          return { ...state("preparing", title + (percent === null ? "" : " \xB7 " + percent + "%"), detail, 0, percent), preparation: true, preparationStep: { queued: 0, images: 0, encoding: 1, uploading: 2 }[prep.stage] || 0 };
+          const stage = prep.stage, count = prep.progress, percent = stage === "uploading" && count?.total > 0 ? Math.round(count.completed / count.total * 100) : null;
+          return { ...copyState({ queued: "S06", images: "S07", encoding: "S08", uploading: "S09" }[stage] || "S06", "preparing", 0, percent), preparation: true, preparationStep: { queued: 0, images: 0, encoding: 1, uploading: 2 }[stage] || 0 };
         }
-        if (!result.syncConfigured) return state(prep?.ready ? "connect" : "unbound", prep?.ready ? "\u753B\u5C4F\u5185\u5BB9\u5DF2\u51C6\u5907\u597D \xB7 \u53BB\u94FE\u63A5\u795E\u7269" : "\u5148\u8BB8\u613F\uFF0C\u751F\u6210\u4F60\u7684\u7948\u798F\u56FE", prep?.ready ? "\u73B0\u5728\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u548C Wi-Fi\uFF0C\u7ED1\u5B9A\u540E\u5373\u53EF\u9886\u53D6\u5DF2\u51C6\u5907\u7684\u5185\u5BB9\u3002" : "\u5148\u5728\u300C\u8BB8\u613F\u6C60\u300D\u586B\u5199\u751F\u8FB0\u4E0E\u5FC3\u613F\uFF1B\u753B\u5C4F\u5185\u5BB9\u51C6\u5907\u5B8C\u6210\u540E\uFF0C\u518D\u8FDE\u63A5\u8BBE\u5907\u3002", prep?.ready ? 1 : 0);
-        if (prep?.ready && (result.pendingUpdate || result.build?.status !== "published")) return state("publishing", "\u753B\u5C4F\u5185\u5BB9\u5DF2\u5C31\u7EEA \xB7 \u6B63\u5728\u5B89\u6392\u4E0B\u53D1", "\u5185\u5BB9\u5DF2\u51C6\u5907\u5B8C\u6210\uFF0C\u6B63\u5728\u5173\u8054\u5230\u753B\u5C4F\uFF1B\u65E0\u9700\u91CD\u65B0\u751F\u6210\u6216\u914D\u7F51\u3002", 1);
-        if (result.pendingUpdate || result.build?.status !== "published") return state("preparing", "\u6B63\u5728\u51C6\u5907\u753B\u5C4F\u5185\u5BB9", "\u6B63\u5728\u51C6\u5907\u4E24\u65E5\u753B\u4F5C\u4E0E\u5FAE\u884C\u52A8\uFF0C\u5B8C\u6210\u540E\u5373\u53EF\u4F9B\u753B\u5C4F\u9886\u53D6\u3002");
+        if (!result.syncConfigured) return prep?.ready ? copyState("S10", "connect", 1) : copyState("S02", "unbound");
+        if (prep?.ready && (result.pendingUpdate || result.build?.status !== "published")) return copyState("S11", "publishing", 1);
+        if (result.pendingUpdate || result.build?.status !== "published") return copyState("S12", "preparing");
         const report = result.deviceReport;
-        if (report?.firmwareUpdateRequired) return state("firmware", "\u8BF7\u5148\u66F4\u65B0\u753B\u5C4F\u56FA\u4EF6", "\u5F53\u524D\u56FA\u4EF6\u4E0D\u80FD\u63A5\u6536\u8FD9\u4EFD\u5185\u5BB9\uFF0C\u8BF7\u5230\u300C\u94FE\u63A5\u795E\u7269\u300D\u66F4\u65B0\u56FA\u4EF6\u3002", 1);
-        if (!report) return state("waiting", "\u5185\u5BB9\u5DF2\u5C31\u7EEA \xB7 \u7B49\u5F85\u8BBE\u5907\u8054\u7F51\u68C0\u67E5", "\u8BF7\u5524\u9192\u753B\u5C4F\u5E76\u8FDE\u63A5 Wi-Fi\uFF0C\u6216\u5728\u84DD\u7259\u8FDE\u63A5\u540E\u70B9\u51FB\u201C\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\u201D\u3002\u84DD\u7259\u8FDE\u63A5\u6210\u529F\u4E0D\u7B49\u4E8E\u65B0\u5185\u5BB9\u5DF2\u4E0B\u8F7D\u3002", 1);
-        const knownTarget = !!result.build?.sha256;
-        const matchesTarget = !knownTarget || report.targetSha === result.build.sha256;
-        const samePackage = knownTarget && matchesTarget;
+        if (report?.firmwareUpdateRequired) return copyState("S13", "firmware", 1);
+        if (!report) return copyState("S14", "waiting", 1);
+        const knownTarget = !!result.build?.sha256, matchesTarget = !knownTarget || report.targetSha === result.build.sha256, samePackage = knownTarget && matchesTarget;
         const fresh = !report.stale && !(Date.parse(report.lastSeen) < Date.parse(result.build?.publishedAt));
-        if (samePackage && report.renderedCurrent && report.renderReport) return state("rendered", "\u5F53\u524D\u5185\u5BB9\u5DF2\u56DE\u62A5\u5237\u65B0", "\u5F53\u524D\u5305\u5DF2\u6267\u884C\u753B\u9762\u5237\u65B0\uFF1B\u5982\u4F60\u505C\u5728 Home\uFF0C\u53EF\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002\u8BBE\u5907\u4F11\u7720\u4E0D\u64A4\u9500\u8FD9\u6B21\u6210\u529F\u8BB0\u5F55\u3002", 4);
-        if (samePackage && report.stored) return state("stored", "\u5185\u5BB9\u5DF2\u4FDD\u5B58 \xB7 \u73B0\u5728\u53EF\u4EE5\u8FDB\u5165\u753B\u9762", "\u8BF7\u5728\u753B\u5C4F Home \u9009\u62E9\u201C\u753B\u9762\u201D\uFF0C\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002\u540E\u53F0\u4E0B\u8F7D\u4E0D\u4F1A\u6253\u65AD Home \u6216\u8BBE\u7F6E\u9875\uFF1B\u6B63\u5728\u7B49\u5F85\u8BE5\u5185\u5BB9\u7684\u5237\u65B0\u56DE\u6267\u3002", 3);
-        if (!fresh) return state("waiting", "\u5185\u5BB9\u5DF2\u5C31\u7EEA \xB7 \u7B49\u5F85\u6700\u65B0\u8BBE\u5907\u68C0\u67E5", "\u5C1A\u65E0\u5F53\u524D\u5185\u5BB9\u7684\u8FD1\u671F\u56DE\u6267\u3002\u8BF7\u5524\u9192\u753B\u5C4F\uFF0C\u4FDD\u6301 Wi-Fi \u8054\u7F51\uFF0C\u5E76\u5728\u84DD\u7259\u8FDE\u63A5\u540E\u70B9\u51FB\u201C\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\u201D\uFF1B\u65E0\u9700\u91CD\u65B0\u751F\u6210\u753B\u4F5C\u3002", 1);
-        if (matchesTarget && report.stored && !report.showingPrevious && report.renderReport) return state("rendered", "\u4F20\u8F93\u5B8C\u6210 \xB7 \u753B\u5C4F\u5DF2\u56DE\u62A5\u5237\u65B0", "\u8BBE\u5907\u5DF2\u56DE\u62A5\u5237\u65B0\uFF1BHome \u4E2D\u53EF\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u786E\u8BA4\u952E\u67E5\u770B\u3002", 4);
-        if (matchesTarget && report.stored) return state("stored", "\u5185\u5BB9\u5DF2\u4FDD\u5B58 \xB7 \u73B0\u5728\u53EF\u4EE5\u8FDB\u5165\u753B\u9762", "\u8BF7\u5728\u753B\u5C4F Home \u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\uFF0C\u7F51\u9875\u6B63\u5728\u7B49\u5F85\u5237\u65B0\u56DE\u6267\u3002", 3);
-        if (!matchesTarget) return state("confirming", "\u753B\u5C4F\u5DF2\u8054\u7F51 \xB7 \u6B63\u5728\u786E\u8BA4\u5F53\u524D\u5185\u5BB9", "\u6700\u8FD1\u56DE\u62A5\u5BF9\u5E94\u5176\u4ED6\u5185\u5BB9\u5305\uFF0C\u6B63\u5728\u7B49\u5F85\u5F53\u524D\u5185\u5BB9\u7684\u4E0B\u8F7D\u6216\u5237\u65B0\u56DE\u6267\u3002", 1);
-        if (report.downloadState === 2) return state("confirming", "\u8BBE\u5907\u5DF2\u56DE\u62A5\u4E0B\u8F7D\u5B8C\u6210 \xB7 \u7B49\u5F85\u5185\u5BB9\u6838\u9A8C", "\u6B63\u5728\u786E\u8BA4\u5F53\u524D\u5185\u5BB9\u5305\u7684\u4FDD\u5B58\u4E0E\u5237\u65B0\u7ED3\u679C\uFF1B\u5982\u753B\u5C4F\u5DF2\u663E\u793A\u65B0\u753B\uFF0C\u65E0\u9700\u91CD\u590D\u63A8\u9001\u3002", 2);
-        if (report.downloadState === 3) return state("retrying", "\u4F20\u8F93\u6682\u672A\u6210\u529F \xB7 \u7B49\u5F85\u91CD\u8BD5", "\u8BF7\u68C0\u67E5\u753B\u5C4F Wi-Fi \u5E76\u4FDD\u6301\u5F00\u673A\uFF0C\u8BBE\u5907\u5C06\u91CD\u65B0\u9886\u53D6\u5185\u5BB9\u3002", 1);
+        if (samePackage && report.renderedCurrent && report.renderReport) return copyState("S21", "rendered", 4);
+        if (samePackage && report.stored) return copyState("S20", "stored", 3);
+        if (!fresh) return copyState("S15", "waiting", 1);
+        if (matchesTarget && report.stored && !report.showingPrevious && report.renderReport) return copyState("S23", "rendered", 4);
+        if (matchesTarget && report.stored) return copyState("S22", "stored", 3);
+        if (!matchesTarget) return copyState("S16", "confirming", 1);
+        if (report.downloadState === 2) return copyState("S19", "confirming", 2);
+        if (report.downloadState === 3) return copyState("S24", "retrying", 1);
         if (report.downloadState === 1) {
           const percent = Number.isFinite(report.downloadProgress) ? Math.max(0, Math.min(100, report.downloadProgress)) : null;
-          return state("downloading", "\u6B63\u5728\u4F20\u8F93\u5230\u753B\u5C4F" + (percent === null ? "" : " \xB7 " + percent + "%"), "\u8FD9\u662F\u8BBE\u5907\u6700\u8FD1\u56DE\u62A5\u7684\u4E0B\u8F7D\u8FDB\u5EA6\uFF0C\u8BF7\u4FDD\u6301\u753B\u5C4F\u8054\u7F51\u3002", 2, percent);
+          return copyState("S17", "downloading", 2, percent);
         }
-        return state("confirming", "\u753B\u5C4F\u5DF2\u8054\u7F51 \xB7 \u6B63\u5728\u786E\u8BA4\u540C\u6B65\u7ED3\u679C", "\u4E91\u7AEF\u5185\u5BB9\u5DF2\u5C31\u7EEA\uFF0C\u4F46\u5F53\u524D\u5185\u5BB9\u5305\u7684\u4E0B\u8F7D\u6216\u5237\u65B0\u56DE\u6267\u5C1A\u4E0D\u5B8C\u6574\uFF1B\u5982\u753B\u5C4F\u5DF2\u663E\u793A\u65B0\u753B\uFF0C\u65E0\u9700\u91CD\u590D\u63A8\u9001\u3002", 1);
+        return copyState("S25", "confirming", 1);
       }
       function withLiveDownload(state, result, live, now = Date.now()) {
         if (!live || now - live.receivedAt > 6e3 || result?.pendingUpdate || result?.build?.status !== "published" || !result.build.sha256 || result.device?.id !== live.deviceId || result.deviceReport?.targetSha !== result.build.sha256 || result.deviceReport?.stale || Date.parse(result.deviceReport?.lastSeen) < Date.parse(result.build.publishedAt) || !["downloading", "confirming", "waiting"].includes(state.phase)) return state;
         if (live.state !== 1 || !Number.isFinite(live.progress)) return state;
         const percent = Math.max(0, Math.min(100, live.progress));
-        return { ...state, phase: "downloading", title: "\u6B63\u5728\u4F20\u8F93\u5230\u753B\u5C4F \xB7 " + percent + "%", detail: "\u8BBE\u5907\u901A\u8FC7\u84DD\u7259\u56DE\u62A5\u7684\u4E0B\u8F7D\u8FDB\u5EA6\uFF0C\u8BF7\u4FDD\u6301\u753B\u5C4F\u8054\u7F51\u3002", step: 2, percent };
+        return { ...state, ...copyState("S18", "downloading", 2, percent) };
       }
       function receiptTime(value) {
         const stamp = Date.parse(value);
@@ -3014,10 +3115,10 @@
 
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
   <button wx:if="{{prepareFailed}}" bindtap="retryPreparation" disabled="{{busy}}" class="secondary">\u91CD\u8BD5\u51C6\u5907\u753B\u5C4F\u5185\u5BB9</button>
-  <text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
+  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
   <button wx:if="{{syncState.phase==='connect'||syncState.phase==='waiting'}}" class="primary spaced" bindtap="connectScreen">\u53BB\u94FE\u63A5\u795E\u7269 / \u68C0\u67E5\u8FDE\u63A5</button>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
-  <text wx:if="{{!(syncState.phase==='retrying'&&syncState.step===0)}}" class="note">{{syncState.phase==='preparing'?(syncState.preparation?'\u65E0\u9700\u63D0\u524D\u914D\u7F51\u3002':'\u8BF7\u8010\u5FC3\u7B49\u5F85\uFF0C\u6682\u4E0D\u9700\u8981\u64CD\u4F5C\u3002'):'\u5207\u6362\u9875\u9762\u4F1A\u4FDD\u7559\u84DD\u7259\u8FDE\u63A5\uFF1B\u4E0B\u8F7D\u5B8C\u6210\u540E\u53EF\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\u67E5\u770B\u3002'}}</text>
+
  </view>
 
  <view class="paper" wx:if="{{!user}}">
@@ -3116,23 +3217,19 @@
 `, "css": ".inline-action{display:flex;align-items:stretch;gap:calc(16 * var(--rpx))}.inline-action .field{flex:1}.inline-action button{min-width:calc(132 * var(--rpx));padding-left:calc(18 * var(--rpx));padding-right:calc(18 * var(--rpx))}.wish-group{padding-bottom:calc(16 * var(--rpx))}.paper .section-title{margin-bottom:0}\n\n.art-style-heading{margin-top:calc(32 * var(--rpx))}.art-style-row{display:flex;align-items:center;gap:calc(20 * var(--rpx));margin:calc(14 * var(--rpx)) 0}.art-style-row .choice{flex:1}.art-style-row .note{margin-top:calc(4 * var(--rpx));font-size:calc(22 * var(--rpx))}.art-style-row .text-button{flex-shrink:0}\n" }, "network": { "wxml": `<view class="page">
  <button wx:if="{{!status.plan}}" class="secondary" bindtap="wish">\u5148\u53BB\u8BB8\u613F\u6C60\u751F\u6210\u7948\u798F\u56FE</button>
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
-  <text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
+  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
   <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">\u2460 \u5185\u5BB9\u5C31\u7EEA</text><text class="{{syncState.step>=2?'complete':''}}">\u2461 \u4E0B\u8F7D\u4E2D</text><text class="{{syncState.step>=3?'complete':''}}">\u2462 \u5DF2\u4FDD\u5B58</text><text class="{{syncState.step>=4?'complete':''}}">\u2463 \u5DF2\u5237\u65B0</text></view>
-  <text wx:if="{{!(syncState.phase==='retrying'&&syncState.step===0)}}" class="note">{{syncState.phase==='preparing'?(syncState.preparation?'\u65E0\u9700\u63D0\u524D\u914D\u7F51\u3002':'\u8BF7\u8010\u5FC3\u7B49\u5F85\uFF0C\u6682\u4E0D\u9700\u8981\u64CD\u4F5C\u3002'):syncState.step>=3?'\u73B0\u5728\u53EF\u5728\u753B\u5C4F Home \u9009\u62E9\u201C\u753B\u9762\u201D\uFF0C\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002':'\u8BF7\u7B49\u5F85\u201C\u5185\u5BB9\u5DF2\u4FDD\u5B58\u201D\u540E\uFF0C\u518D\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u786E\u8BA4\u952E\u67E5\u770B\u65B0\u753B\u3002'}}</text>
-  <text wx:if="{{status.deviceReport.firmwareVersion}}" class="note">\u8FD0\u884C\u56FA\u4EF6\uFF1A{{status.deviceReport.firmwareVersion}}</text>
-  <text wx:if="{{status.deviceReport.lastSeen}}" class="note">\u6700\u8FD1\u8BBE\u5907\u56DE\u62A5\uFF1A{{syncLastSeen}}\uFF08\u5317\u4EAC\u65F6\u95F4\uFF09\u3002\u4F11\u7720\u65F6\u4E0D\u4F1A\u6301\u7EED\u8054\u7F51\u3002</text>
-  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.phase!=='preparing'&&!(syncState.phase==='retrying'&&syncState.step===0)}}" disabled="{{!paired||busy}}">\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\uFF08\u9700\u84DD\u7259\uFF09</button>
-  <text class="note">\u6B64\u529F\u80FD\u9700\u8981 ritual.6 \u56FA\u4EF6\uFF1B\u65E7\u56FA\u4EF6\u53EF\u5230\u7F51\u9875\u201C\u94FE\u63A5\u795E\u7269\u201D\u6253\u5F00\u56FA\u4EF6\u5347\u7EA7\u5E76\u6838\u9A8C\u7248\u672C\u3002\u8BE5\u6309\u94AE\u53EA\u68C0\u67E5\u5185\u5BB9\uFF0C\u4E0D\u4F1A\u9065\u63A7\u79BB\u5F00 Home\u3002</text>
+  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.step>=1&&syncState.phase!=='connect'&&syncState.phase!=='preparing'}}" disabled="{{!paired||busy}}">\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\uFF08\u9700\u84DD\u7259\uFF09</button>
  </view>
-<text class="kicker">CONNECT YOUR COMPANION / 02</text><text class="title">\u94FE\u63A5\u795E\u7269</text><text class="subtitle">\u5185\u5BB9\u51C6\u5907\u5B8C\u6210\u540E\uFF0C\u518D\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u4E0E Wi-Fi\u3002</text><view class="error">{{error}}</view><view wx:if="{{message}}" class="notice">{{message}}</view><view class="paper"><text class="kicker">01 / \u8FDE\u63A5\u753B\u5C4F</text><text class="section-title">\u5148\u8BA9\u5B83\u8FDE\u4E0A\u7F51\u7EDC</text><text class="note">\u5524\u9192\u753B\u5C4F\uFF0C\u5F00\u542F\u624B\u673A\u84DD\u7259\u3002\u8BF7\u9009\u540D\u79F0\u4EE5 FRAMEFILMARK \u5F00\u5934\u7684\u8BBE\u5907\u3002</text><button class="secondary spaced" bindtap="scan" disabled="{{busy}}">\u641C\u7D22\u9644\u8FD1\u753B\u5C4F</button><button class="device" wx:for="{{bleDevices}}" wx:key="id" data-id="{{item.id}}" bindtap="connect" disabled="{{busy}}"><text>{{item.name}}</text><text class="muted">\u8FDE\u63A5</text></button><text class="note">{{bleText}}</text><view wx:if="{{paired}}"><text class="label">2.4 GHz Wi-Fi \u540D\u79F0</text><input class="field" value="{{ssid}}" data-field="ssid" bindinput="input" maxlength="32"/><text class="label">Wi-Fi \u5BC6\u7801</text><input class="field" value="{{wifiPassword}}" data-field="wifiPassword" bindinput="input" password maxlength="63"/><text class="note">\u5BC6\u7801\u4EC5\u7ECF\u84DD\u7259\u53D1\u7ED9\u6240\u9009\u753B\u5C4F\uFF0C\u4E0D\u4E0A\u4F20\u540E\u53F0\u3002</text><button class="primary spaced" bindtap="wifi" disabled="{{busy}}" loading="{{busy}}">\u53D1\u9001 Wi-Fi \u8BBE\u7F6E</button><button class="text-button" bindtap="disconnect" disabled="{{busy}}">\u65AD\u5F00\u84DD\u7259</button></view></view>
-<view wx:if="{{user}}"><view class="paper"><text class="section-title">\u8D26\u6237\u4E0E\u753B\u5C4F</text><text wx:if="{{status.device}}" class="note">{{status.device.id}} \xB7 {{status.device.active?'\u5F53\u524D\u4F7F\u7528\u672C\u8D26\u6237':'\u5F53\u524D\u4F7F\u7528\u53E6\u4E00\u5173\u8054\u8D26\u6237'}}{{status.device.memberCount>1?' \xB7 \u5DF2\u5173\u8054 '+status.device.memberCount+' \u4E2A\u8D26\u6237':''}}</text><text wx:else class="note">\u5C1A\u672A\u7ED1\u5B9A\u8BBE\u5907</text><view wx:if="{{status.deviceLinked&&!status.device.active}}" class="notice">\u8FD9\u53F0\u753B\u5C4F\u5DF2\u5173\u8054\u591A\u4E2A\u8D26\u6237\u3002\u8FDE\u63A5\u9644\u8FD1\u753B\u5C4F\u540E\uFF0C\u53EF\u5C06\u5F53\u524D\u8D26\u6237\u8BBE\u4E3A\u5C4F\u5E55\u5185\u5BB9\u7684\u4E0B\u53D1\u8D26\u6237\u3002</view><button wx:if="{{paired && connectedDeviceId}}" class="secondary spaced" bindtap="bind" disabled="{{busy}}">{{status.device.id?'\u5C06\u672C\u8D26\u6237\u8BBE\u4E3A\u5F53\u524D\u753B\u5C4F\u8D26\u6237':'\u7ED1\u5B9A\u5F53\u524D\u84DD\u7259\u753B\u5C4F'}}</button><button wx:if="{{status.device.id}}" class="text-button" bindtap="unbind" disabled="{{busy}}">\u89E3\u9664\u672C\u8D26\u6237\u4E0E\u753B\u5C4F\u7684\u5173\u8054</button><text class="note">\u84DD\u7259\u8FDE\u63A5\u4E0D\u7B49\u4E8E\u8D26\u6237\u7ED1\u5B9A\u3002\u4E0D\u540C\u5FAE\u4FE1\u8D26\u6237\u53EF\u5173\u8054\u540C\u4E00\u53F0\u753B\u5C4F\uFF0C\u4F46\u540C\u4E00\u65F6\u95F4\u53EA\u4F7F\u7528\u4E00\u4E2A\u8D26\u6237\u7684\u5185\u5BB9\u3002</text></view></view><button wx:else class="primary" bindtap="login">\u5FAE\u4FE1\u767B\u5F55\u540E\u7ED1\u5B9A\u6211\u7684\u753B\u5C4F</button></view>
+<text class="kicker">CONNECT YOUR COMPANION / 02</text><text class="title">\u94FE\u63A5\u795E\u7269</text><text class="subtitle">\u5185\u5BB9\u51C6\u5907\u5B8C\u6210\u540E\uFF0C\u518D\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u4E0E Wi-Fi\u3002</text><view class="error">{{error}}</view><view wx:if="{{message}}" class="notice">{{message}}</view><block wx:if="{{syncState.step>=1}}"><view class="paper"><text class="kicker">01 / \u8FDE\u63A5\u753B\u5C4F</text><text class="section-title">\u5148\u8BA9\u5B83\u8FDE\u4E0A\u7F51\u7EDC</text><text class="note">\u5524\u9192\u753B\u5C4F\uFF0C\u5F00\u542F\u624B\u673A\u84DD\u7259\u3002\u8BF7\u9009\u540D\u79F0\u4EE5 FRAMEFILMARK \u5F00\u5934\u7684\u8BBE\u5907\u3002</text><button class="secondary spaced" bindtap="scan" disabled="{{busy}}">\u641C\u7D22\u9644\u8FD1\u753B\u5C4F</button><button class="device" wx:for="{{bleDevices}}" wx:key="id" data-id="{{item.id}}" bindtap="connect" disabled="{{busy}}"><text>{{item.name}}</text><text class="muted">\u8FDE\u63A5</text></button><text class="note">{{bleText}}</text><view wx:if="{{paired}}"><text class="label">2.4 GHz Wi-Fi \u540D\u79F0</text><input class="field" value="{{ssid}}" data-field="ssid" bindinput="input" maxlength="32"/><text class="label">Wi-Fi \u5BC6\u7801</text><input class="field" value="{{wifiPassword}}" data-field="wifiPassword" bindinput="input" password maxlength="63"/><text class="note">\u5BC6\u7801\u4EC5\u7ECF\u84DD\u7259\u53D1\u7ED9\u6240\u9009\u753B\u5C4F\uFF0C\u4E0D\u4E0A\u4F20\u540E\u53F0\u3002</text><button class="primary spaced" bindtap="wifi" disabled="{{busy}}" loading="{{busy}}">\u53D1\u9001 Wi-Fi \u8BBE\u7F6E</button><button class="text-button" bindtap="disconnect" disabled="{{busy}}">\u65AD\u5F00\u84DD\u7259</button></view></view>
+<view wx:if="{{user}}"><view class="paper"><text class="section-title">\u8D26\u6237\u4E0E\u753B\u5C4F</text><text wx:if="{{status.device}}" class="note">{{status.device.id}} \xB7 {{status.device.active?'\u5F53\u524D\u4F7F\u7528\u672C\u8D26\u6237':'\u5F53\u524D\u4F7F\u7528\u53E6\u4E00\u5173\u8054\u8D26\u6237'}}{{status.device.memberCount>1?' \xB7 \u5DF2\u5173\u8054 '+status.device.memberCount+' \u4E2A\u8D26\u6237':''}}</text><text wx:else class="note">\u5C1A\u672A\u7ED1\u5B9A\u8BBE\u5907</text><view wx:if="{{status.deviceLinked&&!status.device.active}}" class="notice">\u8FD9\u53F0\u753B\u5C4F\u5DF2\u5173\u8054\u591A\u4E2A\u8D26\u6237\u3002\u8FDE\u63A5\u9644\u8FD1\u753B\u5C4F\u540E\uFF0C\u53EF\u5C06\u5F53\u524D\u8D26\u6237\u8BBE\u4E3A\u5C4F\u5E55\u5185\u5BB9\u7684\u4E0B\u53D1\u8D26\u6237\u3002</view><button wx:if="{{paired && connectedDeviceId}}" class="secondary spaced" bindtap="bind" disabled="{{busy}}">{{status.device.id?'\u5C06\u672C\u8D26\u6237\u8BBE\u4E3A\u5F53\u524D\u753B\u5C4F\u8D26\u6237':'\u7ED1\u5B9A\u5F53\u524D\u84DD\u7259\u753B\u5C4F'}}</button><button wx:if="{{status.device.id}}" class="text-button" bindtap="unbind" disabled="{{busy}}">\u89E3\u9664\u672C\u8D26\u6237\u4E0E\u753B\u5C4F\u7684\u5173\u8054</button><text class="note">\u84DD\u7259\u8FDE\u63A5\u4E0D\u7B49\u4E8E\u8D26\u6237\u7ED1\u5B9A\u3002\u4E0D\u540C\u5FAE\u4FE1\u8D26\u6237\u53EF\u5173\u8054\u540C\u4E00\u53F0\u753B\u5C4F\uFF0C\u4F46\u540C\u4E00\u65F6\u95F4\u53EA\u4F7F\u7528\u4E00\u4E2A\u8D26\u6237\u7684\u5185\u5BB9\u3002</text></view></view><button wx:else class="primary" bindtap="login">\u5FAE\u4FE1\u767B\u5F55\u540E\u7ED1\u5B9A\u6211\u7684\u753B\u5C4F</button></block></view>
 `, "css": ".device{display:flex;justify-content:space-between;align-items:center;background:#eef0e5;border:calc(1 * var(--rpx)) solid #ccd1bd;padding:calc(18 * var(--rpx));margin-top:calc(16 * var(--rpx));font-size:calc(24 * var(--rpx));line-height:1.6;text-align:left}.draft{width:100%;height:calc(340 * var(--rpx));margin-top:calc(24 * var(--rpx));background:#f6f1e7}.photo-canvas{position:fixed;left:-2000px;top:0;width:1440px;height:1440px;pointer-events:none}\n\n.sync-steps{display:flex;flex-wrap:wrap;gap:calc(16 * var(--rpx));margin:calc(20 * var(--rpx)) 0;color:#888}.sync-steps .complete{color:#415B48;font-weight:600}.sync-panel .note{display:block;margin:calc(12 * var(--rpx)) 0}\n" }, "today": { "wxml": `<view class="page">
  <view class="row"><text class="kicker">YOUR DAILY COMPANION / 03</text><text class="date">{{date}}</text></view>
  <text class="title">\u89E3\u8BFB\u966A\u4F34</text>
  <text class="subtitle">\u4E00\u5E45\u753B\uFF0C\u4E00\u4EF6\u5C0F\u4E8B\uFF0C\u4E00\u4E2A\u7B54\u6848\uFF0C\u90FD\u5728\u8FD9\u91CC\u8BFB\u5B8C\u3002</text>
- <view wx:if="{{!sample&&syncState}}" class="paper"><text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
-  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/><text class="note">{{syncState.step>=3?'\u53EF\u4EE5\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\uFF0C\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002':'\u8BF7\u7B49\u5F85\u5185\u5BB9\u4FDD\u5B58\u540E\u518D\u8FDB\u5165\u753B\u5C4F\u753B\u9762\uFF1B\u65E0\u9700\u91CD\u590D\u751F\u6210\u3002'}}</text></view>
+ <view wx:if="{{!sample&&syncState}}" class="paper"><text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/></view>
  <view class="loading" wx:if="{{loading}}">\u6B63\u5728\u8F7D\u5165\u4ECA\u65E5\u5185\u5BB9\u2026</view>
  <view class="error" role="alert">{{error}}</view>
 
@@ -3206,29 +3303,22 @@
 </view>
 `, "css": '.artwork{position:relative;margin:calc(30 * var(--rpx)) 0 calc(16 * var(--rpx));aspect-ratio:2/3;height:calc((100vw - calc(72 * var(--rpx)))*1.5);max-height:calc(1000 * var(--rpx));background:#fffaf0;border:calc(1 * var(--rpx)) solid #ccc5b4;overflow:hidden}.painting{width:100%;height:100%;position:absolute}.art-title{position:absolute;top:calc(30 * var(--rpx));left:calc(28 * var(--rpx));writing-mode:vertical-rl;letter-spacing:calc(9 * var(--rpx));font-size:calc(25 * var(--rpx));font-family:"Songti SC",serif}.seal{position:absolute;right:calc(26 * var(--rpx));top:calc(30 * var(--rpx));width:calc(50 * var(--rpx));height:calc(56 * var(--rpx));border:calc(2 * var(--rpx)) solid #a44b3f;color:#a44b3f;text-align:center;line-height:calc(50 * var(--rpx));font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx))}.art-action{position:absolute;bottom:0;left:0;right:0;padding:calc(26 * var(--rpx)) calc(28 * var(--rpx)) calc(32 * var(--rpx));background:rgba(255,250,240,.95);border-top:calc(1 * var(--rpx)) solid #d2cdbf}.action-label{display:block;font-size:calc(22 * var(--rpx));letter-spacing:calc(3 * var(--rpx));color:#716e64}.action-text{font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx));display:block;margin-top:calc(8 * var(--rpx));line-height:1.5}.blank{padding:calc(180 * var(--rpx)) calc(34 * var(--rpx))}.photo .painting{background:#fffaf0}\n\n.day-previews{display:flex;gap:calc(20 * var(--rpx));margin:calc(28 * var(--rpx)) 0}.day-preview{width:calc(50% - calc(10 * var(--rpx)))}.day-preview image{width:100%;height:calc(260 * var(--rpx));background:#fffcf5}.action-item{border-top:calc(1 * var(--rpx)) solid #dcd7cb;padding:calc(18 * var(--rpx)) 0}.action-option{display:block;margin-top:calc(20 * var(--rpx))}\n' }, "screen": { "wxml": `<view class="page">
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
-  <text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
+  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
   <button wx:if="{{syncState.phase==='connect'||syncState.phase==='waiting'}}" class="primary spaced" bindtap="connectScreen">\u53BB\u94FE\u63A5\u795E\u7269 / \u68C0\u67E5\u8FDE\u63A5</button>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
   <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">\u2460 \u5185\u5BB9\u5C31\u7EEA</text><text class="{{syncState.step>=2?'complete':''}}">\u2461 \u4E0B\u8F7D\u4E2D</text><text class="{{syncState.step>=3?'complete':''}}">\u2462 \u5DF2\u4FDD\u5B58</text><text class="{{syncState.step>=4?'complete':''}}">\u2463 \u5DF2\u5237\u65B0</text></view>
-  <text wx:if="{{!(syncState.phase==='retrying'&&syncState.step===0)}}" class="note">{{syncState.phase==='preparing'?(syncState.preparation?'\u65E0\u9700\u63D0\u524D\u914D\u7F51\u3002':'\u8BF7\u8010\u5FC3\u7B49\u5F85\uFF0C\u6682\u4E0D\u9700\u8981\u64CD\u4F5C\u3002'):syncState.step>=3?'\u73B0\u5728\u53EF\u5728\u753B\u5C4F Home \u9009\u62E9\u201C\u753B\u9762\u201D\uFF0C\u6309\u753B\u5C4F\u786E\u8BA4\u952E\u8FDB\u5165\u3002':'\u8BF7\u7B49\u5F85\u201C\u5185\u5BB9\u5DF2\u4FDD\u5B58\u201D\u540E\uFF0C\u518D\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u786E\u8BA4\u952E\u67E5\u770B\u65B0\u753B\u3002'}}</text>
-  <text wx:if="{{status.deviceReport.firmwareVersion}}" class="note">\u8FD0\u884C\u56FA\u4EF6\uFF1A{{status.deviceReport.firmwareVersion}}</text>
-  <text wx:if="{{status.deviceReport.lastSeen}}" class="note">\u6700\u8FD1\u8BBE\u5907\u56DE\u62A5\uFF1A{{syncLastSeen}}\uFF08\u5317\u4EAC\u65F6\u95F4\uFF09\u3002\u4F11\u7720\u65F6\u4E0D\u4F1A\u6301\u7EED\u8054\u7F51\u3002</text>
-  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.phase!=='preparing'&&!(syncState.phase==='retrying'&&syncState.step===0)}}" disabled="{{!paired||busy}}">\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\uFF08\u9700\u84DD\u7259\uFF09</button>
-  <text class="note">\u6B64\u529F\u80FD\u9700\u8981 ritual.6 \u56FA\u4EF6\uFF1B\u65E7\u56FA\u4EF6\u53EF\u5230\u7F51\u9875\u201C\u94FE\u63A5\u795E\u7269\u201D\u6253\u5F00\u56FA\u4EF6\u5347\u7EA7\u5E76\u6838\u9A8C\u7248\u672C\u3002\u8BE5\u6309\u94AE\u53EA\u68C0\u67E5\u5185\u5BB9\uFF0C\u4E0D\u4F1A\u9065\u63A7\u79BB\u5F00 Home\u3002</text>
+  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.step>=1&&syncState.phase!=='connect'&&syncState.phase!=='preparing'}}" disabled="{{!paired||busy}}">\u7ACB\u5373\u68C0\u67E5\u540C\u6B65\uFF08\u9700\u84DD\u7259\uFF09</button>
  </view>
-
  <text class="kicker">MAKE IT YOURS / 04</text>
  <text class="title">\u81EA\u5B9A\u4E49</text>
  <text class="subtitle">\u5148\u4E0A\u4F20\u81EA\u5DF1\u7684\u56FE\u7247\uFF0C\u518D\u5B89\u6392\u6BCF\u5929\u51FA\u73B0\u7684\u90A3\u4E00\u5F20\u3002</text>
  <view class="error" role="alert">{{error}}</view>
  <view class="notice" wx:if="{{message}}">{{message}}</view>
-
  <view wx:if="{{!user}}" class="paper">
   <text class="section-title">\u4F60\u7684\u56FE\u7247\uFF0C\u8DDF\u968F\u8D26\u6237</text>
   <text class="note">\u767B\u5F55\u540E\u4E0A\u4F20\u3001\u6392\u5E8F\u5E76\u540C\u6B65\u5230\u753B\u5C4F\uFF1B\u7F51\u9875\u4E0E\u5C0F\u7A0B\u5E8F\u4F7F\u7528\u540C\u4E00\u4EFD\u8F6E\u64AD\u5185\u5BB9\u3002</text>
   <button class="primary spaced" bindtap="login">\u5FAE\u4FE1\u767B\u5F55</button>
  </view>
-
  <view wx:else>
   <view class="mode-banner">
    <view>
@@ -3237,7 +3327,6 @@
    </view>
    <text class="badge">{{syncConfigured?'\u5DF2\u7ED1\u5B9A\u753B\u5C4F':'\u4EC5\u4FDD\u5B58\u5230\u8D26\u6237'}}</text>
   </view>
-
   <view class="paper">
    <text class="kicker">01 / UPLOAD</text>
    <text class="section-title">\u4E0A\u4F20\u81EA\u5DF1\u7684\u56FE\u7247</text>
@@ -3245,7 +3334,6 @@
    <button class="primary spaced wide" bindtap="choosePhotos" disabled="{{busy||photoSelection.length>=maxPhotos}}" loading="{{busy}}">\u4ECE\u76F8\u518C\u9009\u62E9 / \u62CD\u7167</button>
    <text class="note" wx:if="{{photoSelection.length>=maxPhotos}}">\u8F6E\u64AD\u5DF2\u6EE1 6 \u5F20\uFF0C\u8BF7\u5148\u79FB\u9664\u4E00\u5F20\u518D\u4E0A\u4F20\u3002</text>
   </view>
-
   <view class="paper">
    <view class="row">
     <view>
@@ -3273,7 +3361,6 @@
     <switch checked="{{showActions}}" color="#415B48" bindchange="actions" disabled="{{busy}}"/>
    </view>
   </view>
-
   <view wx:if="{{availablePhotos.length}}" class="paper">
    <text class="section-title">\u52A0\u5165\u5DF2\u6709\u56FE\u7247</text>
    <text class="note">\u8FD9\u4E9B\u56FE\u7247\u5DF2\u4FDD\u5B58\u5728\u8D26\u6237\u4E2D\uFF0C\u70B9\u51FB\u5373\u53EF\u52A0\u5165\u8F6E\u64AD\u3002</text>
@@ -3286,7 +3373,6 @@
    </view>
   </view>
   <button wx:if="{{cursor}}" class="text-button" bindtap="more" disabled="{{busy}}">\u8F7D\u5165\u66F4\u591A\u56FE\u7247</button>
-
   <view class="stack action-buttons">
    <button class="primary wide" bindtap="savePhoto" disabled="{{busy||!photoSelection.length}}" loading="{{busy}}">{{photoMode?'\u4FDD\u5B58\u5E76\u66F4\u65B0\u5185\u5BB9':'\u786E\u8BA4\u5207\u6362\u4E3A\u81EA\u5DF1\u4F5C\u54C1'}}</button>
    <button wx:if="{{photoMode}}" class="secondary wide" bindtap="switchPrayer" disabled="{{busy}}">\u5207\u6362\u56DE\u7948\u798F\u56FE</button>

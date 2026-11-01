@@ -7,10 +7,10 @@
 
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
   <button wx:if="{{prepareFailed}}" bindtap="retryPreparation" disabled="{{busy}}" class="secondary">重试准备画屏内容</button>
-  <text class="section-title">{{syncState.title}}</text><text class="note">{{syncState.detail}}</text>
+  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
   <button wx:if="{{syncState.phase==='connect'||syncState.phase==='waiting'}}" class="primary spaced" bindtap="connectScreen">去链接神物 / 检查连接</button>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
-  <text wx:if="{{!(syncState.phase==='retrying'&&syncState.step===0)}}" class="note">{{syncState.phase==='preparing'?(syncState.preparation?'无需提前配网。':'请耐心等待，暂不需要操作。'):'切换页面会保留蓝牙连接；下载完成后可在画屏选择“画面”查看。'}}</text>
+
  </view>
 
  <view class="paper" wx:if="{{!user}}">

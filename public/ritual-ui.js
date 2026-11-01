@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withLiveDownload} from './transfer-status.js?v=20261101-copy-v1';
+import {transferStatus,renderTransfer,withLiveDownload} from './transfer-status.js?v=20261101-approved-copy-v1';
 import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
