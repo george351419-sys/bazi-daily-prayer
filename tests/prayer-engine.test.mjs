@@ -1,0 +1,101 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {analyzeMapping} from '../lib/service.mjs';
+import {validateInput,calendarFor,WISHES} from '../lib/domain.mjs';
+import {generateRuleMapping,natalFingerprint,selectStemSymbols,zodiacModels,selectZodiac,PRAYER_ENGINE_VERSION} from '../lib/prayer-engine.mjs';
+import {relationKey} from '../lib/branch-policy.mjs';
+import {PRAYER_CATALOG} from '../lib/prayer-catalog.mjs';
+import {buildImagePrompt} from '../lib/domain.mjs';
+const profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']};
+const input=validateInput(profile,'2026-11-01'),calendar=calendarFor(input);
+const foundation={day_master:calendar.dayMaster,month_branch:calendar.natal[1][1],primary_element:'火',secondary_element:'木',reason:'本测试以既定火主木辅档案为前提，原局取用与每日动态分开保存。',tiaohou_reason:'具体调候按已确认档案安排，本例不额外增加未确认的景物。',tiaohou_required_stems:[],unmet_tiaohou_stems:[],tiaohou_groups:[],protected_stems:[]};
+function fixture(){const records=new Map();let calls=0;const config={ENGINE_OWNER_ID:'test-account',PRAYER_RULE_STORE:{get:async k=>records.get(k),put:async(k,v)=>records.set(k,structuredClone(v))},DEEPSEEK_API_KEY:'test'};const fetcher=async(url,options)=>{calls++;const request=JSON.parse(JSON.parse(options.body).messages[1].content);const result=request.schema?.decisions?{unmet_tiaohou_stems:[],effective_stem_bindings:[],decisions:request.models.map(m=>({model:m.id,effective_indices:[],unfavorable_indices:[],critical_indices:[],reason:'本测试未确认有效牵合条件，成员关系不自动当作已成局。'}))}:foundation;return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify(result)}}]})};};return {config,fetcher,records,get calls(){return calls;}};}
+test('默认入口由规则组装完整方案；首次只补判条件，随后断网复用',async()=>{
+ const f=fixture();const first=await analyzeMapping(f.config,input,calendar,[],f.fetcher);
+ assert.equal(first.engine.version,PRAYER_ENGINE_VERSION);assert.equal(first.deity,'陈九公');assert.equal(first.engine.zodiac_candidates.length,79);assert.equal(f.calls,2);
+ const second=await analyzeMapping({...f.config,DEEPSEEK_API_KEY:''},input,calendar,[],()=>{throw Error('must not call');});
+ assert.deepEqual(second,first);assert.ok(second.professional);assert.equal(second.reading.sections.length,5);assert.ok(!second.image_prompt.includes(profile.birthDate));
+ assert.ok([...f.records.values()].some(x=>x.origin==='model_supplement'));
+});
+test('36愿望均从资料库生成；三种画风共享相同选择，仅变画法',async()=>{
+ const f=fixture();await analyzeMapping(f.config,input,calendar,[],f.fetcher);
+ for(const wish of WISHES){const i={...input,wishes:[wish.id]};const m=await generateRuleMapping(f.config,i,calendar,[],f.fetcher);assert.equal(m.wish_id,wish.id);assert.ok(PRAYER_CATALOG[wish.id].some(x=>x.name===m.deity)||wish.id==='W02');}
+ const images=[];for(const style of ['cute','spirit','folk']){const m=await analyzeMapping(f.config,{...input,artStyle:style},calendar,[],f.fetcher);images.push(m);assert.ok(buildImagePrompt(m).includes(m.deity));}
+ assert.deepEqual(images.map(m=>m.zodiac),[[],[],[]]);assert.equal(new Set(images.map(m=>m.deity)).size,1);
+});
+test('缓存按账号、出生资料与动态状态隔离；失败不保存有效档案',async()=>{
+ const f=fixture();await analyzeMapping(f.config,input,calendar,[],f.fetcher);const previous=f.calls;
+ await analyzeMapping({...f.config,ENGINE_OWNER_ID:'other'},input,calendar,[],f.fetcher);assert.equal(f.calls,previous+2);
+ const bad=fixture();await assert.rejects(analyzeMapping(bad.config,input,calendar,[],async()=>({ok:true,status:200,json:async()=>({choices:[{message:{content:'{}'}}]})})),/日主月令/);assert.ok(![...bad.records.keys()].some(k=>k.includes('/foundation/')));assert.ok([...bad.records.keys()].some(k=>k.includes('/failures/')));
+ await assert.rejects(analyzeMapping({...fixture().config,DEEPSEEK_API_KEY:''},input,calendar),e=>e.code==='rule_gap_model_unavailable');
+});
+test('真实文件仓库可跨调用实例读取补判档案，出生变更不复用旧档案',async()=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'prayer-rule-test-'));
+ try{const f=fixture();const config={...f.config,PRAYER_RULE_STORE:undefined,ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'rule-test-secret-at-least-20-chars'};
+  await analyzeMapping(config,input,calendar,[],f.fetcher);
+  await analyzeMapping({...config,DEEPSEEK_API_KEY:''},input,calendar,[],()=>{throw Error('network');});
+  const changed=validateInput({...profile,birthTime:'21:00'},input.today);
+  assert.notEqual(natalFingerprint(input,calendar),natalFingerprint(changed,calendarFor(changed)));
+  await assert.rejects(analyzeMapping({...config,DEEPSEEK_API_KEY:''},changed,calendarFor(changed)),e=>e.code==='rule_gap_model_unavailable');
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+test('生肖枚举重算并以整组为单位比较，合不消除刑害',()=>{
+ const base=[... '寅午'].map((branch,i)=>({id:'natal.'+i,branch})),models=zodiacModels(base);
+ const values=[];for(const m of models)for(const r of m.relations)if(r.type==='三合'&&r.branches.includes('戌'))values.push({key:relationKey(r),effective:true});
+ const selected=selectZodiac(models,{values},foundation);assert.deepEqual(selected.added,['戌']);assert.ok(selected.evaluated.length===79);
+});
+test('天干调候豁免与关键用干保护；不能解决的冲明确保留',()=>{
+ const c={...calendar,stems:[{id:'natal.year',stem:'壬'},{id:'transit.year',stem:'丙'}],rawStemClashes:[{a:{id:'natal.year',stem:'壬'},b:{id:'transit.year',stem:'丙'}}]};
+ assert.equal(selectStemSymbols(c,{...foundation,tiaohou_required_stems:['丙']}).items.length,0);
+ const plan=selectStemSymbols(c,{...foundation,protected_stems:['丙']});assert.equal(plan.items.length,0);assert.equal(plan.unresolved.length,1);
+});
+test('资料库暂停关联没有重新入池',()=>{
+ for(const [id,name]of [['W07','关公'],['W09','范蠡'],['W12','魁星'],['W16','魁星'],['W28','和合二仙'],['W20','妈祖']])assert.ok(!PRAYER_CATALOG[id].some(x=>x.name===name));
+});
+test('跨日保留稳定取用，只有动态条件补判更新；同愿望轮换不虚构历史',async()=>{
+ const f=fixture();const today=await analyzeMapping(f.config,input,calendar,[],f.fetcher);
+ const nextInput={...input,today:'2026-11-02'},nextCalendar=calendarFor(nextInput);
+ const next=await analyzeMapping(f.config,nextInput,nextCalendar,[{date:input.today,deity:today.deity,wish:'W02'}],f.fetcher);
+ assert.equal(f.calls,3);assert.deepEqual(next.engine.foundation,today.engine.foundation);assert.equal(next.primary_element,today.primary_element);assert.notEqual(next.deity,today.deity);assert.ok(next.rotation_reason);
+});
+test('双生肖共同补全三合通过实际成员和象征成员分离校验',async()=>{
+ const f=fixture();f.fetcher=async(url,options)=>{const q=JSON.parse(JSON.parse(options.body).messages[1].content);if(!q.schema?.decisions)return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify(foundation)}}]})};
+ const decisions=q.models.map(m=>({model:m.id,effective_indices:m.relation_indices.filter(i=>q.relation_catalog[i].type==='三合'&&q.relation_catalog[i].branches.every(b=>'寅午戌'.includes(b))),unfavorable_indices:[],critical_indices:[],reason:'本测试的火三合满足已给定的有效牵合条件，按主喜火方向比较候选。'}));
+ return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify({decisions,unmet_tiaohou_stems:[],effective_stem_bindings:[]})}}]})};};
+ const c={...calendar,natal:['甲寅','乙卯','丙卯','丁卯'],dayMaster:'丙',luck:null,year:'乙卯',month:'乙卯',day:'乙卯',stems:[],rawStemClashes:[],rawStemBindings:[]};
+ const custom={...foundation,day_master:'丙',month_branch:'卯'};
+ const config={...f.config,PRAYER_FOUNDATION:{signature:natalFingerprint(input,c),value:custom}};
+ const mapping=await analyzeMapping(config,input,c,[],f.fetcher);assert.deepEqual(new Set(mapping.zodiac),new Set(['马','狗']));assert.ok(mapping.professional.includes('三合取象'));
+});
+test('新的天干意象不能引入新冲，并用调候不能只补一半',()=>{
+ const c={...calendar,stems:[{id:'natal.year',stem:'壬'},{id:'natal.month',stem:'乙'},{id:'transit.year',stem:'丙'}],rawStemClashes:[{a:{id:'natal.year',stem:'壬'},b:{id:'transit.year',stem:'丙'}}]};
+ const plan=selectStemSymbols(c,foundation);assert.equal(plan.items.length,0);assert.equal(plan.unresolved.length,1);
+ const paired=selectStemSymbols({...c,rawStemClashes:[]},{...foundation,tiaohou_required_stems:['甲','庚'],unmet_tiaohou_stems:['甲','庚'],tiaohou_groups:[['甲','庚']]});assert.equal(paired.items.length,0);
+});
+test('默认HTTP入口接通规则生成，缺补判配置时返回明确阶段错误',async t=>{
+ const {handleRequest}=await import('../api/gateway.js');const {createSession,csrfFor}=await import('../lib/tokens.mjs');
+ const config={SESSION_SECRET:'default-rule-engine-http-test-secret'},session=createSession(config);let status,data;
+ const request={method:'POST',url:'https://playmath.cn/api/analyze',headers:{host:'playmath.cn',origin:'https://playmath.cn','x-session-token':session,'x-csrf-token':csrfFor(config,session)},query:{route:'analyze'},body:profile};
+ await handleRequest(request,{setHeader(){},status(value){status=value;return this;},json(value){data=value;}},config);
+ assert.equal(status,503);assert.equal(data.code,'rule_gap_model_unavailable');assert.match(data.error,/未启动绘图/);
+});
+test('已确认的新取用覆盖旧模型档案，并在后续调用保存生效',async()=>{
+ const f=fixture();await analyzeMapping(f.config,input,calendar,[],f.fetcher);
+ const replacement={...foundation,primary_element:'木',secondary_element:'火'};
+ const changed=await analyzeMapping({...f.config,PRAYER_FOUNDATION:{signature:natalFingerprint(input,calendar),value:replacement}},input,calendar,[],f.fetcher);
+ assert.equal(changed.primary_element,'木');assert.equal(changed.confidence,'confirmed');
+ const cached=await analyzeMapping({...f.config,DEEPSEEK_API_KEY:''},input,calendar,[],()=>{throw Error('network');});assert.equal(cached.primary_element,'木');
+});
+test('配额门禁失败不再次请求模型',async()=>{
+ const f=fixture();let gates=0;
+ await assert.rejects(analyzeMapping({...f.config,BEFORE_TEXT_CALL:()=>{gates++;throw Error('text_quota');}},input,calendar,[],f.fetcher),/text_quota/);
+ assert.equal(gates,1);assert.equal(f.calls,0);
+});
+test('同一天已经生成的主尊记录不改变当天的初始方案',async()=>{
+ const f=fixture();const first=await analyzeMapping(f.config,input,calendar,[],f.fetcher);
+ const again=await analyzeMapping(f.config,input,calendar,[{date:input.today,deity:first.deity,wish:first.wish_id}],f.fetcher);
+ assert.equal(again.deity,first.deity);assert.equal(again.wish_id,first.wish_id);
+});

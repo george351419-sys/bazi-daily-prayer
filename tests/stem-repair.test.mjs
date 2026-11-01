@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validateInput,calendarFor,validateMapping,STEM_PARTNER} from '../lib/domain.mjs';
 import {makeMapping,addClashStem} from './fixtures/selection-mapping.mjs';
-import {analyzeMapping} from '../lib/service.mjs';
+import {analyzeLegacyMapping as analyzeMapping} from '../lib/service.mjs';
 import {stemResponsePlan,repairHints,mergeSelectionRepair} from '../lib/selection-rationale.mjs';
 const input=validateInput({gender:'female',birthDate:'1992-10-17',birthTime:'22:30',calendar:'solar',city:'上海',wishes:['W02']},'2026-10-17'),calendar=calendarFor(input);
 function conflict(){

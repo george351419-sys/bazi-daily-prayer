@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {analyzeMapping} from '../lib/service.mjs';
+import {analyzeLegacyMapping as analyzeMapping} from '../lib/service.mjs';
 import {validateInput,calendarFor} from '../lib/domain.mjs';
 import {makeMapping} from './fixtures/selection-mapping.mjs';
 const input=validateInput({gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']},'2026-10-17'),calendar=calendarFor(input);

@@ -41,7 +41,7 @@ export async function handleRequest(req,res,config){
  let session=verifySession(config,req.headers['x-session-token']);
  try{
   if(route==='bootstrap'&&req.method==='GET'){
-   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)},miniProgram:{enabled:miniProgram,wechatLoginEnabled:miniProgram&&wechatReady}});
+   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:config.PRAYER_ENGINE!=='legacy'||!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,analysisEngine:config.PRAYER_ENGINE==='legacy'?'legacy':'rules',accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)},miniProgram:{enabled:miniProgram,wechatLoginEnabled:miniProgram&&wechatReady}});
   }
   if(!session)return send(res,403,{error:'页面会话已更新，请刷新重试。'});
   if(req.method==='POST'&&req.headers['x-csrf-token']!==csrfFor(config,session))return send(res,403,{error:'页面会话校验失败，请刷新重试。'});
@@ -100,13 +100,13 @@ export async function handleRequest(req,res,config){
    return send(res,404,{error:'账户接口不存在。'});
   }
   if(route==='analyze'&&req.method==='POST'){
-   if(!config.DEEPSEEK_API_KEY)return send(res,503,{error:'服务端尚未配置 DeepSeek API Key。'});
+
    const input=validateInput(body),account=accountMode?await requireAccount(config,req):null,id=account?newArtworkId():randomBytes(18).toString('hex');
    const rateId=createHash('sha256').update(session).digest('hex');if(Date.now()-(rate.get(rateId)||0)<3000)return send(res,429,{error:'请稍候再提交。'});rate.set(rateId,Date.now());
    if(account)await saveProfileSafely(config,account,input);
    const calendar=calendarFor(input),history=account?await accountHistory(config,account,input):Array.isArray(body.history)?body.history.slice(-14).map(x=>({date:String(x.date).slice(0,10),deity:String(x.deity).slice(0,40),wish:String(x.wish).slice(0,3)})):[];
    const analysisConfig=account?{...config,ANALYSIS_BUDGET_MS:Math.max(1000,(Number(config.ANALYSIS_BUDGET_MS)||108000)-(Date.now()-startedAt)-5000)}:config;
-   const mapping=await analyzeMapping(analysisConfig,input,calendar,history);
+   const mapping=await analyzeMapping({...analysisConfig,ENGINE_OWNER_ID:account?.id||rateId},input,calendar,history);
    if(account){const record={id,userId:account.id,date:input.today,createdAt:new Date().toISOString(),input,calendar,mapping,profileSignature:profileSignature(input),status:'mapped',image:null};await saveArtwork(config,account,record);return send(res,200,accountJob(config,account,record));}
    const job={id,owner:session,date:input.today,mapping,expires:Date.now()+86400000};
    return send(res,200,{id,status:'mapped',phase:'解读已完成',date:input.today,calendar,mapping,token:sealJob(config,job),error:null,image:null});
@@ -132,5 +132,5 @@ export async function handleRequest(req,res,config){
    return send(res,200,{id:job.id,status:'complete',phase:'今日祈福画已完成',date:job.date,mapping:job.mapping,token:body.jobToken,error:null,image:result.url});
   }
   return send(res,404,{error:'接口不存在。'});
- }catch(e){if(e.analysisValidationFailed)return send(res,503,{error:'祈福方案还未通过一致性检查，未启动绘图。请稍后重试，无需修改出生资料。',code:'analysis_validation_failed'});if(e instanceof AccountError)return send(res,e.status,{error:e.message,...(['revision_conflict','policy_conflict','profile_conflict'].includes(e.code)?{code:e.code}:{})});if(['MISSING_ENVIRONMENT','MISSING_PROJECT_ID','CREDENTIAL_ERROR','COS_ERROR','QUOTA_EXCEEDED','RATE_LIMITED'].includes(e.code)){console.warn('Account storage unavailable:',e.code);return send(res,503,{error:'账户存储暂时不可用，请稍后再试。'});}const err=e.service?publicProviderError(e):String(e.message).slice(0,180);return send(res,e.service?502:400,{error:err});}
+ }catch(e){if(['rule_gap_model_unavailable','rule_assessment_invalid','rule_generation_failed'].includes(e.code))return send(res,503,{error:e.code==='rule_gap_model_unavailable'?'本次方案有尚未覆盖的条件，需要补判服务恢复后继续，未启动绘图。':'祈福规则计算未完成，已保留诊断记录，未启动绘图。',code:e.code});if(e.analysisValidationFailed)return send(res,503,{error:'祈福方案还未通过一致性检查，未启动绘图。请稍后重试，无需修改出生资料。',code:'analysis_validation_failed'});if(e instanceof AccountError)return send(res,e.status,{error:e.message,...(['revision_conflict','policy_conflict','profile_conflict'].includes(e.code)?{code:e.code}:{})});if(['MISSING_ENVIRONMENT','MISSING_PROJECT_ID','CREDENTIAL_ERROR','COS_ERROR','QUOTA_EXCEEDED','RATE_LIMITED'].includes(e.code)){console.warn('Account storage unavailable:',e.code);return send(res,503,{error:'账户存储暂时不可用，请稍后再试。'});}const err=e.service?publicProviderError(e):String(e.message).slice(0,180);return send(res,e.service?502:400,{error:err});}
 }

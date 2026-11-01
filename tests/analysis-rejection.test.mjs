@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {handleRequest} from '../api/gateway.js';
 import {createSession,csrfFor} from '../lib/tokens.mjs';
 test('exhausted analysis validation returns an actionable stage error and never calls the image provider',async t=>{
- const config={SESSION_SECRET:'test-only-analysis-rejection-secret',DEEPSEEK_API_KEY:'test-only',ANALYSIS_BUDGET_MS:3000};
+ const config={PRAYER_ENGINE:'legacy',SESSION_SECRET:'test-only-analysis-rejection-secret',DEEPSEEK_API_KEY:'test-only',ANALYSIS_BUDGET_MS:3000};
  const session=createSession(config);let calls=0,status,data;
  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});
  globalThis.fetch=async url=>{assert.match(String(url),/api\.deepseek\.com/);calls++;return Response.json({choices:[{message:{content:JSON.stringify({wish_id:'W99'})}}]});};

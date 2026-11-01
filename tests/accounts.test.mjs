@@ -10,7 +10,7 @@ import {validateInput,calendarFor} from '../lib/domain.mjs';
 import {makeMapping} from './fixtures/selection-mapping.mjs';
 const secret='private-account-test-secret-0123456789',password='Test-only-strong-password!';
 const profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02','W06']};
-async function context(t){const dir=await mkdtemp(path.join(os.tmpdir(),'prayer-account-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));return {ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:secret,DEEPSEEK_API_KEY:'test-only',ARK_API_KEY:'test-only'};}
+async function context(t){const dir=await mkdtemp(path.join(os.tmpdir(),'prayer-account-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));return {PRAYER_ENGINE:'legacy',ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:secret,DEEPSEEK_API_KEY:'test-only',ARK_API_KEY:'test-only'};}
 test('并发注册同名账号只有一份成功，密码加盐且账户资料密文持久化',async t=>{
  const c=await context(t),body={username:'atomic_user',nickname:'私密昵称',password};
  const results=await Promise.allSettled([register(c,body,'test-client-1'),register(c,body,'test-client-2')]);assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(results.find(x=>x.status==='rejected').reason.status,409);
