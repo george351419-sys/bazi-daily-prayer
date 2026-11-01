@@ -1,2 +1,2 @@
-import handler from '../../.edgeone-build/handler-39fff7d7788063ef.mjs';
+import handler from '../../.edgeone-build/handler-eaee5994dcba5bee.mjs';
 export default async function onRequest(context){return handler(context); }

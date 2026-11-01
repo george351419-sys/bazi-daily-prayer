@@ -15,7 +15,7 @@ test('相同画面不同风格不复用；底部留位写入提示词',()=>{
  const fingerprints=['folk','cute','spirit'].map(art_style=>visualMapping({...mapping,art_style}).fingerprint);
  assert.equal(new Set(fingerprints).size,3);
  assert.notEqual(visualMapping(mapping).fingerprint,visualMapping({...mapping,art_style_version:'new'}).fingerprint);
- for(const art_style of ['folk','cute','spirit']){const prompt=buildImagePrompt({...mapping,art_style});assert.ok(prompt.startsWith('[PRAYER_STYLE:'+art_style+']'));assert.match(prompt,/720×480/);assert.match(prompt,/底部/);}
+ for(const art_style of ['folk','cute','spirit']){const prompt=buildImagePrompt({...mapping,art_style});assert.ok(prompt.startsWith('[PRAYER_STYLE:'+art_style+']'));assert.match(prompt,/宽480×高720/);assert.match(prompt,/底部/);assert.match(prompt,/2:3竖图/);assert.match(prompt,/次要云卷/);assert.ok(!prompt.includes('像素横图'));}
 });
 test('每日自动生成快照和配置指纹包含风格',()=>{
  const a=generationSettings({}, {...input,artStyle:'cute'}),b=generationSettings({}, {...input,artStyle:'spirit'});
@@ -23,7 +23,7 @@ test('每日自动生成快照和配置指纹包含风格',()=>{
 });
 test('灵兽风向图片模型传原创形象参考，其他风格不传',async()=>{
  for(const art_style of ['folk','cute','spirit'])await doubao({ARK_API_KEY:'fake'},buildImagePrompt({...mapping,art_style}),async(url,init)=>{
-  const request=JSON.parse(init.body);assert.equal(request.size,'2496x1664');
+  const request=JSON.parse(init.body);assert.equal(request.size,'1664x2496');
   if(art_style==='spirit')assert.match(request.image,/^data:image\/jpeg;base64,/);else assert.equal(request.image,undefined);
   return Response.json({data:[{url:'https://cdn.example.com/illustration.png'}]});
  },true);
