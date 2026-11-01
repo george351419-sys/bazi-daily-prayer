@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withConnection} from './transfer-status.js?v=20261101-connected-sync-v1';
+import {transferStatus,renderTransfer,withConnection} from './transfer-status.js?v=20261101-connected-sync-v2';
 import {preparePhoto} from './photo-upload.js';
 
 export function setupCustomPhoto({request,fetchImage,getUser}){

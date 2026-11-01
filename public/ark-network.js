@@ -1,6 +1,6 @@
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer,withConnection} from './transfer-status.js?v=20261101-connected-sync-v1';
+import {renderTransfer,withConnection} from './transfer-status.js?v=20261101-connected-sync-v2';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -196,7 +196,7 @@ export function setupNetwork(){
   binding.append(bindingState,bind,note);state.after(binding);
  }
  let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false,announcedDevice=null;
- let reconnectTimer=null,reconnectAttempts=0,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null;
+ let reconnectTimer=null,reconnectAttempts=0,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null,forceSync=false;
  function announceConnection(){connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt:Date.now(),syncRequestedAt,requestedSha};document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection));}
  const networkGrid=root.querySelector('.network-grid');
  function updateConnectionControls(){const ready=latestTransferState?.step>=1;if(networkGrid)networkGrid.hidden=!ready;state.hidden=!ready;binding.hidden=!ready||!connectedDevice;}
@@ -210,7 +210,7 @@ export function setupNetwork(){
  const firmwareStatus=document.createElement('p');firmwareStatus.setAttribute('role','status');firmwareStatus.setAttribute('aria-live','polite');
  firmwareBox.append(firmwareSummary,firmwareVersion,firmwareButton,firmwareStatus);
 
- let buildChecked=false;
+ let buildChecked=false,buildInfoRead=null;
  const client=new ArkNetwork({bluetooth:navigator.bluetooth,onState:status=>{
   if(!status.connected){syncSha=null;syncRequestedAt=null;requestedSha=null;}
   state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;firmwareButton.disabled=!status.paired||busy;
@@ -223,16 +223,17 @@ export function setupNetwork(){
   form.classList.toggle('network-connected',status.connected);
   if(status.paired&&!downloadTimer){downloadTimer=setInterval(pollDownload,2000);}
   else if(!status.paired&&downloadTimer){clearInterval(downloadTimer);downloadTimer=null;}
-  if(status.paired&&!buildChecked){buildChecked=true;void client.readBuildInfo().then(info=>{firmwareVersion.textContent='当前固件：'+(info.version||'未知版本');}).catch(()=>{firmwareVersion.textContent='当前固件版本暂时无法读取。';});}
+  if(status.paired&&!buildChecked){buildChecked=true;buildInfoRead=client.readBuildInfo().then(info=>{firmwareVersion.textContent='当前固件：'+(info.version||'未知版本');}).catch(()=>{firmwareVersion.textContent='当前固件版本暂时无法读取。';});}
   announceConnection();
-  if(status.connected)void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});
   if(!status.paired){
    buildChecked=false;syncSha=null;
    if(allowReconnect&&rememberedDevice&&!reconnectTimer&&reconnectAttempts<3){
     reconnectTimer=setTimeout(async()=>{
      reconnectTimer=null;reconnectAttempts++;
-     try{await client.connect(rememberedDevice);await client.resumeWifi();reconnectAttempts=0;await syncPublished();}
+     busy=true;
+     try{while(downloadBusy)await sleep(25);await client.connect(rememberedDevice);await buildInfoRead;await client.resumeWifi();reconnectAttempts=0;}
      catch(error){state.textContent='连接暂未恢复，请按键唤醒画屏后连接蓝牙；无需重填 Wi-Fi。'+error.message;}
+     finally{busy=false;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}
     },3000);
    }
   }
@@ -252,10 +253,11 @@ export function setupNetwork(){
  }
  firmwareButton.textContent='打开固件升级与版本核验';
  firmwareButton.onclick=()=>{location.href='/firmware-upgrade.html?fix=ota-compat-v1';};
- async function syncPublished(){
+ async function syncPublished(force=false){
+  if(force)forceSync=true;
   const sha=latestStatus?.build?.sha256;
-  if(busy||downloadBusy||syncBusy||!client.characteristic||client.lastStatus!==true||!sha||syncSha===sha||latestStatus.pendingUpdate||latestStatus.build.status!=='published'||latestStatus.device?.id!==client.deviceId)return;
-  syncBusy=true;try{await client.resumeWifi();if(client.lastStatus===true){syncSha=sha;requestedSha=sha;syncRequestedAt=Date.now();announceConnection();}}finally{syncBusy=false;}
+  if(busy||downloadBusy||syncBusy||!client.characteristic||client.lastStatus!==true||!sha||(syncSha===sha&&!forceSync)||latestStatus.pendingUpdate||latestStatus.build.status!=='published'||latestStatus.device?.id!==client.deviceId)return;
+  syncBusy=true;try{await client.resumeWifi();if(client.lastStatus===true){syncSha=sha;forceSync=false;requestedSha=sha;syncRequestedAt=Date.now();announceConnection();}}finally{syncBusy=false;}
  }
  document.addEventListener('prayer:transfer-status',event=>{
   latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();
@@ -267,14 +269,14 @@ export function setupNetwork(){
  }
  document.addEventListener('prayer:ark-sync',async()=>{
   if(!client.characteristic){state.textContent='请先连接附近画屏蓝牙，再点击立即检查同步。';location.hash='network-onboarding';root.scrollIntoView({behavior:'smooth'});return;}
-  try{await client.resumeWifi();requestedSha=latestStatus?.build?.sha256;syncRequestedAt=Date.now();announceConnection();state.textContent='已请求画屏检查云端内容。请保持联网，等待“内容已保存”后在画屏进入“画面”。旧固件若仍无回报，请先更新到 ritual.6。';}catch(error){state.textContent='检查同步未启动：'+error.message;}
+  try{await syncPublished(true);}catch(error){state.textContent='检查同步未启动：'+error.message;}
  });
- connect.onclick=async()=>{connect.disabled=true;try{allowReconnect=true;reconnectAttempts=0;clearTimeout(reconnectTimer);reconnectTimer=null;await client.connect();rememberedDevice=client.device;await client.resumeWifi();await syncPublished();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{connect.disabled=false;}};
+ connect.onclick=async()=>{busy=true;connect.disabled=true;try{allowReconnect=true;reconnectAttempts=0;clearTimeout(reconnectTimer);reconnectTimer=null;while(downloadBusy)await sleep(25);await client.connect();rememberedDevice=client.device;await buildInfoRead;await client.resumeWifi();await syncPublished();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{busy=false;connect.disabled=false;send.disabled=!client.characteristic;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}};
  disconnect.onclick=()=>{allowReconnect=false;clearTimeout(reconnectTimer);reconnectTimer=null;client.disconnect();};
  bind.onclick=()=>document.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
  form.onsubmit=async event=>{event.preventDefault();busy=true;send.disabled=true;connect.disabled=true;
   for(const control of form.elements)control.disabled=true;
-  try{await client.configure(form.elements.ssid.value,form.elements.wifiPassword.value);}catch(e){state.textContent=e.message;}
+  try{while(downloadBusy)await sleep(25);await client.configure(form.elements.ssid.value,form.elements.wifiPassword.value);}catch(e){state.textContent=e.message;}
   finally{form.elements.wifiPassword.value='';for(const control of form.elements)control.disabled=false;busy=false;send.disabled=!client.characteristic;connect.disabled=false;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}
  };
  root.querySelector('[data-show-password]').onchange=event=>{form.elements.wifiPassword.type=event.target.checked?'text':'password';};
