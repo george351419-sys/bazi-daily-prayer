@@ -1,24 +1,16 @@
-<view class="page">
+<view class="page"><text class="note">真机测试版 1.1.7</text>
  <text class="kicker">A WISH OF YOUR OWN / 01</text>
  <text class="title">许愿池</text>
  <text class="subtitle">生辰入画，心愿成象。今天的画，从这里开始。</text>
  <view class="error" role="alert">{{error}}</view>
  <view class="notice" wx:if="{{message}}">{{message}}</view>
 
- <view wx:if="{{user&&syncState}}" class="paper sync-panel">
-  <button wx:if="{{prepareFailed}}" bindtap="retryPreparation" disabled="{{busy}}" class="secondary">重试准备画屏内容</button>
-  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
-  <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'配置画屏 Wi-Fi':'去链接神物并同步'}}</button>
-  <button wx:if="{{syncState.action==='check'}}" class="secondary spaced" bindtap="syncNow" disabled="{{busy}}">重新检查同步</button>
-  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
-
- </view>
 
  <view class="paper" wx:if="{{!user}}">
   <text class="kicker">WECHAT ACCOUNT</text>
   <text class="section-title">把每一次心愿，留在自己的画册里</text>
   <text class="note">微信登录后自动建立账户。生辰、心愿和画作只保存在你的账户中。</text>
-  <button class="primary spaced wide" bindtap="wechatAuth" loading="{{busy}}" disabled="{{busy||!agreed||!wechatEnabled}}">微信一键登录</button>
+  <button class="primary spaced wide" bindtap="wechatAuth" loading="{{busy}}" disabled="{{busy||!wechatEnabled}}">微信一键登录</button>
   <text class="note" wx:if="{{!wechatEnabled}}">服务端还需配置小程序 AppID 与 AppSecret，当前不会伪造登录成功。</text>
   <button class="text-button" bindtap="legacy">{{authMode==='legacy'?'返回微信登录':'使用已有网页账户'}}</button>
   <view wx:if="{{authMode==='legacy'}}">
@@ -26,7 +18,7 @@
    <input class="field" value="{{username}}" data-field="username" bindinput="input" maxlength="24" placeholder="已有网页账号"/>
    <text class="label">密码</text>
    <input class="field" value="{{password}}" password data-field="password" bindinput="input" maxlength="128" placeholder="账户密码"/>
-   <button class="secondary spaced wide" bindtap="auth" loading="{{busy}}" disabled="{{busy||!agreed}}">登录已有账户</button>
+   <button class="secondary spaced wide" bindtap="auth" loading="{{busy}}" disabled="{{busy}}">登录已有账户</button>
    <text class="note">邮箱验证码注册与找回仍在网页端完成。</text>
   </view>
  </view>
@@ -83,23 +75,33 @@
     <text class="label">{{item.name}}</text>
     <text wx:for="{{item.items}}" wx:for-item="wish" wx:key="id" class="pill {{wish.selected?'selected':''}}" data-id="{{wish.id}}" bindtap="wish">{{wish.label}}</text>
    </view>
-   <text class="section-title art-style-heading">画面风格</text><view wx:for="{{artStyles}}" wx:key="id" class="art-style-row"><button class="choice {{(profile.artStyle||'cute')===item.id?'selected':''}}" data-field="artStyle" data-value="{{item.id}}" bindtap="choose" disabled="{{busy}}"><text>{{item.label}}</text><text class="note">{{item.description}}</text></button><button class="text-button" data-id="{{item.id}}" bindtap="previewArtStyle">查看示例</button></view><text class="note">示意图仅供风格参考；保存后用于新生成的画面，已完成作品保持原样。</text><button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">保存生辰与心愿</button>
+   <text class="section-title art-style-heading">画面风格</text><view wx:for="{{artStyles}}" wx:key="id" class="art-style-row"><button class="choice {{(profile.artStyle||'cute')===item.id?'selected':''}}" data-field="artStyle" data-value="{{item.id}}" bindtap="choose" disabled="{{busy}}"><text>{{item.label}}</text><text class="note">{{item.description}}</text></button><button class="text-button" data-id="{{item.id}}" bindtap="previewArtStyle">查看示例</button></view><text class="note">示意图仅供风格参考；保存后用于新生成的画面，已完成作品保持原样。</text><button class="primary spaced wide" bindtap="save" disabled="{{busy}}" loading="{{busy}}">保存生辰与心愿</button>
    <text class="note">保存资料不会触发画面生成。</text>
    <view class="rule"></view>
    <text class="section-title">为今天，留一幅造像</text>
    <text class="note">生辰为底，心愿为笔。生成通常需要一至两分钟，完成后会保存到账户画册。</text>
-   <button class="secondary spaced wide" bindtap="generate" disabled="{{busy||!agreed}}" loading="{{busy}}">{{jobReady?'继续完成今日造像':'生成今日造像'}}</button>
-   <text class="note" wx:if="{{generation}}">{{generation}}</text>
+   <button class="{{profileSaved?'primary':'secondary'}} spaced wide" bindtap="generate" disabled="{{busy||!profileSaved}}" loading="{{busy}}">{{jobReady?'继续完成今日造像':'生成今日造像'}}</button>
+   <view class="generation-panel" wx:if="{{generation}}" role="status">
+    <text class="section-title">{{generationPhase==='complete'?'今日造像已完成':generationPhase==='failed'?'生成暂未完成':'今日造像正在展开'}}</text>
+    <view class="generation-steps"><text class="{{generationPhase==='analyzing'?'current':''}}">01 生辰取象</text><text class="{{generationPhase==='drawing'?'current':''}}">02 心愿入画</text><text class="{{generationPhase==='complete'?'current':''}}">03 今日造像</text></view>
+    <text class="note">{{generation}}</text>
+    <image wx:if="{{generatedImage}}" class="generated-image" src="{{generatedImage}}" mode="widthFix"/>
+    <button wx:if="{{generationPhase==='complete'}}" class="primary spaced wide" bindtap="connectScreen">去链接神物</button>
+   </view> <view wx:if="{{user&&syncState}}" class="paper sync-panel">
+  <button wx:if="{{prepareFailed}}" bindtap="retryPreparation" disabled="{{busy}}" class="secondary">重试准备画屏内容</button>
+  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'配置画屏 Wi-Fi':'去链接神物并同步'}}</button>
+  <button wx:if="{{syncState.action==='check'}}" class="secondary spaced" bindtap="syncNow" disabled="{{busy}}">重新检查同步</button>
+  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
+
+ </view>
+
    <button class="text-button" bindtap="companion" disabled="{{busy}}">到「解读陪伴」看画面、做小事、收下一个答案</button>
    <button class="text-button" bindtap="screen" disabled="{{busy}}">到画屏选择展示内容</button>
   </view>
  </view>
 
  <view class="privacy">
-  <view class="row">
-   <text>同意账户与隐私说明</text>
-   <switch color="#415B48" checked="{{agreed}}" bindchange="agree"/>
-  </view>
   <button class="text-button" bindtap="privacy">{{privacyOpen?'收起说明':'查看数据用途与权限'}}</button>
   <view wx:if="{{privacyOpen}}">
     <text class="note">生辰、城市与心愿用于保存个人资料及造像与解读服务；照片仅上传到 playmath.cn 的私有账户。选择照片前会请求相册/相机权限；Wi-Fi 密码只通过蓝牙发给你选择的设备，不上传后台，不保存到本地。微信登录凭证只由服务端用于建立账户，不保存 session_key。登录会话保存在本机，退出后清除。无需通讯录或定位权限。运营主体、隐私联系渠道及正式隐私保护指引须在提交审核前核实。</text>

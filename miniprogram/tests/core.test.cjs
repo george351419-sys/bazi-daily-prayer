@@ -36,3 +36,17 @@ test('tab order starts at wishes and guides connection second',()=>{
  const app=JSON.parse(fs.readFileSync(path.join(__dirname,'../app.json'),'utf8'));
  assert.deepEqual(app.tabBar.list.map(item=>item.text),['许愿池','链接神物','解读陪伴','自定义']);assert.equal(app.pages[0],'pages/mine/index');
 });
+
+test('saved Wi-Fi uses peripheral credentials only for an exact SSID match',async()=>{
+ const {ArkBLE,packet}=require('../utils/ble'),client=new ArkBLE(()=>{},()=>{}),channels=[];client.id='screen';client.write=async ch=>{channels.push(ch);if(ch===0x33)client.receive(packet(ch,require('../utils/ble').utf8('Home')));if(ch===0x3a)client.receive(packet(ch,[1]));};await client.configure('Home','');assert.deepEqual(channels,[0x33,0x30,0x38,0x3a]);await assert.rejects(client.configure('Other',''),/新的 Wi-Fi/);assert.ok(!channels.some(ch=>[0x32,0x34,0x35,0x39].includes(ch)));assert.equal(client.busy,false);
+});
+test('custom-named peripheral identity comes from cloud proof and restores its heartbeat URL',async()=>{
+ const {ArkBLE,packet,utf8}=require('../utils/ble'),client=new ArkBLE(()=>{},()=>{}),writes=[],normal='https://playmath.cn/api/v1/device/heartbeat',nonce='a'.repeat(32);client.id='ios-uuid';
+ client.write=async(ch,body=[])=>{writes.push({ch,body});if(ch===0x3f)client.receive(packet(ch,utf8(normal)));};
+ const id=await client.resolveIdentity(async(path,body)=>body.beginPairing?{nonce,heartbeatURL:normal+'?link='+nonce+'&device_id='}:{status:'identified',deviceId:'112233445566'});
+ assert.equal(id,'112233445566');assert.equal(require('../utils/ble').decode(writes.at(-1).body),normal);assert.ok(writes.every(x=>![0x35,0x57].includes(x.ch)));
+});
+test('identity API failures restore the normal heartbeat instead of leaving a pairing URL',async()=>{
+ const {ArkBLE,packet,utf8,decode}=require('../utils/ble'),client=new ArkBLE(()=>{},()=>{}),writes=[],normal='https://playmath.cn/api/v1/device/heartbeat',nonce='b'.repeat(32);client.id='ios-uuid';client.write=async(ch,body=[])=>{writes.push({ch,body});if(ch===0x3f)client.receive(packet(ch,utf8(normal)));};
+ await assert.rejects(client.resolveIdentity(async(path,body)=>{if(body.beginPairing)return {nonce,heartbeatURL:normal+'?link='+nonce+'&device_id='};throw Error('offline');}),/offline/);assert.equal(decode(writes.at(-1).body),normal);
+});

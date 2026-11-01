@@ -1,1 +1,1 @@
-<view class="tabs"><button wx:for="{{list}}" wx:key="path" class="tab {{selected===index?'active':''}}" data-index="{{index}}" bindtap="change">{{item.text}}<view class="mark" wx:if="{{selected===index}}"></view></button></view>
+<view class="tabs"><button wx:for="{{list}}" wx:key="path" class="tab {{selected===index?'active':''}}" data-index="{{index}}" bindtap="change"><text class="tab-no">0{{index+1}}</text><text class="tab-text">{{item.text}}</text><view class="mark" wx:if="{{selected===index}}"></view></button></view>

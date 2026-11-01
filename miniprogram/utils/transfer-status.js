@@ -147,6 +147,7 @@ function transferAction(state){
 // Live Wi-Fi confirmation is connectivity evidence, not a content-storage receipt.
 function withConnection(state,result,connection,now=Date.now()){
  state=state.connectionBase||state;
+ if(connection?.paired&&!result?.syncConfigured&&state.phase==='connect')return {...state,connectionBase:state,phase:'binding',title:connection.deviceId?'画屏已连接 · 正在关联当前账户':'画屏已连接 · 正在核验设备身份',detail:connection.deviceId?'账户关联由程序自动完成，完成后会领取已准备的内容。':'设备联网后会自动核验身份并关联账户，无需填写设备编号。',action:null};
  if(!connection?.paired||!Number.isFinite(connection.receivedAt)||now-connection.receivedAt>6000||!result?.device?.id||connection.deviceId!==result.device.id)return {...state,action:transferAction(state)};
  if(state.step<1||state.preparation||['stored','rendered','firmware','publishing'].includes(state.phase))return {...state,action:transferAction(state)};
  if(['waiting','syncing'].includes(state.phase)){

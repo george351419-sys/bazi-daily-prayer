@@ -75,3 +75,19 @@ test('automatic sync waits for Wi-Fi confirmation instead of consuming the reque
  c.client.status=true;c.client.state('Wi-Fi 已连接',true);await c.syncPublished();
  assert.equal(c.syncSha,'new');assert.equal(c.client.commands.filter(v=>v==='check-sync').length,1);assert.equal(c.stateFor({...ready(),deviceReport:null}).phase,'syncing');
 });
+test('manual Wi-Fi setup waits for in-flight polling and excludes new background polls',async()=>{
+ const env=session(),c=await connected(env);let release,started;const entered=new Promise(r=>started=r);c.client.queryDownload=()=>{started();return new Promise(r=>release=r);};
+ const poll=c.poll();await entered;const configure=c.configure('Home','password');await c.poll();assert.equal(c.client.commands.includes('configure'),false);release();await poll;await configure;assert.equal(c.client.commands.filter(x=>x==='configure').length,1);assert.equal(c.busy,false);
+});
+test('a failed BLE command releases the queue for the next user operation',async()=>{
+ const env=session(),c=await connected(env);c.client.configure=async()=>{throw new Error('设备未确认');};await assert.rejects(c.configure('Home','password'),/设备未确认/);await c.syncNow();assert.equal(c.busy,false);assert.equal(c.client.commands.includes('check-sync'),true);
+});
+test('connected but unbound screen asks for binding instead of linking again',async()=>{
+ const env=session(),c=await connected(env),s={syncConfigured:false,plan:{artworkIds:['today']},preparation:{ready:true}};const state=c.stateFor(s);assert.equal(state.phase,'binding');assert.equal(state.action,null);assert.match(state.title,/正在关联当前账户/);assert.doesNotMatch(state.detail,/前往/);
+});
+test('broadcast localName supplies identity when the display name is generic',async()=>{
+ const env=session(),c=env.getScreenConnection();c.client.found([{id:'ios-uuid',name:'FRAMEFILMARK-Elink',localName:'FRAMEFILMARK-aabbccddeeff'}]);await c.connect('ios-uuid');assert.equal(c.snapshot.connectedDeviceId,'aabbccddeeff');
+});
+test('missing hardware identity remains actionable and never uses the iOS BLE UUID as device ID',async()=>{
+ const env=session(),c=env.getScreenConnection();c.client.found([{id:'ios-uuid',name:'FRAMEFILMARK-Elink'}]);await c.connect('ios-uuid');assert.equal(c.snapshot.connectedDeviceId,'');assert.match(c.stateFor({syncConfigured:false,plan:{},preparation:{ready:true}}).detail,/无需填写设备编号/);
+});

@@ -78,3 +78,16 @@ test('v2 photo packets are delivered only to compatible firmware; old firmware r
  const old=await(await invoke(c,hb+'&ritual_v=1&ritual_active=1',{headers:{authorization}})).json();assert.equal(old.data.firmware_update_required,true);assert.ok(!old.data.commands.some(c=>['download_film','download_ritual','disable_ritual'].includes(c.cmd)));
  const current=await(await invoke(c,hb+'&ritual_v=2',{headers:{authorization}})).json();assert.equal(current.data.firmware_update_required,false);assert.equal(current.data.commands[0].cmd,'download_ritual');
 });
+
+test('BLE pairing uses an authenticated legacy heartbeat, is scoped to its account, and expires safely',async()=>{
+ const {beginDevicePairing,pairedDeviceIdentity}=await import('../lib/ark-cloud.mjs');const c=context();await setup(c);const account='1'.repeat(32),challenge=await beginDevicePairing(env,account,{store:c.store,now});
+ assert.ok(Buffer.byteLength(challenge.heartbeatURL)+4<=125);assert.equal((await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now})).status,'waiting');
+ const legacy=challenge.heartbeatURL+'?device_id='+deviceId+'&ritual_v=3';
+ assert.equal((await handleArkCloud(new Request(legacy),env,{store:c.store,now})).status,403);
+ assert.equal((await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now})).status,'waiting');
+ const response=await handleArkCloud(new Request(legacy,{headers:{authorization}}),env,{store:c.store,now});assert.equal(response.status,200);
+ assert.deepEqual(await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now}),{status:'identified',deviceId});
+ await assert.rejects(pairedDeviceIdentity(env,'2'.repeat(32),challenge.nonce,{store:c.store,now}));await assert.rejects(pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now:now+90001}));
+ // If the app disappears before restoring the URL, expiry must not break the device's normal cloud sync.
+ assert.equal((await handleArkCloud(new Request(legacy,{headers:{authorization}}),env,{store:c.store,now:now+90001})).status,200);
+});

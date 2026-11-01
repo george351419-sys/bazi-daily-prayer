@@ -22,15 +22,12 @@ class ScreenConnection{
  notice(bleText){this.snapshot={...this.snapshot,bleText};this.emit();}
  async scan(){this.allowed=false;clearTimeout(this.retryTimer);this.live=null;this.hardwareId='';await this.client.scan();}
  async connect(id){
-  if(this.busy)return;
-  const device=this.snapshot.bleDevices.find(item=>item.id===id),match=device&&/^FRAMEFILMARK[-_ ]?([a-f0-9]{12})$/i.exec(device.name);
-  this.hardwareId=match?match[1].toLowerCase():'';this.target=id;this.allowed=false;clearTimeout(this.retryTimer);this.attempts=0;this.live=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
+  const device=this.snapshot.bleDevices.find(item=>item.id===id),match=device&&[device.name,device.localName].map(name=>/^FRAMEFILMARK[-_ ]?([a-f0-9]{12})$/i.exec(String(name||'').trim())).find(Boolean);
+  this.hardwareId=this.client.resolveIdentity?'':match?match[1].toLowerCase():'';this.target=id;this.allowed=false;clearTimeout(this.retryTimer);this.attempts=0;this.live=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
   await this.connectTarget();this.allowed=true;this.start();
  }
  async connectTarget(){
-  this.busy=true;
-  try{await this.client.connect(this.target);if(!this.client.id)return;await this.client.resumeWifi();}
-  finally{this.busy=false;}
+  return this.serial(async()=>{await this.client.connect(this.target);if(!this.client.id)return;if(this.client.readSavedSSID){const savedSSID=await this.client.readSavedSSID().catch(()=>null);this.snapshot={...this.snapshot,savedSSID};this.emit();}await this.client.resumeWifi();});
  }
  reconnect(){
   if(!this.allowed||!this.foreground||!this.target||this.retryTimer||this.attempts>=3)return;
@@ -40,8 +37,19 @@ class ScreenConnection{
    catch(error){this.notice('连接暂未恢复，请唤醒画屏；无需重填 Wi-Fi。'+error.message);this.reconnect();}
   },3000);
  }
- async configure(ssid,password){if(this.busy)throw new Error('画屏正在通信，请稍候。');this.busy=true;try{return await this.client.configure(ssid,password);}finally{this.busy=false;}}
- async syncNow(){if(this.busy)throw new Error('画屏正在通信，请稍候。');this.busy=true;try{const result=await this.client.syncNow();if(this.client.status===true){this.syncRequestedAt=Date.now();this.requestedSha=this.current?.build?.sha256;this.emit();}return result;}finally{this.busy=false;}}
+ async serial(action){
+  this.pending=(this.pending||0)+1;
+  const previous=this.operation||Promise.resolve();
+  const task=previous.catch(()=>{}).then(async()=>{this.busy=true;try{return await action();}finally{this.pending--;this.busy=this.pending>0;}});
+  this.operation=task;return task;
+ }
+ async resolveIdentity(request){
+  const epoch=this.client.epoch,id=await this.serial(()=>this.client.resolveIdentity(request));
+  if(epoch!==this.client.epoch||!this.snapshot.paired)throw new Error('设备连接已改变，请重试。');
+  this.hardwareId=id;this.snapshot={...this.snapshot,connectedDeviceId:id};this.emit();return id;
+ }
+ async configure(ssid,password){return this.serial(async()=>{const result=await this.client.configure(ssid,password);this.snapshot={...this.snapshot,savedSSID:ssid};this.emit();return result;});}
+ async syncNow(){return this.serial(async()=>{const result=await this.client.syncNow();if(this.client.status===true){this.syncRequestedAt=Date.now();this.requestedSha=this.current?.build?.sha256;this.emit();}return result;});}
  async syncPublished(){
   const s=this.current,sha=s&&s.build&&s.build.sha256;
   if(this.busy||!this.foreground||!this.client.id||this.client.status!==true||!sha||sha===this.syncSha||s.pendingUpdate||s.build.status!=='published'||!s.device||s.device.id!==this.hardwareId)return;
@@ -49,10 +57,8 @@ class ScreenConnection{
  }
  async poll(){
   if(!this.foreground||!this.client.id||this.busy)return;
-  this.busy=true;
-  try{await this.client.write(0x3a,[],this.client.epoch);await this.client.queryDownload();}
+  try{await this.serial(async()=>{await this.client.write(0x3a,[],this.client.epoch);await this.client.queryDownload();});}
   catch(error){this.live=null;this.notice('下载进度暂未读到：'+error.message);}
-  finally{this.busy=false;}
   await this.syncPublished().catch(error=>this.notice('自动检查同步暂未成功：'+error.message));
  }
  start(){clearTimeout(this.backgroundTimer);this.foreground=true;if(!this.pollTimer)this.pollTimer=setInterval(()=>void this.poll(),2000);if(!this.client.id)this.reconnect();}
@@ -74,7 +80,7 @@ function observeConnection(page){
  if(page.stopConnection)page.stopConnection();
  page.stopConnection=connection.subscribe(snapshot=>{
   if(!page.active)return;
-  const data={...snapshot};if(page.data.status&&!page.preparingPair&&!page.prepareFailure)data.syncState=connection.stateFor(page.data.status,page.generatedArtworkId);
+  const data={...snapshot};if(snapshot.savedSSID&&!page.data.ssid)data.ssid=snapshot.savedSSID;if(page.data.status&&!page.preparingPair&&!page.prepareFailure)data.syncState=connection.stateFor(page.data.status,page.generatedArtworkId);
   page.setData(data);
  });
  return connection;

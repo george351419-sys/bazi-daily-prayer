@@ -34,8 +34,8 @@ test('ForFilm protocol preserves UTF-8 credentials and waits for device network 
  const p=peripheral(),states=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async()=>{}});
  await client.connect();assert.equal(states.at(-1).connected,false);
  await client.configure('家里的网','test-password');
- const channels=p.writes.map(p=>p[1]);assert.deepEqual(channels,[0x39,0x3a,0x32,0x34,0x33,0x30,0x38,0x3a]);
- assert.equal(states.at(-1).connected,true);assert.equal(new TextDecoder().decode(Uint8Array.from(p.writes[2].slice(3,-1))),'家里的网');
+ const channels=p.writes.map(p=>p[1]);assert.deepEqual(channels,[0x33,0x39,0x3a,0x32,0x34,0x33,0x30,0x38,0x3a]);
+ assert.equal(states.at(-1).connected,true);assert.equal(new TextDecoder().decode(Uint8Array.from(p.writes[3].slice(3,-1))),'家里的网');
  for(const bytes of p.writes)assert.equal(bytes.at(-1),bytes.slice(0,-1).reduce((s,n)=>(s+n)&255,0));
  client.disconnect();assert.equal(p.device.gatt.connected,false);
 });
@@ -89,7 +89,7 @@ const imageHash=b=>createHash('sha256').update(b).digest('hex');
 test('BLE upgrade validates image, uses bounded chunks and processing barriers before commit',async()=>{
  const p=peripheral(),updates=[],client=new ArkNetwork({bluetooth:p.bluetooth,onOta:s=>updates.push(s),delay:async()=>{}});await client.connect();const b=otaImage();
  assert.equal(await client.startBleOta(b,imageHash(b)),true);
- const channels=p.writes.map(b=>b[1]);assert.equal(channels[0],0x56);assert.equal(channels[1],0x10);assert.equal(channels[2],0x42);assert.equal(channels.at(-2),0x42);assert.equal(channels.at(-1),0x13);
+ assert.equal(p.writes[0][1],0x33);const channels=p.writes.slice(1).map(b=>b[1]);assert.equal(channels[0],0x56);assert.equal(channels[1],0x10);assert.equal(channels[2],0x42);assert.equal(channels.at(-2),0x42);assert.equal(channels.at(-1),0x13);
  assert.equal(channels.filter(c=>c===0x11).length,10);assert.equal(channels.filter(c=>c===0x42).length,3);
  const data=p.writes.filter(b=>b[1]===0x11).flatMap(b=>b.slice(3,-1));assert.deepEqual(data,[...b]);assert.equal(updates.at(-1).progress,100);client.disconnect();
 });
@@ -103,5 +103,11 @@ test('reconnecting the same authorized screen resumes saved Wi-Fi without creden
  await client.connect();await client.configure('home','test-password');client.disconnect();p.writes.length=0;
  client.bluetooth.requestDevice=()=>{throw new Error('unexpected device picker');};
  await client.connect(p.device);await client.resumeWifi();
- assert.deepEqual(p.writes.map(bytes=>bytes[1]),[0x38,0x3a]);assert.equal(client.lastStatus,true);client.disconnect();
+ assert.deepEqual(p.writes.map(bytes=>bytes[1]),[0x33,0x38,0x3a]);assert.equal(client.lastStatus,true);client.disconnect();
+});
+
+test('custom BLE names resolve a cloud-authenticated device identity and restore heartbeat settings',async()=>{
+ const client=new ArkNetwork({delay:async()=>{}}),normal='https://playmath.cn/api/v1/device/heartbeat',nonce='d'.repeat(32),writes=[];client.characteristic={};client.device={name:'FRAMEFILMARK-Elink'};
+ client.write=async(ch,body=[])=>{writes.push({ch,body});if(ch===0x3f)client.receive(packet(ch,new TextEncoder().encode(normal)));};
+ const id=await client.resolveIdentity(async(path,body)=>body.beginPairing?{nonce,heartbeatURL:normal+'?link='+nonce+'&device_id='}:{status:'identified',deviceId:'112233445566'});assert.equal(id,'112233445566');assert.equal(new TextDecoder().decode(writes.at(-1).body),normal);assert.equal(client.identifying,false);
 });

@@ -7,14 +7,14 @@ export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUs
  const devices=setupDevices({request,fetchImage,getUser:()=>user}),ritual=setupRitual({request,fetchImage,getUser:()=>user}),customPhoto=setupCustomPhoto({request,fetchImage,getUser:()=>user});
  document.querySelector('#custom-login')?.addEventListener('click',()=>open('login',()=>{location.hash='custom';}));
  document.querySelector('#ritual-login')?.addEventListener('click',()=>open('login',()=>{location.hash='ritual-home';}));
- document.addEventListener('prayer:ark-device',event=>{pairedDevice=event.detail?.deviceId?event.detail:null;if(pairedDevice&&user)void bindPairedDevice(false);});
+ document.addEventListener('prayer:ark-device',event=>{pairedDevice=(event.detail?.deviceId||event.detail?.resolveIdentity)?event.detail:null;if(pairedDevice&&user)void bindPairedDevice(false);});
  async function bindPairedDevice(manual=true){
-  const device=pairedDevice;if(!device?.deviceId)return;
+  const device=pairedDevice;if(!device)return;
   const state=$('#network-device-state'),button=$('#bind-ark-device');
   if(!user){if(manual)open('login',bindPairedDevice);return;}
   if(bindingDevice)return;
   bindingDevice=true;button.disabled=true;state.textContent='已识别画屏，正在自动绑定到当前账户…';
-  try{await ritual.bindDevice(device.deviceId);document.dispatchEvent(new CustomEvent('prayer:ark-sync'));state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';}
+  try{const id=device.deviceId||await device.resolveIdentity(request);device.deviceId=id;await ritual.bindDevice(id);document.dispatchEvent(new CustomEvent('prayer:ark-sync'));state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';}
   catch(e){state.textContent='绑定暂未完成：'+e.message;}
   finally{bindingDevice=false;button.disabled=false;}
  }

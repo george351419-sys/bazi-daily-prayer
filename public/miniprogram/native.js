@@ -1368,7 +1368,7 @@
       function credentials(ssid, password) {
         const name = utf8(ssid), secret = utf8(password);
         if (!name.length || name.length > 32 || /[\x00-\x1f\x7f]/.test(ssid)) throw new Error("Wi-Fi \u540D\u79F0\u9700\u4E3A 1\u201332 \u4E2A UTF-8 \u5B57\u8282\u3002");
-        if (secret.length < 8 || secret.length > 63 || /[\x00-\x1f\x7f]/.test(password)) throw new Error("Wi-Fi \u5BC6\u7801\u9700\u4E3A 8\u201363 \u4E2A UTF-8 \u5B57\u8282\u3002");
+        if (secret.length < 8 || secret.length > 63 || /[\x00-\x1f\x7f]/.test(password)) throw new Error("\u8BF7\u6838\u5BF9\u8BE5 Wi-Fi \u7684\u73B0\u6709\u5BC6\u7801\u540E\u91CD\u8BD5\u3002");
         return { name, secret };
       }
       var ArkBLE = class {
@@ -1410,7 +1410,7 @@
           this.devices.clear();
           this.listener = (e) => {
             for (const d of e.devices || []) {
-              if ((d.name || d.localName || "").startsWith("FRAMEFILMARK")) this.devices.set(d.deviceId, { id: d.deviceId, name: d.name || d.localName, rssi: d.RSSI });
+              if ((d.name || d.localName || "").startsWith("FRAMEFILMARK")) this.devices.set(d.deviceId, { id: d.deviceId, name: d.name || d.localName, localName: d.localName || "", rssi: d.RSSI });
             }
             this.found(Array.from(this.devices.values()));
           };
@@ -1486,6 +1486,15 @@
         }
         receive(b) {
           if (b.length < 4 || b[0] !== 85 || b.length !== b[2] + 4 || b.slice(0, -1).reduce((s, x) => s + x & 255, 0) !== b[b.length - 1]) return;
+          if (b[1] === 63 && this.identityRead) {
+            const reader = this.identityRead;
+            this.identityRead = null;
+            try {
+              reader.resolve(decode(b.slice(3, -1)));
+            } catch {
+              reader.reject(new Error("\u753B\u5C4F\u8EAB\u4EFD\u901A\u9053\u56DE\u590D\u65E0\u6548"));
+            }
+          }
           if (b[1] === 58 && b[2] === 1) {
             this.status = b[3] === 1;
             this.state(this.status ? "\u753B\u5C4F\u5DF2\u786E\u8BA4 Wi-Fi \u8054\u7F51\u3002" : "\u84DD\u7259\u5DF2\u8FDE\u63A5\uFF0CWi-Fi \u5C1A\u672A\u8FDE\u63A5\u3002", true);
@@ -1506,7 +1515,82 @@
             }
           }
         }
+        async readHeartbeatURL() {
+          const epoch = this.epoch;
+          const read = new Promise((resolve, reject) => {
+            this.identityRead = { resolve, reject };
+          });
+          read.catch(() => {
+          });
+          const timer = setTimeout(() => {
+            this.identityRead?.reject(new Error("\u753B\u5C4F\u672A\u56DE\u590D\u8EAB\u4EFD\u901A\u9053\uFF0C\u8BF7\u4FDD\u6301\u5524\u9192\u540E\u91CD\u8BD5\u3002"));
+            this.identityRead = null;
+          }, 3e3);
+          try {
+            await this.write(63, [], epoch);
+            return await read;
+          } finally {
+            clearTimeout(timer);
+            this.identityRead = null;
+          }
+        }
+        async resolveIdentity(request) {
+          const epoch = this.epoch, original = await this.readHeartbeatURL(), normal = "https://playmath.cn/api/v1/device/heartbeat";
+          const priorChallenge = original.startsWith(normal + "?link=") && /^[a-f0-9]{32}&device_id=$/.test(original.slice((normal + "?link=").length));
+          if (original && original !== normal && !priorChallenge) throw new Error("\u753B\u5C4F\u4F7F\u7528\u4E86\u5176\u4ED6\u4E91\u7AEF\u5730\u5740\uFF0C\u8BF7\u5148\u6838\u5BF9\u8BBE\u5907\u914D\u7F6E\u3002");
+          const challenge = await request("/api/account/ritual/device", { beginPairing: true });
+          if (!/^[a-f0-9]{32}$/.test(challenge.nonce || "") || challenge.heartbeatURL !== normal + "?link=" + challenge.nonce + "&device_id=") throw new Error("\u8BBE\u5907\u8BC6\u522B\u670D\u52A1\u56DE\u590D\u65E0\u6548\u3002");
+          let changed = false;
+          try {
+            changed = true;
+            await this.write(62, utf8(challenge.heartbeatURL), epoch);
+            await this.resumeWifi();
+            const end = Date.now() + 6e4;
+            while (Date.now() < end) {
+              if (epoch !== this.epoch || !this.id) throw new Error("\u84DD\u7259\u8FDE\u63A5\u5DF2\u65AD\u5F00\uFF0C\u8BF7\u91CD\u65B0\u8FDE\u63A5\u753B\u5C4F\u3002");
+              const result = await request("/api/account/ritual/device", { pairingNonce: challenge.nonce });
+              if (result.status === "identified" && /^[a-f0-9]{12}$/.test(result.deviceId || "")) return result.deviceId;
+              await pause(2e3);
+            }
+            throw new Error("\u5C1A\u672A\u6536\u5230\u753B\u5C4F\u8BA4\u8BC1\u56DE\u62A5\uFF0C\u8BF7\u4FDD\u6301\u753B\u5C4F\u5524\u9192\u5E76\u70B9\u51FB\u91CD\u8BD5\u5173\u8054\u3002");
+          } finally {
+            if (changed && epoch === this.epoch && this.id) await this.write(62, utf8(normal), epoch);
+          }
+        }
+        async readSavedSSID() {
+          const epoch = this.epoch;
+          this.ssid = null;
+          await this.write(51, [], epoch);
+          const end = Date.now() + 1500;
+          while (this.ssid === null && Date.now() < end) {
+            if (epoch !== this.epoch) throw new Error("\u84DD\u7259\u5DF2\u65AD\u5F00");
+            await pause(100);
+          }
+          if (this.ssid === null) throw new Error("\u672A\u8BFB\u5230\u753B\u5C4F\u4FDD\u5B58\u7684\u7F51\u7EDC\uFF0C\u8BF7\u91CD\u65B0\u8FDE\u63A5\u3002");
+          return this.ssid;
+        }
+        async resumeSaved(ssid) {
+          if (this.busy) throw new Error("\u6B63\u5728\u8FDE\u63A5 Wi-Fi\uFF0C\u8BF7\u7A0D\u5019\u3002");
+          this.busy = true;
+          const epoch = this.epoch;
+          try {
+            const saved = await this.readSavedSSID();
+            if (!saved || saved !== ssid) throw new Error("\u8FD9\u662F\u65B0\u7684 Wi-Fi\uFF0C\u8BF7\u586B\u5199\u8BE5\u7F51\u7EDC\u7684\u73B0\u6709\u5BC6\u7801\u3002");
+            this.status = null;
+            await this.write(48, [1], epoch);
+            await this.resumeWifi();
+            const end = Date.now() + 3e4;
+            while (this.status !== true && Date.now() < end) {
+              await this.write(58, [], epoch);
+              if (this.status !== true) await pause(700);
+            }
+            if (this.status !== true) throw new Error("\u4F7F\u7528\u5DF2\u4FDD\u5B58\u7684\u5BC6\u7801\u5C1A\u672A\u786E\u8BA4\u8054\u7F51\uFF1B\u8BF7\u68C0\u67E5\u7F51\u7EDC\uFF0C\u5BC6\u7801\u53D8\u66F4\u65F6\u518D\u586B\u5199\u65B0\u5BC6\u7801\u3002");
+          } finally {
+            this.busy = false;
+          }
+        }
         async configure(ssid, password) {
+          if (!password) return this.resumeSaved(ssid);
           if (this.busy) throw new Error("\u6B63\u5728\u914D\u7F51\uFF0C\u8BF7\u7A0D\u5019\u3002");
           const { name, secret } = credentials(ssid, password), epoch = this.epoch;
           this.busy = true;
@@ -1576,6 +1660,10 @@
           this.state("\u5DF2\u8BF7\u6C42\u68C0\u67E5\u4E91\u7AEF\u66F4\u65B0\uFF1B\u7B49\u5F85\u5185\u5BB9\u4FDD\u5B58\u56DE\u6267\u540E\uFF0C\u53EF\u5728\u753B\u5C4F\u9009\u62E9\u201C\u753B\u9762\u201D\u5E76\u6309\u786E\u8BA4\u952E\u8FDB\u5165\u3002\u9700\u8981 ritual.6 \u56FA\u4EF6\u3002", true);
         }
         async disconnect() {
+          if (this.identityRead) {
+            this.identityRead.reject(new Error("\u84DD\u7259\u5DF2\u65AD\u5F00"));
+            this.identityRead = null;
+          }
           this.status = null;
           this.epoch++;
           if (this.downloadRead) {
@@ -1750,6 +1838,7 @@
       }
       function withConnection(state, result, connection, now = Date.now()) {
         state = state.connectionBase || state;
+        if (connection?.paired && !result?.syncConfigured && state.phase === "connect") return { ...state, connectionBase: state, phase: "binding", title: connection.deviceId ? "\u753B\u5C4F\u5DF2\u8FDE\u63A5 \xB7 \u6B63\u5728\u5173\u8054\u5F53\u524D\u8D26\u6237" : "\u753B\u5C4F\u5DF2\u8FDE\u63A5 \xB7 \u6B63\u5728\u6838\u9A8C\u8BBE\u5907\u8EAB\u4EFD", detail: connection.deviceId ? "\u8D26\u6237\u5173\u8054\u7531\u7A0B\u5E8F\u81EA\u52A8\u5B8C\u6210\uFF0C\u5B8C\u6210\u540E\u4F1A\u9886\u53D6\u5DF2\u51C6\u5907\u7684\u5185\u5BB9\u3002" : "\u8BBE\u5907\u8054\u7F51\u540E\u4F1A\u81EA\u52A8\u6838\u9A8C\u8EAB\u4EFD\u5E76\u5173\u8054\u8D26\u6237\uFF0C\u65E0\u9700\u586B\u5199\u8BBE\u5907\u7F16\u53F7\u3002", action: null };
         if (!connection?.paired || !Number.isFinite(connection.receivedAt) || now - connection.receivedAt > 6e3 || !result?.device?.id || connection.deviceId !== result.device.id) return { ...state, action: transferAction(state) };
         if (state.step < 1 || state.preparation || ["stored", "rendered", "firmware", "publishing"].includes(state.phase)) return { ...state, action: transferAction(state) };
         if (["waiting", "syncing"].includes(state.phase)) {
@@ -1843,9 +1932,8 @@
           await this.client.scan();
         }
         async connect(id) {
-          if (this.busy) return;
-          const device = this.snapshot.bleDevices.find((item) => item.id === id), match = device && /^FRAMEFILMARK[-_ ]?([a-f0-9]{12})$/i.exec(device.name);
-          this.hardwareId = match ? match[1].toLowerCase() : "";
+          const device = this.snapshot.bleDevices.find((item) => item.id === id), match = device && [device.name, device.localName].map((name) => /^FRAMEFILMARK[-_ ]?([a-f0-9]{12})$/i.exec(String(name || "").trim())).find(Boolean);
+          this.hardwareId = this.client.resolveIdentity ? "" : match ? match[1].toLowerCase() : "";
           this.target = id;
           this.allowed = false;
           clearTimeout(this.retryTimer);
@@ -1859,14 +1947,16 @@
           this.start();
         }
         async connectTarget() {
-          this.busy = true;
-          try {
+          return this.serial(async () => {
             await this.client.connect(this.target);
             if (!this.client.id) return;
+            if (this.client.readSavedSSID) {
+              const savedSSID = await this.client.readSavedSSID().catch(() => null);
+              this.snapshot = { ...this.snapshot, savedSSID };
+              this.emit();
+            }
             await this.client.resumeWifi();
-          } finally {
-            this.busy = false;
-          }
+          });
         }
         reconnect() {
           if (!this.allowed || !this.foreground || !this.target || this.retryTimer || this.attempts >= 3) return;
@@ -1885,19 +1975,40 @@
             }
           }, 3e3);
         }
+        async serial(action) {
+          this.pending = (this.pending || 0) + 1;
+          const previous = this.operation || Promise.resolve();
+          const task = previous.catch(() => {
+          }).then(async () => {
+            this.busy = true;
+            try {
+              return await action();
+            } finally {
+              this.pending--;
+              this.busy = this.pending > 0;
+            }
+          });
+          this.operation = task;
+          return task;
+        }
+        async resolveIdentity(request) {
+          const epoch = this.client.epoch, id = await this.serial(() => this.client.resolveIdentity(request));
+          if (epoch !== this.client.epoch || !this.snapshot.paired) throw new Error("\u8BBE\u5907\u8FDE\u63A5\u5DF2\u6539\u53D8\uFF0C\u8BF7\u91CD\u8BD5\u3002");
+          this.hardwareId = id;
+          this.snapshot = { ...this.snapshot, connectedDeviceId: id };
+          this.emit();
+          return id;
+        }
         async configure(ssid, password) {
-          if (this.busy) throw new Error("\u753B\u5C4F\u6B63\u5728\u901A\u4FE1\uFF0C\u8BF7\u7A0D\u5019\u3002");
-          this.busy = true;
-          try {
-            return await this.client.configure(ssid, password);
-          } finally {
-            this.busy = false;
-          }
+          return this.serial(async () => {
+            const result = await this.client.configure(ssid, password);
+            this.snapshot = { ...this.snapshot, savedSSID: ssid };
+            this.emit();
+            return result;
+          });
         }
         async syncNow() {
-          if (this.busy) throw new Error("\u753B\u5C4F\u6B63\u5728\u901A\u4FE1\uFF0C\u8BF7\u7A0D\u5019\u3002");
-          this.busy = true;
-          try {
+          return this.serial(async () => {
             const result = await this.client.syncNow();
             if (this.client.status === true) {
               this.syncRequestedAt = Date.now();
@@ -1905,9 +2016,7 @@
               this.emit();
             }
             return result;
-          } finally {
-            this.busy = false;
-          }
+          });
         }
         async syncPublished() {
           const s = this.current, sha = s && s.build && s.build.sha256;
@@ -1917,15 +2026,14 @@
         }
         async poll() {
           if (!this.foreground || !this.client.id || this.busy) return;
-          this.busy = true;
           try {
-            await this.client.write(58, [], this.client.epoch);
-            await this.client.queryDownload();
+            await this.serial(async () => {
+              await this.client.write(58, [], this.client.epoch);
+              await this.client.queryDownload();
+            });
           } catch (error) {
             this.live = null;
             this.notice("\u4E0B\u8F7D\u8FDB\u5EA6\u6682\u672A\u8BFB\u5230\uFF1A" + error.message);
-          } finally {
-            this.busy = false;
           }
           await this.syncPublished().catch((error) => this.notice("\u81EA\u52A8\u68C0\u67E5\u540C\u6B65\u6682\u672A\u6210\u529F\uFF1A" + error.message));
         }
@@ -1976,6 +2084,7 @@
         page.stopConnection = connection.subscribe((snapshot) => {
           if (!page.active) return;
           const data = { ...snapshot };
+          if (snapshot.savedSSID && !page.data.ssid) data.ssid = snapshot.savedSSID;
           if (page.data.status && !page.preparingPair && !page.prepareFailure) data.syncState = connection.stateFor(page.data.status, page.generatedArtworkId);
           page.setData(data);
         });
@@ -2136,7 +2245,7 @@
       var { syncGeneratedPrayer } = require_ritual_sync();
       var fresh = () => ({ gender: "female", birthDate: "", birthTime: "", calendar: "solar", leap: false, city: "", wishes: [], artStyle: "cute" });
       Page({
-        data: { artStyles: [{ id: "cute", label: "\u53EF\u7231\u98CE", description: "Q\u7248\u795E\u4ED9\uFF0C\u5706\u6DA6\u559C\u5E86" }, { id: "spirit", label: "\u7075\u517D\u98CE", description: "\u95EE\u95EE\u517D\u6F14\u7ECE\uFF0C\u4FDD\u7559\u795E\u50CF\u914D\u9970" }, { id: "folk", label: "\u6C11\u4FD7\u98CE", description: "\u4F20\u7EDF\u795E\u50CF\uFF0C\u5E84\u91CD\u4EB2\u5207" }], user: null, error: "", message: "", busy: false, authMode: "wechat", username: "", password: "", nicknameDraft: "", agreed: false, profile: fresh(), groups: [], today: new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10), privacyOpen: false, generation: "", jobReady: false, wechatEnabled: false },
+        data: { artStyles: [{ id: "cute", label: "\u53EF\u7231\u98CE", description: "Q\u7248\u795E\u4ED9\uFF0C\u5706\u6DA6\u559C\u5E86" }, { id: "spirit", label: "\u7075\u517D\u98CE", description: "\u95EE\u95EE\u517D\u6F14\u7ECE\uFF0C\u4FDD\u7559\u795E\u50CF\u914D\u9970" }, { id: "folk", label: "\u6C11\u4FD7\u98CE", description: "\u4F20\u7EDF\u795E\u50CF\uFF0C\u5E84\u91CD\u4EB2\u5207" }], user: null, error: "", message: "", busy: false, authMode: "wechat", username: "", password: "", nicknameDraft: "", agreed: false, profile: fresh(), groups: [], today: new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10), privacyOpen: false, generation: "", generationPhase: "", generatedImage: "", profileSaved: false, jobReady: false, wechatEnabled: false },
         previewArtStyle(e) {
           const id = e.currentTarget.dataset.id;
           if (!["folk", "cute", "spirit"].includes(id)) return;
@@ -2148,7 +2257,7 @@
           api.tab(this, 0);
           await getApp().ready;
           const app2 = getApp();
-          this.setData({ user: app2.globalData.user, profile: app2.globalData.profile || fresh(), nicknameDraft: app2.globalData.user && app2.globalData.user.nickname || "" });
+          this.setData({ user: app2.globalData.user, profile: app2.globalData.profile || fresh(), profileSaved: !!app2.globalData.profile?.birthDate, nicknameDraft: app2.globalData.user && app2.globalData.user.nickname || "" });
           try {
             const b = await api.init();
             this.groups = b.wishGroups || [];
@@ -2193,23 +2302,24 @@
         },
         field(e) {
           this.job = null;
-          this.setData({ jobReady: false });
+          this.setData({ jobReady: false, profileSaved: false });
           this.setData({ ["profile." + e.currentTarget.dataset.field]: e.detail.value });
         },
         choose(e) {
           this.job = null;
-          this.setData({ jobReady: false });
+          this.setData({ jobReady: false, profileSaved: false });
           this.setData({ ["profile." + e.currentTarget.dataset.field]: e.currentTarget.dataset.value });
         },
         agree(e) {
           this.setData({ agreed: e.detail.value });
         },
         leap(e) {
-          this.setData({ "profile.leap": e.detail.value });
+          this.job = null;
+          this.setData({ "profile.leap": e.detail.value, profileSaved: false, jobReady: false });
         },
         wish(e) {
           this.job = null;
-          this.setData({ jobReady: false });
+          this.setData({ jobReady: false, profileSaved: false });
           const id = e.currentTarget.dataset.id, wishes = (this.data.profile.wishes || []).slice(), i = wishes.indexOf(id);
           if (i < 0) wishes.push(id);
           else wishes.splice(i, 1);
@@ -2230,10 +2340,7 @@
         },
         async wechatAuth() {
           if (this.data.busy) return;
-          if (!this.data.agreed) {
-            api.error(this, new Error("\u8BF7\u5148\u9605\u8BFB\u5E76\u540C\u610F\u8D26\u6237\u4E0E\u9690\u79C1\u8BF4\u660E\u3002"));
-            return;
-          }
+          if (!await this.confirmPrivacy()) return;
           this.setData({ busy: true, error: "", message: "" });
           try {
             const data = await api.wechatLogin();
@@ -2246,10 +2353,7 @@
         },
         async auth() {
           if (this.data.busy) return;
-          if (!this.data.agreed) {
-            api.error(this, new Error("\u8BF7\u5148\u9605\u8BFB\u5E76\u540C\u610F\u8D26\u6237\u4E0E\u9690\u79C1\u8BF4\u660E\u3002"));
-            return;
-          }
+          if (!await this.confirmPrivacy()) return;
           this.setData({ busy: true, error: "", message: "" });
           try {
             const data = await api.request("/api/account/login", { username: this.data.username, password: this.data.password });
@@ -2293,20 +2397,20 @@
         },
         async save() {
           if (this.data.busy) return;
-          if (!this.data.agreed) {
-            api.error(this, new Error("\u4FDD\u5B58\u751F\u8FB0\u524D\uFF0C\u8BF7\u5148\u9605\u8BFB\u5E76\u540C\u610F\u9690\u79C1\u8BF4\u660E\u3002"));
-            return;
-          }
           const p = this.data.profile;
-          if (!p.birthDate || !p.birthTime || !p.wishes.length) {
-            api.error(this, new Error("\u8BF7\u586B\u5199\u51FA\u751F\u65E5\u671F\u3001\u65F6\u95F4\uFF0C\u5E76\u9009\u62E9\u81F3\u5C11\u4E00\u4E2A\u613F\u671B\u3002"));
+          if (!p.birthDate || !p.birthTime || !p.wishes?.length) {
+            const message = "\u8BF7\u586B\u5199\u51FA\u751F\u65E5\u671F\u3001\u65F6\u95F4\uFF0C\u5E76\u9009\u62E9\u81F3\u5C11\u4E00\u4E2A\u613F\u671B\u3002";
+            api.error(this, new Error(message));
+            wx.showToast({ title: message, icon: "none" });
             return;
           }
+          if (!await this.confirmPrivacy()) return;
+          if (this.data.busy) return;
           this.setData({ busy: true, error: "", message: "" });
           try {
             const r = await api.request("/api/account/profile", p);
             getApp().globalData.profile = r.profile;
-            this.setData({ profile: r.profile, message: "\u751F\u8FB0\u4E0E\u7948\u613F\u5DF2\u4FDD\u5B58\u3002" });
+            this.setData({ profile: r.profile, profileSaved: true, message: "\u751F\u8FB0\u4E0E\u5FC3\u613F\u5DF2\u4FDD\u5B58\uFF0C\u53EF\u4EE5\u751F\u6210\u4ECA\u65E5\u9020\u50CF\u3002" });
           } catch (e) {
             api.error(this, e);
           } finally {
@@ -2316,17 +2420,17 @@
         async generate() {
           if (this.data.busy) return;
           const p = this.data.profile;
-          if (!this.data.agreed || !p.birthDate || !p.birthTime || !p.wishes.length) {
-            api.error(this, new Error("\u8BF7\u5148\u540C\u610F\u9690\u79C1\u8BF4\u660E\uFF0C\u586B\u5199\u751F\u8FB0\u5E76\u9009\u62E9\u5FC3\u613F\u3002"));
+          if (!this.data.profileSaved) {
+            api.error(this, new Error("\u8BF7\u5148\u4FDD\u5B58\u751F\u8FB0\u4E0E\u5FC3\u613F\uFF0C\u518D\u751F\u6210\u4ECA\u65E5\u9020\u50CF\u3002"));
             return;
           }
           const user = getApp().globalData.user;
           if (!user) return;
-          this.setData({ busy: true, error: "", message: "", generation: this.job ? "\u6B63\u5728\u7EE7\u7EED\u5B8C\u6210\u2026" : "\u6B63\u5728\u8BFB\u751F\u8FB0\u4E0E\u5FC3\u613F\u2026" });
+          this.setData({ busy: true, error: "", message: "", generationPhase: this.job ? "drawing" : "analyzing", generatedImage: "", generation: this.job ? "\u6B63\u5728\u7EE7\u7EED\u7ED8\u5236\u9020\u50CF\u2026" : "\u6B63\u5728\u6838\u5BF9\u751F\u8FB0\u3001\u8BFB\u61C2\u5FC3\u613F\u2026" });
           try {
             if (!this.job) {
               this.job = await api.request("/api/analyze", p);
-              this.setData({ jobReady: true, generation: "\u89E3\u8BFB\u5DF2\u5F52\u6863\uFF0C\u6B63\u5728\u7ED8\u5236\u753B\u9762\u2026" });
+              this.setData({ jobReady: true, generationPhase: "drawing", generation: "\u89E3\u8BFB\u5DF2\u5F52\u6863\uFF0C\u6B63\u5728\u7ED8\u5236\u753B\u9762\u2026" });
             }
             const record = await api.request("/api/jobs/" + this.job.id + "/image", { jobToken: this.job.token });
             if (!getApp().globalData.user || getApp().globalData.user.id !== user.id) return;
@@ -2335,7 +2439,8 @@
             this.prepareFailure = null;
             this.job = null;
             void this.pollSync();
-            this.setData({ jobReady: false, generation: "", message: "\u4ECA\u65E5\u9020\u50CF\u5DF2\u5B8C\u6210\u3002\u5230\u300C\u89E3\u8BFB\u966A\u4F34\u300D\u770B\u753B\u9762\u3001\u5FAE\u884C\u52A8\u4E0E\u7B54\u6848\u4E4B\u6570\u3002" });
+            this.setData({ jobReady: false, generationPhase: "complete", generation: "\u4ECA\u65E5\u9020\u50CF\u5DF2\u5B8C\u6210\uFF0C\u5DF2\u4FDD\u5B58\u5230\u8D26\u6237\u753B\u518C\u3002", message: "\u4ECA\u65E5\u9020\u50CF\u5DF2\u5B8C\u6210\u3002\u5230\u300C\u89E3\u8BFB\u966A\u4F34\u300D\u770B\u753B\u9762\u3001\u5FAE\u884C\u52A8\u4E0E\u7B54\u6848\u4E4B\u6570\u3002" });
+            void this.loadGeneratedImage(record, user.id);
             try {
               const synced = await syncGeneratedPrayer();
               if (!getApp().globalData.user || getApp().globalData.user.id !== user.id) return;
@@ -2351,9 +2456,33 @@
             }
           } catch (e) {
             api.error(this, e);
-            this.setData({ generation: "", jobReady: !!this.job });
+            this.setData({ generationPhase: "failed", generation: this.job ? "\u753B\u9762\u6682\u672A\u5B8C\u6210\uFF0C\u53EF\u70B9\u51FB\u7EE7\u7EED\u5B8C\u6210\u4ECA\u65E5\u9020\u50CF\u3002" : "\u672C\u6B21\u751F\u6210\u6682\u672A\u5B8C\u6210\uFF0C\u8BF7\u91CD\u8BD5\u3002", jobReady: !!this.job });
           } finally {
             this.setData({ busy: false });
+          }
+        },
+        async loadGeneratedImage(record, userId) {
+          try {
+            const image = await api.image(record.image || "/api/account/artworks/" + record.id + "/image");
+            if (getApp().globalData.user?.id === userId && this.generatedArtworkId === record.id) this.setData({ generatedImage: image });
+          } catch {
+            if (getApp().globalData.user?.id === userId) this.setData({ generation: "\u4ECA\u65E5\u9020\u50CF\u5DF2\u4FDD\u5B58\uFF0C\u56FE\u7247\u6682\u672A\u8F7D\u5165\uFF0C\u53EF\u5230\u89E3\u8BFB\u966A\u4F34\u67E5\u770B\u3002" });
+          }
+        },
+        async confirmPrivacy() {
+          if (this.consentPending) return false;
+          this.consentPending = true;
+          try {
+            const result = await new Promise((resolve) => wx.showModal({ title: "\u8D26\u6237\u4E0E\u9690\u79C1\u8BF4\u660E", content: "\u751F\u8FB0\u3001\u57CE\u5E02\u4E0E\u5FC3\u613F\u7528\u4E8E\u4FDD\u5B58\u4E2A\u4EBA\u8D44\u6599\u3001\u751F\u6210\u9020\u50CF\u4E0E\u89E3\u8BFB\uFF1B\u753B\u4F5C\u4E0E\u7167\u7247\u4FDD\u5B58\u5728\u4F60\u7684\u79C1\u6709\u8D26\u6237\u3002\u767B\u5F55\u4F1A\u8BDD\u4FDD\u5B58\u5728\u672C\u673A\uFF0C\u9000\u51FA\u540E\u6E05\u9664\u3002Wi-Fi \u5BC6\u7801\u4EC5\u901A\u8FC7\u84DD\u7259\u53D1\u9001\u7ED9\u6240\u9009\u8BBE\u5907\uFF0C\u4E0D\u4E0A\u4F20\u540E\u53F0\u3002\u662F\u5426\u540C\u610F\u5E76\u7EE7\u7EED\uFF1F", confirmText: "\u540C\u610F\u7EE7\u7EED", cancelText: "\u6682\u4E0D\u540C\u610F", success: resolve, fail: () => {
+              const message = "\u9690\u79C1\u786E\u8BA4\u6682\u672A\u6253\u5F00\uFF0C\u8BF7\u518D\u6B21\u70B9\u51FB\u4FDD\u5B58\u91CD\u8BD5\u3002";
+              api.error(this, new Error(message));
+              wx.showToast({ title: message, icon: "none" });
+              resolve({ confirm: false });
+            } }));
+            if (result.confirm) this.setData({ agreed: true });
+            return !!result.confirm;
+          } finally {
+            this.consentPending = false;
           }
         },
         async retryPreparation() {
@@ -2393,7 +2522,7 @@
           try {
             await getApp().logout();
             this.job = null;
-            this.setData({ user: null, status: null, syncState: null, profile: fresh(), nicknameDraft: "", message: "\u5DF2\u9000\u51FA\u767B\u5F55\u3002", authMode: "wechat" });
+            this.setData({ user: null, status: null, syncState: null, profileSaved: false, generatedImage: "", generation: "", generationPhase: "", agreed: false, profile: fresh(), nicknameDraft: "", message: "\u5DF2\u9000\u51FA\u767B\u5F55\u3002", authMode: "wechat" });
             this.decorate();
           } catch (e) {
             api.error(this, e);
@@ -2471,8 +2600,14 @@
       var { observeConnection, stopObserving } = require_screen_connection();
       var { syncPrayerPair, syncGeneratedPrayer } = require_ritual_sync();
       Page({
-        data: { user: null, error: "", message: "", busy: false, contentMode: "prayer", showActions: true, mode: "test", catalog: [], artworks: [], titles: [], choices: [0, 0], cursor: null, photoTitle: "", draft: "", bleDevices: [], bleText: "\u5148\u5524\u9192\u753B\u5C4F\uFF0C\u518D\u641C\u7D22\u84DD\u7259\u8BBE\u5907\u3002", paired: false, ssid: "", wifiPassword: "", syncConfigured: false, status: null, connectedDeviceId: "", preparing: false },
+        data: { releaseVersion: "1.1.7", editingPassword: false, binding: false, bindingError: "", setupExpanded: false, user: null, error: "", message: "", busy: false, contentMode: "prayer", showActions: true, mode: "test", catalog: [], artworks: [], titles: [], choices: [0, 0], cursor: null, photoTitle: "", draft: "", bleDevices: [], bleText: "\u5148\u5524\u9192\u753B\u5C4F\uFF0C\u518D\u641C\u7D22\u84DD\u7259\u8BBE\u5907\u3002", paired: false, ssid: "", wifiPassword: "", syncConfigured: false, status: null, connectedDeviceId: "", preparing: false },
         onLoad() {
+        },
+        changePassword() {
+          this.setData({ editingPassword: true, wifiPassword: "" });
+        },
+        toggleSetup() {
+          this.setData({ setupExpanded: !this.data.setupExpanded });
         },
         wish() {
           wx.switchTab({ url: "/pages/mine/index" });
@@ -2503,6 +2638,7 @@
           if (!this.active || !this.data.user) return;
           const run = this.run;
           try {
+            await this.autoBind();
             const status = await api.request("/api/account/ritual");
             if (!this.active || run !== this.run) return;
             this.connection.acceptStatus(status);
@@ -2637,9 +2773,9 @@
           this.setData({ busy: true, error: "" });
           try {
             await this.ble.connect(e.currentTarget.dataset.id);
-            const d = this.data.bleDevices.find((x) => x.id === e.currentTarget.dataset.id);
-            const match = d && d.name.match(/^FRAMEFILMARK[-_ ]?([a-f0-9]{12})$/i);
-            this.setData({ connectedDeviceId: match ? match[1].toLowerCase() : "" });
+            this.setData({ connectedDeviceId: this.connection.snapshot.connectedDeviceId });
+            await this.autoBind();
+            void this.pollSync();
           } catch (e2) {
             if (this.active) api.error(this, e2);
           } finally {
@@ -2647,28 +2783,48 @@
           }
         },
         async wifi() {
+          if (!this.data.paired) {
+            api.error(this, new Error("\u8BF7\u5148\u8FDE\u63A5\u9644\u8FD1\u753B\u5C4F\u84DD\u7259\u3002"));
+            return;
+          }
           if (this.data.busy) return;
           this.setData({ busy: true, error: "" });
           try {
             await this.ble.configure(this.data.ssid, this.data.wifiPassword);
+            await this.autoBind();
+            void this.pollSync();
+            this.setData({ setupExpanded: false, message: this.data.status?.device?.active ? "\u84DD\u7259\u4E0E Wi-Fi \u5DF2\u8FDE\u63A5\uFF0C\u8BF7\u67E5\u770B\u4E0A\u65B9\u66F4\u65B0\u72B6\u6001\u3002" : "\u84DD\u7259\u4E0E Wi-Fi \u5DF2\u8FDE\u63A5\uFF0C\u6B63\u5728\u6838\u5BF9\u8D26\u6237\u5173\u8054\u548C\u66F4\u65B0\u72B6\u6001\u3002" });
           } catch (e) {
             if (this.active) api.error(this, e);
           } finally {
-            this.setData({ wifiPassword: "", busy: false });
+            this.setData({ wifiPassword: "", editingPassword: false, busy: false });
+          }
+        },
+        async autoBind() {
+          const user = getApp().globalData.user;
+          if (!user || !this.data.paired || !this.data.wifiConnected || this.data.binding) return;
+          const known = this.connection.snapshot.connectedDeviceId;
+          if (known && this.data.status?.device?.id === known && this.data.status.device.active) return;
+          const key = user.id + ":" + this.connection.target + ":" + this.connection.client.epoch;
+          if (this.bindAttempt === key) return;
+          this.bindAttempt = key;
+          this.setData({ binding: true, bindingError: "", message: "\u753B\u5C4F\u5DF2\u8054\u7F51\uFF0C\u6B63\u5728\u6838\u9A8C\u8BBE\u5907\u8EAB\u4EFD\u5E76\u81EA\u52A8\u5173\u8054\u8D26\u6237\u2026" });
+          try {
+            const id = known || await this.connection.resolveIdentity(api.request);
+            if (getApp().globalData.user?.id !== user.id) return;
+            await api.request("/api/account/ritual/device", { deviceId: id });
+            this.setData({ message: "\u753B\u5C4F\u5DF2\u81EA\u52A8\u5173\u8054\u8D26\u6237\uFF0C\u6B63\u5728\u68C0\u67E5\u66F4\u65B0\u3002" });
+          } catch (e) {
+            this.setData({ bindingError: e.message });
+            api.error(this, e);
+          } finally {
+            this.setData({ binding: false });
           }
         },
         async bind() {
-          if (this.data.busy || !this.data.connectedDeviceId || !this.data.paired) return;
-          this.setData({ busy: true, error: "" });
-          try {
-            await api.request("/api/account/ritual/device", { deviceId: this.data.connectedDeviceId });
-            await this.load();
-            this.setData({ message: "\u753B\u5C4F\u5DF2\u7ED1\u5B9A\u3002\u5DF2\u51C6\u5907\u7684\u5185\u5BB9\u4F1A\u76F4\u63A5\u4E0B\u53D1\uFF1B\u82E5\u8FD8\u6CA1\u6709\u753B\u4F5C\uFF0C\u8BF7\u5148\u53BB\u8BB8\u613F\u6C60\u751F\u6210\u3002" });
-          } catch (e) {
-            api.error(this, e);
-          } finally {
-            this.setData({ busy: false });
-          }
+          this.bindAttempt = null;
+          await this.autoBind();
+          await this.pollSync();
         },
         async unbind() {
           if (this.data.busy) return;
@@ -3158,27 +3314,19 @@
 
   // mini-review-entry.js
   window.MINI_START_TAB = "mine";
-  window.MINI_TEMPLATES = { "mine": { "wxml": `<view class="page">
+  window.MINI_TEMPLATES = { "mine": { "wxml": `<view class="page"><text class="note">\u771F\u673A\u6D4B\u8BD5\u7248 1.1.7</text>
  <text class="kicker">A WISH OF YOUR OWN / 01</text>
  <text class="title">\u8BB8\u613F\u6C60</text>
  <text class="subtitle">\u751F\u8FB0\u5165\u753B\uFF0C\u5FC3\u613F\u6210\u8C61\u3002\u4ECA\u5929\u7684\u753B\uFF0C\u4ECE\u8FD9\u91CC\u5F00\u59CB\u3002</text>
  <view class="error" role="alert">{{error}}</view>
  <view class="notice" wx:if="{{message}}">{{message}}</view>
 
- <view wx:if="{{user&&syncState}}" class="paper sync-panel">
-  <button wx:if="{{prepareFailed}}" bindtap="retryPreparation" disabled="{{busy}}" class="secondary">\u91CD\u8BD5\u51C6\u5907\u753B\u5C4F\u5185\u5BB9</button>
-  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
-  <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'\u914D\u7F6E\u753B\u5C4F Wi-Fi':'\u53BB\u94FE\u63A5\u795E\u7269\u5E76\u540C\u6B65'}}</button>
-  <button wx:if="{{syncState.action==='check'}}" class="secondary spaced" bindtap="syncNow" disabled="{{busy}}">\u91CD\u65B0\u68C0\u67E5\u540C\u6B65</button>
-  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
-
- </view>
 
  <view class="paper" wx:if="{{!user}}">
   <text class="kicker">WECHAT ACCOUNT</text>
   <text class="section-title">\u628A\u6BCF\u4E00\u6B21\u5FC3\u613F\uFF0C\u7559\u5728\u81EA\u5DF1\u7684\u753B\u518C\u91CC</text>
   <text class="note">\u5FAE\u4FE1\u767B\u5F55\u540E\u81EA\u52A8\u5EFA\u7ACB\u8D26\u6237\u3002\u751F\u8FB0\u3001\u5FC3\u613F\u548C\u753B\u4F5C\u53EA\u4FDD\u5B58\u5728\u4F60\u7684\u8D26\u6237\u4E2D\u3002</text>
-  <button class="primary spaced wide" bindtap="wechatAuth" loading="{{busy}}" disabled="{{busy||!agreed||!wechatEnabled}}">\u5FAE\u4FE1\u4E00\u952E\u767B\u5F55</button>
+  <button class="primary spaced wide" bindtap="wechatAuth" loading="{{busy}}" disabled="{{busy||!wechatEnabled}}">\u5FAE\u4FE1\u4E00\u952E\u767B\u5F55</button>
   <text class="note" wx:if="{{!wechatEnabled}}">\u670D\u52A1\u7AEF\u8FD8\u9700\u914D\u7F6E\u5C0F\u7A0B\u5E8F AppID \u4E0E AppSecret\uFF0C\u5F53\u524D\u4E0D\u4F1A\u4F2A\u9020\u767B\u5F55\u6210\u529F\u3002</text>
   <button class="text-button" bindtap="legacy">{{authMode==='legacy'?'\u8FD4\u56DE\u5FAE\u4FE1\u767B\u5F55':'\u4F7F\u7528\u5DF2\u6709\u7F51\u9875\u8D26\u6237'}}</button>
   <view wx:if="{{authMode==='legacy'}}">
@@ -3186,7 +3334,7 @@
    <input class="field" value="{{username}}" data-field="username" bindinput="input" maxlength="24" placeholder="\u5DF2\u6709\u7F51\u9875\u8D26\u53F7"/>
    <text class="label">\u5BC6\u7801</text>
    <input class="field" value="{{password}}" password data-field="password" bindinput="input" maxlength="128" placeholder="\u8D26\u6237\u5BC6\u7801"/>
-   <button class="secondary spaced wide" bindtap="auth" loading="{{busy}}" disabled="{{busy||!agreed}}">\u767B\u5F55\u5DF2\u6709\u8D26\u6237</button>
+   <button class="secondary spaced wide" bindtap="auth" loading="{{busy}}" disabled="{{busy}}">\u767B\u5F55\u5DF2\u6709\u8D26\u6237</button>
    <text class="note">\u90AE\u7BB1\u9A8C\u8BC1\u7801\u6CE8\u518C\u4E0E\u627E\u56DE\u4ECD\u5728\u7F51\u9875\u7AEF\u5B8C\u6210\u3002</text>
   </view>
  </view>
@@ -3243,23 +3391,33 @@
     <text class="label">{{item.name}}</text>
     <text wx:for="{{item.items}}" wx:for-item="wish" wx:key="id" class="pill {{wish.selected?'selected':''}}" data-id="{{wish.id}}" bindtap="wish">{{wish.label}}</text>
    </view>
-   <text class="section-title art-style-heading">\u753B\u9762\u98CE\u683C</text><view wx:for="{{artStyles}}" wx:key="id" class="art-style-row"><button class="choice {{(profile.artStyle||'cute')===item.id?'selected':''}}" data-field="artStyle" data-value="{{item.id}}" bindtap="choose" disabled="{{busy}}"><text>{{item.label}}</text><text class="note">{{item.description}}</text></button><button class="text-button" data-id="{{item.id}}" bindtap="previewArtStyle">\u67E5\u770B\u793A\u4F8B</button></view><text class="note">\u793A\u610F\u56FE\u4EC5\u4F9B\u98CE\u683C\u53C2\u8003\uFF1B\u4FDD\u5B58\u540E\u7528\u4E8E\u65B0\u751F\u6210\u7684\u753B\u9762\uFF0C\u5DF2\u5B8C\u6210\u4F5C\u54C1\u4FDD\u6301\u539F\u6837\u3002</text><button class="primary spaced wide" bindtap="save" disabled="{{busy||!agreed}}" loading="{{busy}}">\u4FDD\u5B58\u751F\u8FB0\u4E0E\u5FC3\u613F</button>
+   <text class="section-title art-style-heading">\u753B\u9762\u98CE\u683C</text><view wx:for="{{artStyles}}" wx:key="id" class="art-style-row"><button class="choice {{(profile.artStyle||'cute')===item.id?'selected':''}}" data-field="artStyle" data-value="{{item.id}}" bindtap="choose" disabled="{{busy}}"><text>{{item.label}}</text><text class="note">{{item.description}}</text></button><button class="text-button" data-id="{{item.id}}" bindtap="previewArtStyle">\u67E5\u770B\u793A\u4F8B</button></view><text class="note">\u793A\u610F\u56FE\u4EC5\u4F9B\u98CE\u683C\u53C2\u8003\uFF1B\u4FDD\u5B58\u540E\u7528\u4E8E\u65B0\u751F\u6210\u7684\u753B\u9762\uFF0C\u5DF2\u5B8C\u6210\u4F5C\u54C1\u4FDD\u6301\u539F\u6837\u3002</text><button class="primary spaced wide" bindtap="save" disabled="{{busy}}" loading="{{busy}}">\u4FDD\u5B58\u751F\u8FB0\u4E0E\u5FC3\u613F</button>
    <text class="note">\u4FDD\u5B58\u8D44\u6599\u4E0D\u4F1A\u89E6\u53D1\u753B\u9762\u751F\u6210\u3002</text>
    <view class="rule"></view>
    <text class="section-title">\u4E3A\u4ECA\u5929\uFF0C\u7559\u4E00\u5E45\u9020\u50CF</text>
    <text class="note">\u751F\u8FB0\u4E3A\u5E95\uFF0C\u5FC3\u613F\u4E3A\u7B14\u3002\u751F\u6210\u901A\u5E38\u9700\u8981\u4E00\u81F3\u4E24\u5206\u949F\uFF0C\u5B8C\u6210\u540E\u4F1A\u4FDD\u5B58\u5230\u8D26\u6237\u753B\u518C\u3002</text>
-   <button class="secondary spaced wide" bindtap="generate" disabled="{{busy||!agreed}}" loading="{{busy}}">{{jobReady?'\u7EE7\u7EED\u5B8C\u6210\u4ECA\u65E5\u9020\u50CF':'\u751F\u6210\u4ECA\u65E5\u9020\u50CF'}}</button>
-   <text class="note" wx:if="{{generation}}">{{generation}}</text>
+   <button class="{{profileSaved?'primary':'secondary'}} spaced wide" bindtap="generate" disabled="{{busy||!profileSaved}}" loading="{{busy}}">{{jobReady?'\u7EE7\u7EED\u5B8C\u6210\u4ECA\u65E5\u9020\u50CF':'\u751F\u6210\u4ECA\u65E5\u9020\u50CF'}}</button>
+   <view class="generation-panel" wx:if="{{generation}}" role="status">
+    <text class="section-title">{{generationPhase==='complete'?'\u4ECA\u65E5\u9020\u50CF\u5DF2\u5B8C\u6210':generationPhase==='failed'?'\u751F\u6210\u6682\u672A\u5B8C\u6210':'\u4ECA\u65E5\u9020\u50CF\u6B63\u5728\u5C55\u5F00'}}</text>
+    <view class="generation-steps"><text class="{{generationPhase==='analyzing'?'current':''}}">01 \u751F\u8FB0\u53D6\u8C61</text><text class="{{generationPhase==='drawing'?'current':''}}">02 \u5FC3\u613F\u5165\u753B</text><text class="{{generationPhase==='complete'?'current':''}}">03 \u4ECA\u65E5\u9020\u50CF</text></view>
+    <text class="note">{{generation}}</text>
+    <image wx:if="{{generatedImage}}" class="generated-image" src="{{generatedImage}}" mode="widthFix"/>
+    <button wx:if="{{generationPhase==='complete'}}" class="primary spaced wide" bindtap="connectScreen">\u53BB\u94FE\u63A5\u795E\u7269</button>
+   </view> <view wx:if="{{user&&syncState}}" class="paper sync-panel">
+  <button wx:if="{{prepareFailed}}" bindtap="retryPreparation" disabled="{{busy}}" class="secondary">\u91CD\u8BD5\u51C6\u5907\u753B\u5C4F\u5185\u5BB9</button>
+  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'\u914D\u7F6E\u753B\u5C4F Wi-Fi':'\u53BB\u94FE\u63A5\u795E\u7269\u5E76\u540C\u6B65'}}</button>
+  <button wx:if="{{syncState.action==='check'}}" class="secondary spaced" bindtap="syncNow" disabled="{{busy}}">\u91CD\u65B0\u68C0\u67E5\u540C\u6B65</button>
+  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
+
+ </view>
+
    <button class="text-button" bindtap="companion" disabled="{{busy}}">\u5230\u300C\u89E3\u8BFB\u966A\u4F34\u300D\u770B\u753B\u9762\u3001\u505A\u5C0F\u4E8B\u3001\u6536\u4E0B\u4E00\u4E2A\u7B54\u6848</button>
    <button class="text-button" bindtap="screen" disabled="{{busy}}">\u5230\u753B\u5C4F\u9009\u62E9\u5C55\u793A\u5185\u5BB9</button>
   </view>
  </view>
 
  <view class="privacy">
-  <view class="row">
-   <text>\u540C\u610F\u8D26\u6237\u4E0E\u9690\u79C1\u8BF4\u660E</text>
-   <switch color="#415B48" checked="{{agreed}}" bindchange="agree"/>
-  </view>
   <button class="text-button" bindtap="privacy">{{privacyOpen?'\u6536\u8D77\u8BF4\u660E':'\u67E5\u770B\u6570\u636E\u7528\u9014\u4E0E\u6743\u9650'}}</button>
   <view wx:if="{{privacyOpen}}">
     <text class="note">\u751F\u8FB0\u3001\u57CE\u5E02\u4E0E\u5FC3\u613F\u7528\u4E8E\u4FDD\u5B58\u4E2A\u4EBA\u8D44\u6599\u53CA\u9020\u50CF\u4E0E\u89E3\u8BFB\u670D\u52A1\uFF1B\u7167\u7247\u4EC5\u4E0A\u4F20\u5230 playmath.cn \u7684\u79C1\u6709\u8D26\u6237\u3002\u9009\u62E9\u7167\u7247\u524D\u4F1A\u8BF7\u6C42\u76F8\u518C/\u76F8\u673A\u6743\u9650\uFF1BWi-Fi \u5BC6\u7801\u53EA\u901A\u8FC7\u84DD\u7259\u53D1\u7ED9\u4F60\u9009\u62E9\u7684\u8BBE\u5907\uFF0C\u4E0D\u4E0A\u4F20\u540E\u53F0\uFF0C\u4E0D\u4FDD\u5B58\u5230\u672C\u5730\u3002\u5FAE\u4FE1\u767B\u5F55\u51ED\u8BC1\u53EA\u7531\u670D\u52A1\u7AEF\u7528\u4E8E\u5EFA\u7ACB\u8D26\u6237\uFF0C\u4E0D\u4FDD\u5B58 session_key\u3002\u767B\u5F55\u4F1A\u8BDD\u4FDD\u5B58\u5728\u672C\u673A\uFF0C\u9000\u51FA\u540E\u6E05\u9664\u3002\u65E0\u9700\u901A\u8BAF\u5F55\u6216\u5B9A\u4F4D\u6743\u9650\u3002\u8FD0\u8425\u4E3B\u4F53\u3001\u9690\u79C1\u8054\u7CFB\u6E20\u9053\u53CA\u6B63\u5F0F\u9690\u79C1\u4FDD\u62A4\u6307\u5F15\u987B\u5728\u63D0\u4EA4\u5BA1\u6838\u524D\u6838\u5B9E\u3002</text>
@@ -3267,7 +3425,7 @@
   </view>
  </view>
 </view>
-`, "css": ".inline-action{display:flex;align-items:stretch;gap:calc(16 * var(--rpx))}.inline-action .field{flex:1}.inline-action button{min-width:calc(132 * var(--rpx));padding-left:calc(18 * var(--rpx));padding-right:calc(18 * var(--rpx))}.wish-group{padding-bottom:calc(16 * var(--rpx))}.paper .section-title{margin-bottom:0}\n\n.art-style-heading{margin-top:calc(32 * var(--rpx))}.art-style-row{display:flex;align-items:center;gap:calc(20 * var(--rpx));margin:calc(14 * var(--rpx)) 0}.art-style-row .choice{flex:1}.art-style-row .note{margin-top:calc(4 * var(--rpx));font-size:calc(22 * var(--rpx))}.art-style-row .text-button{flex-shrink:0}\n" }, "network": { "wxml": `<view class="page">
+`, "css": ".inline-action{display:flex;align-items:stretch;gap:calc(16 * var(--rpx))}.inline-action .field{flex:1}.inline-action button{min-width:calc(132 * var(--rpx));padding-left:calc(18 * var(--rpx));padding-right:calc(18 * var(--rpx))}.wish-group{padding-bottom:calc(16 * var(--rpx))}.paper .section-title{margin-bottom:0}\n\n.art-style-heading{margin-top:calc(32 * var(--rpx))}.art-style-row{display:flex;align-items:center;gap:calc(20 * var(--rpx));margin:calc(14 * var(--rpx)) 0}.art-style-row .choice{flex:1}.art-style-row .note{margin-top:calc(4 * var(--rpx));font-size:calc(22 * var(--rpx))}.art-style-row .text-button{flex-shrink:0}\n\n.generation-panel{margin-top:calc(28 * var(--rpx));padding:calc(24 * var(--rpx));background:#F6F1E7;border-radius:calc(16 * var(--rpx))}.generation-steps{display:flex;justify-content:space-between;gap:calc(12 * var(--rpx));margin:calc(24 * var(--rpx)) 0;color:#81796d;font-size:calc(23 * var(--rpx))}.generation-steps .current{color:#415B48;font-weight:600}.generated-image{display:block;width:100%;margin-top:calc(24 * var(--rpx));border-radius:calc(12 * var(--rpx))}\n" }, "network": { "wxml": `<view class="page"><text class="note">\u771F\u673A\u6D4B\u8BD5\u7248 {{releaseVersion}}</text>
  <button wx:if="{{!status.plan}}" class="secondary" bindtap="wish">\u5148\u53BB\u8BB8\u613F\u6C60\u751F\u6210\u7948\u798F\u56FE</button>
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
   <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
@@ -3275,8 +3433,8 @@
   <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">\u2460 \u5185\u5BB9\u5C31\u7EEA</text><text class="{{syncState.step>=2?'complete':''}}">\u2461 \u4E0B\u8F7D\u4E2D</text><text class="{{syncState.step>=3?'complete':''}}">\u2462 \u5DF2\u4FDD\u5B58</text><text class="{{syncState.step>=4?'complete':''}}">\u2463 \u5DF2\u5237\u65B0</text></view>
   <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'}}" disabled="{{!paired||busy}}">\u91CD\u65B0\u68C0\u67E5\u540C\u6B65</button>
  </view>
-<text class="kicker">CONNECT YOUR COMPANION / 02</text><text class="title">\u94FE\u63A5\u795E\u7269</text><text class="subtitle">\u5185\u5BB9\u51C6\u5907\u5B8C\u6210\u540E\uFF0C\u518D\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u4E0E Wi-Fi\u3002</text><view class="error">{{error}}</view><view wx:if="{{message}}" class="notice">{{message}}</view><block wx:if="{{syncState.step>=1}}"><view class="paper"><text class="kicker">01 / \u8FDE\u63A5\u753B\u5C4F</text><text class="section-title">\u5148\u8BA9\u5B83\u8FDE\u4E0A\u7F51\u7EDC</text><text class="note">\u5524\u9192\u753B\u5C4F\uFF0C\u5F00\u542F\u624B\u673A\u84DD\u7259\u3002\u8BF7\u9009\u540D\u79F0\u4EE5 FRAMEFILMARK \u5F00\u5934\u7684\u8BBE\u5907\u3002</text><button class="secondary spaced" bindtap="scan" disabled="{{busy}}">\u641C\u7D22\u9644\u8FD1\u753B\u5C4F</button><button class="device" wx:for="{{bleDevices}}" wx:key="id" data-id="{{item.id}}" bindtap="connect" disabled="{{busy}}"><text>{{item.name}}</text><text class="muted">\u8FDE\u63A5</text></button><text class="note">{{bleText}}</text><view wx:if="{{paired}}"><text class="label">2.4 GHz Wi-Fi \u540D\u79F0</text><input class="field" value="{{ssid}}" data-field="ssid" bindinput="input" maxlength="32"/><text class="label">Wi-Fi \u5BC6\u7801</text><input class="field" value="{{wifiPassword}}" data-field="wifiPassword" bindinput="input" password maxlength="63"/><text class="note">\u5BC6\u7801\u4EC5\u7ECF\u84DD\u7259\u53D1\u7ED9\u6240\u9009\u753B\u5C4F\uFF0C\u4E0D\u4E0A\u4F20\u540E\u53F0\u3002</text><button class="primary spaced" bindtap="wifi" disabled="{{busy}}" loading="{{busy}}">\u53D1\u9001 Wi-Fi \u8BBE\u7F6E</button><button class="text-button" bindtap="disconnect" disabled="{{busy}}">\u65AD\u5F00\u84DD\u7259</button></view></view>
-<view wx:if="{{user}}"><view class="paper"><text class="section-title">\u8D26\u6237\u4E0E\u753B\u5C4F</text><text wx:if="{{status.device}}" class="note">{{status.device.id}} \xB7 {{status.device.active?'\u5F53\u524D\u4F7F\u7528\u672C\u8D26\u6237':'\u5F53\u524D\u4F7F\u7528\u53E6\u4E00\u5173\u8054\u8D26\u6237'}}{{status.device.memberCount>1?' \xB7 \u5DF2\u5173\u8054 '+status.device.memberCount+' \u4E2A\u8D26\u6237':''}}</text><text wx:else class="note">\u5C1A\u672A\u7ED1\u5B9A\u8BBE\u5907</text><view wx:if="{{status.deviceLinked&&!status.device.active}}" class="notice">\u8FD9\u53F0\u753B\u5C4F\u5DF2\u5173\u8054\u591A\u4E2A\u8D26\u6237\u3002\u8FDE\u63A5\u9644\u8FD1\u753B\u5C4F\u540E\uFF0C\u53EF\u5C06\u5F53\u524D\u8D26\u6237\u8BBE\u4E3A\u5C4F\u5E55\u5185\u5BB9\u7684\u4E0B\u53D1\u8D26\u6237\u3002</view><button wx:if="{{paired && connectedDeviceId}}" class="secondary spaced" bindtap="bind" disabled="{{busy}}">{{status.device.id?'\u5C06\u672C\u8D26\u6237\u8BBE\u4E3A\u5F53\u524D\u753B\u5C4F\u8D26\u6237':'\u7ED1\u5B9A\u5F53\u524D\u84DD\u7259\u753B\u5C4F'}}</button><button wx:if="{{status.device.id}}" class="text-button" bindtap="unbind" disabled="{{busy}}">\u89E3\u9664\u672C\u8D26\u6237\u4E0E\u753B\u5C4F\u7684\u5173\u8054</button><text class="note">\u84DD\u7259\u8FDE\u63A5\u4E0D\u7B49\u4E8E\u8D26\u6237\u7ED1\u5B9A\u3002\u4E0D\u540C\u5FAE\u4FE1\u8D26\u6237\u53EF\u5173\u8054\u540C\u4E00\u53F0\u753B\u5C4F\uFF0C\u4F46\u540C\u4E00\u65F6\u95F4\u53EA\u4F7F\u7528\u4E00\u4E2A\u8D26\u6237\u7684\u5185\u5BB9\u3002</text></view></view><button wx:else class="primary" bindtap="login">\u5FAE\u4FE1\u767B\u5F55\u540E\u7ED1\u5B9A\u6211\u7684\u753B\u5C4F</button></block></view>
+<text class="kicker">CONNECT YOUR COMPANION / 02</text><text class="title">\u94FE\u63A5\u795E\u7269</text><text class="subtitle">\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u4E0E Wi-Fi\uFF0C\u5728\u8FD9\u91CC\u67E5\u770B\u753B\u9762\u66F4\u65B0\u72B6\u6001\u3002</text><view class="error">{{error}}</view><view wx:if="{{message}}" class="notice">{{message}}</view><block><view class="paper connection-summary"><text class="section-title">\u5F53\u524D\u8FDE\u63A5</text><text class="note">\u84DD\u7259\uFF1A{{paired?'\u5DF2\u8FDE\u63A5':'\u672A\u8FDE\u63A5'}} \xB7 Wi-Fi\uFF1A{{wifiConnected?'\u5DF2\u8054\u7F51':'\u672A\u786E\u8BA4\u8054\u7F51'}}</text><text wx:if="{{connectedDeviceId}}" class="note">\u753B\u5C4F {{connectedDeviceId}}</text><button wx:if="{{paired&&wifiConnected}}" class="text-button" bindtap="toggleSetup">{{setupExpanded?'\u6536\u8D77\u8FDE\u63A5\u8BBE\u7F6E':'\u5C55\u5F00\u8FDE\u63A5\u8BBE\u7F6E'}}</button></view><view wx:if="{{!paired||!wifiConnected||setupExpanded}}" class="paper"><text class="kicker">01 / \u8FDE\u63A5\u753B\u5C4F</text><text class="section-title">\u5148\u8BA9\u5B83\u8FDE\u4E0A\u7F51\u7EDC</text><text class="note">\u5524\u9192\u753B\u5C4F\uFF0C\u5F00\u542F\u624B\u673A\u84DD\u7259\u3002\u8BF7\u9009\u540D\u79F0\u4EE5 FRAMEFILMARK \u5F00\u5934\u7684\u8BBE\u5907\u3002</text><button class="secondary spaced" bindtap="scan" disabled="{{busy}}">\u641C\u7D22\u9644\u8FD1\u753B\u5C4F</button><button class="device" wx:for="{{bleDevices}}" wx:key="id" data-id="{{item.id}}" bindtap="connect" disabled="{{busy}}"><text>{{item.name}}</text><text class="muted">\u8FDE\u63A5</text></button><text class="note">{{bleText}}</text><view><text class="label">2.4 GHz Wi-Fi \u540D\u79F0</text><input class="field" value="{{ssid}}" data-field="ssid" bindinput="input" placeholder="\u586B\u5199\u5DF2\u6709 Wi-Fi \u540D\u79F0" maxlength="32"/><text class="label">Wi-Fi \u5BC6\u7801</text><view wx:if="{{savedSSID&&ssid===savedSSID&&!editingPassword}}"><input class="field" value="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" disabled/><text class="note">\u5DF2\u4FDD\u5B58\u5728\u753B\u5C4F\uFF0C\u5C06\u81EA\u52A8\u4F7F\u7528</text><button class="text-button" bindtap="changePassword">\u66F4\u6362\u5BC6\u7801</button></view><input wx:else class="field" value="{{wifiPassword}}" data-field="wifiPassword" bindinput="input" password placeholder="{{savedSSID?'\u5DF2\u4FDD\u5B58\u5728\u753B\u5C4F\uFF0C\u540C\u540D\u7F51\u7EDC\u53EF\u7559\u7A7A':'\u586B\u5199\u8BE5 Wi-Fi \u5F53\u524D\u4F7F\u7528\u7684\u5BC6\u7801'}}" maxlength="63"/><button class="primary spaced" bindtap="wifi" disabled="{{busy||!paired}}" loading="{{busy}}">{{paired?'\u8FDE\u63A5 Wi-Fi':'\u8BF7\u5148\u8FDE\u63A5\u84DD\u7259\uFF0C\u518D\u8FDE\u63A5 Wi-Fi'}}</button><button class="text-button" wx:if="{{paired}}" bindtap="disconnect" disabled="{{busy}}">\u65AD\u5F00\u84DD\u7259</button></view></view>
+<view wx:if="{{user}}"><view class="paper"><text class="section-title">\u8D26\u6237\u4E0E\u753B\u5C4F</text><text wx:if="{{status.device}}" class="note">{{status.device.id}} \xB7 {{status.device.active?'\u5F53\u524D\u4F7F\u7528\u672C\u8D26\u6237':'\u5F53\u524D\u4F7F\u7528\u53E6\u4E00\u5173\u8054\u8D26\u6237'}}{{status.device.memberCount>1?' \xB7 \u5DF2\u5173\u8054 '+status.device.memberCount+' \u4E2A\u8D26\u6237':''}}</text><text wx:else class="note">\u5C1A\u672A\u7ED1\u5B9A\u8BBE\u5907</text><view wx:if="{{status.deviceLinked&&!status.device.active}}" class="notice">\u8FD9\u53F0\u753B\u5C4F\u5DF2\u5173\u8054\u591A\u4E2A\u8D26\u6237\u3002\u8FDE\u63A5\u9644\u8FD1\u753B\u5C4F\u540E\uFF0C\u53EF\u5C06\u5F53\u524D\u8D26\u6237\u8BBE\u4E3A\u5C4F\u5E55\u5185\u5BB9\u7684\u4E0B\u53D1\u8D26\u6237\u3002</view><text wx:if="{{binding}}" class="note">\u6B63\u5728\u81EA\u52A8\u5173\u8054\u5F53\u524D\u8D26\u6237\u2026</text><text wx:if="{{paired&&!connectedDeviceId}}" class="note">\u8BBE\u5907\u8EAB\u4EFD\u5C06\u7531\u753B\u5C4F\u7684\u8BA4\u8BC1\u56DE\u62A5\u81EA\u52A8\u6838\u9A8C\uFF0C\u65E0\u9700\u586B\u5199\u7F16\u53F7\u3002</text><button wx:if="{{bindingError}}" class="secondary spaced" bindtap="bind" disabled="{{busy||binding}}">\u91CD\u8BD5\u5173\u8054\u5F53\u524D\u8D26\u6237</button><button wx:if="{{status.device.id}}" class="text-button" bindtap="unbind" disabled="{{busy}}">\u89E3\u9664\u672C\u8D26\u6237\u4E0E\u753B\u5C4F\u7684\u5173\u8054</button><text class="note">\u8FDE\u63A5\u540E\u4F1A\u81EA\u52A8\u5173\u8054\u5F53\u524D\u8D26\u6237\u3002\u4E0D\u540C\u5FAE\u4FE1\u8D26\u6237\u53EF\u5173\u8054\u540C\u4E00\u53F0\u753B\u5C4F\uFF0C\u540C\u4E00\u65F6\u95F4\u4F7F\u7528\u4E00\u4E2A\u8D26\u6237\u7684\u5185\u5BB9\u3002</text></view></view><button wx:else class="primary" bindtap="login">\u5FAE\u4FE1\u767B\u5F55\u540E\u7ED1\u5B9A\u6211\u7684\u753B\u5C4F</button></block></view>
 `, "css": ".device{display:flex;justify-content:space-between;align-items:center;background:#eef0e5;border:calc(1 * var(--rpx)) solid #ccd1bd;padding:calc(18 * var(--rpx));margin-top:calc(16 * var(--rpx));font-size:calc(24 * var(--rpx));line-height:1.6;text-align:left}.draft{width:100%;height:calc(340 * var(--rpx));margin-top:calc(24 * var(--rpx));background:#f6f1e7}.photo-canvas{position:fixed;left:-2000px;top:0;width:1440px;height:1440px;pointer-events:none}\n\n.sync-steps{display:flex;flex-wrap:wrap;gap:calc(16 * var(--rpx));margin:calc(20 * var(--rpx)) 0;color:#888}.sync-steps .complete{color:#415B48;font-weight:600}.sync-panel .note{display:block;margin:calc(12 * var(--rpx)) 0}\n" }, "today": { "wxml": `<view class="page">
  <view class="row"><text class="kicker">YOUR DAILY COMPANION / 03</text><text class="date">{{date}}</text></view>
  <text class="title">\u89E3\u8BFB\u966A\u4F34</text>
@@ -3354,7 +3512,7 @@
 
  <view class="stack spaced"><button wx:if="{{sample}}" class="primary" bindtap="open">\u767B\u5F55\uFF0C\u5F00\u542F\u6211\u7684\u753B\u5C4F</button><button wx:else class="primary" bindtap="open">\u7BA1\u7406\u6211\u7684\u753B\u5C4F</button></view>
 </view>
-`, "css": '.artwork{position:relative;margin:calc(30 * var(--rpx)) 0 calc(16 * var(--rpx));aspect-ratio:2/3;height:calc((100vw - calc(72 * var(--rpx)))*1.5);max-height:calc(1000 * var(--rpx));background:#fffaf0;border:calc(1 * var(--rpx)) solid #ccc5b4;overflow:hidden}.painting{width:100%;height:100%;position:absolute}.art-title{position:absolute;top:calc(30 * var(--rpx));left:calc(28 * var(--rpx));writing-mode:vertical-rl;letter-spacing:calc(9 * var(--rpx));font-size:calc(25 * var(--rpx));font-family:"Songti SC",serif}.seal{position:absolute;right:calc(26 * var(--rpx));top:calc(30 * var(--rpx));width:calc(50 * var(--rpx));height:calc(56 * var(--rpx));border:calc(2 * var(--rpx)) solid #a44b3f;color:#a44b3f;text-align:center;line-height:calc(50 * var(--rpx));font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx))}.art-action{position:absolute;bottom:0;left:0;right:0;padding:calc(26 * var(--rpx)) calc(28 * var(--rpx)) calc(32 * var(--rpx));background:rgba(255,250,240,.95);border-top:calc(1 * var(--rpx)) solid #d2cdbf}.action-label{display:block;font-size:calc(22 * var(--rpx));letter-spacing:calc(3 * var(--rpx));color:#716e64}.action-text{font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx));display:block;margin-top:calc(8 * var(--rpx));line-height:1.5}.blank{padding:calc(180 * var(--rpx)) calc(34 * var(--rpx))}.photo .painting{background:#fffaf0}\n\n.day-previews{display:flex;gap:calc(20 * var(--rpx));margin:calc(28 * var(--rpx)) 0}.day-preview{width:calc(50% - calc(10 * var(--rpx)))}.day-preview image{width:100%;height:calc(260 * var(--rpx));background:#fffcf5}.action-item{border-top:calc(1 * var(--rpx)) solid #dcd7cb;padding:calc(18 * var(--rpx)) 0}.action-option{display:block;margin-top:calc(20 * var(--rpx))}\n' }, "screen": { "wxml": `<view class="page">
+`, "css": '.artwork{position:relative;margin:calc(30 * var(--rpx)) 0 calc(16 * var(--rpx));aspect-ratio:2/3;height:calc((100vw - calc(72 * var(--rpx)))*1.5);max-height:calc(1000 * var(--rpx));background:#fffaf0;border:calc(1 * var(--rpx)) solid #ccc5b4;border-radius:calc(6 * var(--rpx));box-shadow:0 calc(12 * var(--rpx)) calc(36 * var(--rpx)) rgba(65,91,72,.08);overflow:hidden}.painting{width:100%;height:100%;position:absolute}.art-title{position:absolute;top:calc(30 * var(--rpx));left:calc(28 * var(--rpx));writing-mode:vertical-rl;letter-spacing:calc(9 * var(--rpx));font-size:calc(25 * var(--rpx));font-family:"Songti SC",serif}.seal{position:absolute;right:calc(26 * var(--rpx));top:calc(30 * var(--rpx));width:calc(50 * var(--rpx));height:calc(56 * var(--rpx));border:calc(2 * var(--rpx)) solid #a44b3f;color:#a44b3f;text-align:center;line-height:calc(50 * var(--rpx));font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx))}.art-action{position:absolute;bottom:0;left:0;right:0;padding:calc(26 * var(--rpx)) calc(28 * var(--rpx)) calc(32 * var(--rpx));background:rgba(255,250,240,.95);border-top:calc(1 * var(--rpx)) solid #d2cdbf}.action-label{display:block;font-size:calc(22 * var(--rpx));letter-spacing:calc(3 * var(--rpx));color:#716e64}.action-text{font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx));display:block;margin-top:calc(8 * var(--rpx));line-height:1.5}.blank{padding:calc(180 * var(--rpx)) calc(34 * var(--rpx))}.photo .painting{background:#fffaf0}\n\n.day-previews{display:flex;gap:calc(20 * var(--rpx));margin:calc(28 * var(--rpx)) 0}.day-preview{width:calc(50% - calc(10 * var(--rpx)))}.day-preview image{width:100%;height:calc(260 * var(--rpx));background:#fffcf5}.action-item{border-top:calc(1 * var(--rpx)) solid #dcd7cb;padding:calc(18 * var(--rpx)) 0}.action-option{display:block;margin-top:calc(20 * var(--rpx))}\n\n.reading-map{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(12 * var(--rpx));margin:calc(22 * var(--rpx)) 0 calc(30 * var(--rpx))}.reading-map>view{min-height:calc(142 * var(--rpx));padding:calc(18 * var(--rpx)) calc(16 * var(--rpx));border:calc(1 * var(--rpx)) solid #dcd7cb;border-radius:calc(8 * var(--rpx));background:#fffcf5}.reading-map>view:nth-child(2){background:#f4eee2}.map-no{display:block;font-family:Georgia,serif;font-size:calc(18 * var(--rpx));letter-spacing:calc(2 * var(--rpx));color:#b5975c}.map-name{display:block;font-family:"Songti SC",serif;font-size:calc(28 * var(--rpx));color:#334a3a;margin-top:calc(12 * var(--rpx))}.map-copy{display:block;font-size:calc(21 * var(--rpx));color:#8b877b;margin-top:calc(4 * var(--rpx))}\n' }, "screen": { "wxml": `<view class="page">
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
   <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
   <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'\u914D\u7F6E\u753B\u5C4F Wi-Fi':'\u53BB\u94FE\u63A5\u795E\u7269\u5E76\u540C\u6B65'}}</button>
@@ -3740,7 +3898,7 @@
   window.startNative = () => {
     document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => navigate(b.dataset.tab)));
     window.addEventListener("pagehide", () => instance && instance.onHide && instance.onHide());
-    navigate(window.MINI_START_TAB || "today");
+    navigate("network");
   };
   window.MINI_CONTENT = require_content();
   window.registerNative("mine", () => require_mine());
