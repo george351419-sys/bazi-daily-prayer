@@ -39,7 +39,16 @@ export async function handleRequest(req,res,config){
     const result=await handleRitualWorkerRequest(config,{method:req.method,path:pathname,headers:req.headers,body:req.body});
     if(result.bytes){res.setHeader('Content-Type',result.contentType||'application/octet-stream');return res.status(200).end(result.bytes);}
     return send(res,200,result);
-   }catch(error){return send(res,error instanceof AccountError?error.status:503,{error:error instanceof AccountError?error.message:'内部 Worker 服务暂时不可用。'});}
+   }catch(error){
+    if(!(error instanceof AccountError))console.error('Ritual worker request failed',{
+     route,
+     name:String(error?.name||'Error').slice(0,80),
+     code:String(error?.code||'UNKNOWN').slice(0,80),
+     message:String(error?.message||'Unknown error').slice(0,200),
+     stack:String(error?.stack||'').split('\n').slice(0,3).join('\n').slice(0,600)
+    });
+    return send(res,error instanceof AccountError?error.status:503,{error:error instanceof AccountError?error.message:'内部 Worker 服务暂时不可用。'});
+   }
   }
  let session=verifySession(config,req.headers['x-session-token']);
  try{
