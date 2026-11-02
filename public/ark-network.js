@@ -21,10 +21,12 @@ export function arkDeviceId(name){
 }
 export class ArkNetwork {
  constructor({bluetooth,onState=()=>{},onDownload=()=>{},onOta=()=>{},delay=sleep,timeout=30000}={}){this.bluetooth=bluetooth;this.onState=onState;this.onDownload=onDownload;this.onOta=onOta;this.delay=delay;this.timeout=timeout;this.pendingResponses=new Map();this.epoch=0;}
+ trace(stage){this.diagnostics=this.diagnostics||[];this.diagnostics.push({time:new Date().toISOString(),stage});if(this.diagnostics.length>80)this.diagnostics.shift();}
  state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic,deviceName:this.device?.name||null,deviceId:this.deviceId||null,savedSSID:this.savedSSID||''});}
  async open(device){
+  this.trace(device.gatt.connected?'open:existing-connection-reset':'open:disconnected');
   if(device.gatt.connected)device.gatt.disconnect();
-  const server=await device.gatt.connect(),service=await server.getPrimaryService(SERVICE),characteristic=await service.getCharacteristic(CHARACTERISTIC);
+  this.trace('gatt:connect');const server=await device.gatt.connect();this.trace('gatt:connected');const service=await server.getPrimaryService(SERVICE);this.trace('gatt:service');const characteristic=await service.getCharacteristic(CHARACTERISTIC);this.trace('gatt:characteristic');
   return {server,characteristic};
  }
  async connect(knownDevice=null){
@@ -53,13 +55,13 @@ export class ArkNetwork {
    }
    const {characteristic}=opened;
    if(epoch!==this.epoch){device.gatt.disconnect();return;}
-   device.addEventListener('gattserverdisconnected',this.lost=()=>{if(epoch===this.epoch)this.disconnect('蓝牙已断开。正在尝试恢复连接；若画屏已休眠，请按键唤醒，无需重新填写 Wi-Fi。');});
+   device.addEventListener('gattserverdisconnected',this.lost=()=>{this.trace('native:disconnected');if(epoch===this.epoch)this.disconnect('蓝牙已断开。正在尝试恢复连接；若画屏已休眠，请按键唤醒，无需重新填写 Wi-Fi。');});
    this.characteristic=characteristic;this.listener=event=>{if(epoch===this.epoch&&this.characteristic===characteristic)this.receive(new Uint8Array(event.target.value.buffer,event.target.value.byteOffset,event.target.value.byteLength));};
-   characteristic.addEventListener('characteristicvaluechanged',this.listener);await characteristic.startNotifications();
+   characteristic.addEventListener('characteristicvaluechanged',this.listener);this.trace('notify:start');await characteristic.startNotifications();this.trace('notify:ready');
    if(epoch!==this.epoch)return;
-   this.savedSSID=await this.readSavedSSID().catch(()=>null);
+   this.trace('saved-ssid:read');this.savedSSID=await this.readSavedSSID().catch(()=>null);
    this.state('蓝牙已连接：'+device.name+'。正在检查画屏已保存的 Wi-Fi。');
-  }catch(error){if(epoch===this.epoch){this.disconnect();throw error;}}
+  }catch(error){this.trace('connect:failed:'+String(error?.name||'Error'));if(epoch===this.epoch){this.disconnect();throw error;}}
  }
  receive(bytes){
   if(bytes.length!==bytes[2]+4||bytes[0]!==0x55||bytes.slice(0,-1).reduce((s,n)=>(s+n)&255,0)!==bytes.at(-1))return;
@@ -241,8 +243,9 @@ export function setupNetwork(){
   const note=document.createElement('small');note.textContent='绑定后会检查今日与次日两幅祈福画；缺少次日画作时会自动补齐。网页只有收到设备上屏回报后才会展示设备实际画面。';
   binding.append(bindingState,bind,note);state.after(binding);
  }
+ const diagnostics=document.createElement('button');diagnostics.type='button';diagnostics.className='text-button';diagnostics.textContent='复制连接诊断';state.after(diagnostics);diagnostics.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify(client.diagnostics||[],null,2));diagnostics.textContent='连接诊断已复制';}catch{diagnostics.textContent='无法复制，请允许剪贴板权限后重试';}});
  let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false,announcedDevice=null;
- let reconnectTimer=null,reconnectAttempts=0,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null,forceSync=false;
+ let reconnectTimer=null,reconnectAttempts=0,reconnectBusy=false,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null,forceSync=false;
  function announceConnection(){connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt:Date.now(),syncRequestedAt,requestedSha};document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection));}
  const networkGrid=root.querySelector('.network-grid');
  function updateConnectionControls(){if(networkGrid)networkGrid.hidden=false;state.hidden=false;binding.hidden=!connectedDevice;}
@@ -272,19 +275,20 @@ export function setupNetwork(){
   if(status.savedSSID&&!form.elements.ssid.value)form.elements.ssid.value=status.savedSSID;
   password.placeholder='输入该 Wi-Fi 的现有密码';updatePassword();
   form.classList.toggle('network-connected',status.connected);
+  if(status.paired&&reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
   if(status.paired&&!downloadTimer){downloadTimer=setInterval(pollDownload,2000);}
   else if(!status.paired&&downloadTimer){clearInterval(downloadTimer);downloadTimer=null;}
   if(status.paired&&!buildChecked){buildChecked=true;buildInfoRead=client.readBuildInfo().then(info=>{firmwareVersion.textContent='当前固件：'+(info.version||'未知版本');}).catch(()=>{firmwareVersion.textContent='当前固件版本暂时无法读取。';});}
   announceConnection();
   if(!status.paired){
    buildChecked=false;syncSha=null;
-   if(allowReconnect&&rememberedDevice&&!reconnectTimer&&reconnectAttempts<3){
+   if(allowReconnect&&!busy&&!reconnectBusy&&rememberedDevice&&!reconnectTimer&&reconnectAttempts<3){
     reconnectTimer=setTimeout(async()=>{
      reconnectTimer=null;reconnectAttempts++;
-     busy=true;
+     busy=true;reconnectBusy=true;
      try{while(downloadBusy)await sleep(25);await client.connect(rememberedDevice);await buildInfoRead;await client.resumeWifi();reconnectAttempts=0;}
      catch(error){state.textContent='连接暂未恢复，请按键唤醒画屏后连接蓝牙；无需重填 Wi-Fi。'+error.message;}
-     finally{busy=false;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}
+     finally{busy=false;reconnectBusy=false;if(!client.characteristic&&allowReconnect&&reconnectAttempts<3)client.state('蓝牙仍未连接，准备再次尝试。');void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}
     },3000);
    }
   }

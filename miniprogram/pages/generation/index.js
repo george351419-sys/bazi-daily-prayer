@@ -1,4 +1,5 @@
 const generation=require('../../utils/generation');
+const privacy=require('../../utils/privacy');
 Page({
  data:{phase:'analyzing',text:'正在准备今日造像…',image:'',error:'',preparing:false,savingImage:false,saveError:''},
  onLoad(){const profile=getApp().globalData.generationProfile;if(!profile){wx.navigateBack();return;}void generation.start(profile);},
@@ -10,7 +11,7 @@ Page({
   if(!this.data.image||this.data.savingImage)return;
   this.setData({savingImage:true,saveError:''});
   try{
-   if(wx.requirePrivacyAuthorize)await new Promise((resolve,reject)=>wx.requirePrivacyAuthorize({success:resolve,fail:reject}));
+   await privacy.authorize();
    await new Promise((resolve,reject)=>wx.saveImageToPhotosAlbum({filePath:this.data.image,success:resolve,fail:reject}));
    wx.showToast({title:'已保存到相册',icon:'success'});
   }catch(e){
