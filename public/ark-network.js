@@ -89,6 +89,12 @@ export class ArkNetwork {
   await this.write(0x38,[]);
   await this.write(0x3a,[]);
  }
+ async ensureWifi(){
+  // ritual.6's 0x38 calls esp_wifi_disconnect() before reconnecting. On an
+  // already-online screen, avoid interrupting its Wi-Fi on every BLE attach.
+  const status=await this.request(0x3a,[],1500);
+  if(status[0]!==1)await this.resumeWifi();
+ }
  async readHeartbeatURL(){
   const epoch=this.epoch;const read=new Promise((resolve,reject)=>{this.identityRead={resolve,reject};});read.catch(()=>{});
   const timer=setTimeout(()=>{this.identityRead?.reject(new Error('画屏未回复身份通道，请保持唤醒后重试。'));this.identityRead=null;},3000);
@@ -289,7 +295,7 @@ export function setupNetwork(){
     reconnectTimer=setTimeout(async()=>{
      reconnectTimer=null;reconnectAttempts++;
      busy=true;reconnectBusy=true;
-     try{while(downloadBusy)await sleep(25);await client.connect(rememberedDevice);await buildInfoRead;await client.resumeWifi();reconnectAttempts=0;}
+     try{while(downloadBusy)await sleep(25);await client.connect(rememberedDevice);await buildInfoRead;await client.ensureWifi();reconnectAttempts=0;}
      catch(error){state.textContent='连接暂未恢复，请按键唤醒画屏后连接蓝牙；无需重填 Wi-Fi。'+error.message;}
      finally{busy=false;reconnectBusy=false;if(!client.characteristic&&allowReconnect&&reconnectAttempts<3)client.state('蓝牙仍未连接，准备再次尝试。');void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}
     },3000);
@@ -329,7 +335,7 @@ export function setupNetwork(){
   if(!client.characteristic){state.textContent='请先连接附近画屏蓝牙，再点击立即检查同步。';location.hash='network-onboarding';root.scrollIntoView({behavior:'smooth'});return;}
   try{await syncPublished(true);}catch(error){state.textContent='检查同步未启动：'+error.message;}
  });
- connect.onclick=async()=>{busy=true;connect.disabled=true;try{allowReconnect=true;reconnectAttempts=0;clearTimeout(reconnectTimer);reconnectTimer=null;while(downloadBusy)await sleep(25);await client.connect();rememberedDevice=client.device;await buildInfoRead;await client.resumeWifi();await syncPublished();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{busy=false;connect.disabled=false;send.disabled=!client.characteristic;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}};
+ connect.onclick=async()=>{busy=true;connect.disabled=true;try{allowReconnect=true;reconnectAttempts=0;clearTimeout(reconnectTimer);reconnectTimer=null;while(downloadBusy)await sleep(25);await client.connect();rememberedDevice=client.device;await buildInfoRead;await client.ensureWifi();await syncPublished();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{busy=false;connect.disabled=false;send.disabled=!client.characteristic;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}};
  disconnect.onclick=()=>{allowReconnect=false;clearTimeout(reconnectTimer);reconnectTimer=null;client.disconnect();};
  bind.onclick=()=>document.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
  form.elements.ssid.addEventListener('input',()=>{editingPassword=false;password.value='';updatePassword();});

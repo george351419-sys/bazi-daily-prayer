@@ -106,6 +106,19 @@ test('reconnecting the same authorized screen resumes saved Wi-Fi without creden
  assert.deepEqual(p.writes.map(bytes=>bytes[1]),[0x33,0x38,0x3a]);assert.equal(client.lastStatus,true);client.disconnect();
 });
 
+test('BLE attach leaves an already-online ritual screen Wi-Fi untouched',async()=>{
+ const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});
+ await client.connect();await client.configure('home','test-password');client.disconnect();p.writes.length=0;
+ await client.connect(p.device);await client.ensureWifi();
+ assert.deepEqual(p.writes.map(bytes=>bytes[1]),[0x33,0x3a]);assert.equal(client.lastStatus,true);client.disconnect();
+});
+
+test('BLE attach reconnects saved Wi-Fi only when the screen is offline',async()=>{
+ const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});
+ await client.connect();p.writes.length=0;await client.ensureWifi();
+ assert.deepEqual(p.writes.map(bytes=>bytes[1]),[0x3a,0x38,0x3a]);assert.equal(client.lastStatus,true);client.disconnect();
+});
+
 test('custom BLE names resolve a cloud-authenticated device identity and restore heartbeat settings',async()=>{
  const client=new ArkNetwork({delay:async()=>{}}),normal='https://playmath.cn/api/v1/device/heartbeat',nonce='d'.repeat(32),writes=[];client.characteristic={};client.device={name:'FRAMEFILMARK-Elink'};
  client.write=async(ch,body=[])=>{writes.push({ch,body});if(ch===0x3f)client.receive(packet(ch,new TextEncoder().encode(normal)));};
