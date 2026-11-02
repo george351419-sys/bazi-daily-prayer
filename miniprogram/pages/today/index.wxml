@@ -75,3 +75,5 @@
 
  <view class="stack spaced"><button wx:if="{{sample}}" class="primary" bindtap="open">登录，开启我的画屏</button><button wx:else class="primary" bindtap="open">管理我的画屏</button></view>
 </view>
+
+<privacy-consent/>

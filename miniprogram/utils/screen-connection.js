@@ -22,17 +22,17 @@ class ScreenConnection{
  stateFor(status,artworkId){return withConnection(withLiveDownload(transferStatus(status,artworkId),status,this.live),status,{...this.snapshot,deviceId:this.hardwareId,syncRequestedAt:this.syncRequestedAt,requestedSha:this.requestedSha});}
  acceptStatus(status){this.current=status;void this.syncPublished().catch(error=>this.notice('自动检查同步暂未成功：'+error.message));}
  notice(bleText){this.snapshot={...this.snapshot,bleText};this.emit();}
- async scan(){this.allowed=false;clearTimeout(this.retryTimer);this.live=null;this.hardwareId='';await this.client.scan();}
+ async scan(){this.allowed=false;clearTimeout(this.retryTimer);this.retryTimer=null;this.live=null;this.hardwareId='';await this.client.scan();}
  async connect(id){
   const device=this.snapshot.bleDevices.find(item=>item.id===id),match=device&&[device.name,device.localName].map(name=>/^FRAMEFILMARK[-_ ]?([a-f0-9]{12})$/i.exec(String(name||'').trim())).find(Boolean);
-  this.hardwareId=this.client.resolveIdentity?'':match?match[1].toLowerCase():'';this.target=id;this.allowed=false;clearTimeout(this.retryTimer);this.attempts=0;this.live=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
+  this.hardwareId=this.client.resolveIdentity?'':match?match[1].toLowerCase():'';this.target=id;this.allowed=false;clearTimeout(this.retryTimer);this.retryTimer=null;this.attempts=0;this.live=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
   await this.connectTarget();this.allowed=true;this.start();
  }
  async connectTarget(){
-  return this.serial(async()=>{await this.client.connect(this.target);if(!this.client.id)return;if(this.client.readSavedSSID){const savedSSID=await this.client.readSavedSSID().catch(()=>null);this.snapshot={...this.snapshot,savedSSID};this.emit();}await this.client.resumeWifi();});
+  return this.serial(async()=>{this.recovering=true;try{await this.client.connect(this.target);if(!this.client.id)return;if(this.client.readSavedSSID){const savedSSID=await this.client.readSavedSSID().catch(()=>null);this.snapshot={...this.snapshot,savedSSID};this.emit();}await this.client.resumeWifi();}finally{this.recovering=false;}});
  }
  reconnect(){
-  if(!this.allowed||!this.foreground||!this.target||this.retryTimer||this.attempts>=3)return;
+  if(this.recovering||!this.allowed||!this.foreground||!this.target||this.retryTimer||this.attempts>=3)return;
   this.retryTimer=setTimeout(async()=>{
    this.retryTimer=null;this.attempts++;
    try{await this.connectTarget();if(this.client.id){this.attempts=0;await this.syncPublished();}}

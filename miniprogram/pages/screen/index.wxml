@@ -78,3 +78,5 @@
  </view>
  <canvas type="2d" id="photo-canvas" class="photo-canvas"></canvas>
 </view>
+
+<privacy-consent/>

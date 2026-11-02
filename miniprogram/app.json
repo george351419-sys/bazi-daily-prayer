@@ -40,5 +40,8 @@
   },
   "__usePrivacyCheck__": true,
   "lazyCodeLoading": "requiredComponents",
-  "sitemapLocation": "sitemap.json"
+  "sitemapLocation": "sitemap.json",
+  "usingComponents": {
+    "privacy-consent": "/components/privacy-consent/index"
+  }
 }
