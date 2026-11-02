@@ -21,7 +21,7 @@ export function arkDeviceId(name){
 }
 export class ArkNetwork {
  constructor({bluetooth,onState=()=>{},onDownload=()=>{},onOta=()=>{},delay=sleep,timeout=30000}={}){this.bluetooth=bluetooth;this.onState=onState;this.onDownload=onDownload;this.onOta=onOta;this.delay=delay;this.timeout=timeout;this.pendingResponses=new Map();this.epoch=0;}
- trace(stage){this.diagnostics=this.diagnostics||[];this.diagnostics.push({time:new Date().toISOString(),stage});if(this.diagnostics.length>80)this.diagnostics.shift();}
+ trace(stage){this.diagnostics=this.diagnostics||[];this.diagnostics.push({time:new Date().toISOString(),stage});if(this.diagnostics.length>120)this.diagnostics.shift();}
  state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic,deviceName:this.device?.name||null,deviceId:this.deviceId||null,savedSSID:this.savedSSID||''});}
  async open(device){
   this.trace(device.gatt.connected?'open:existing-connection-reset':'open:disconnected');
@@ -65,6 +65,7 @@ export class ArkNetwork {
  }
  receive(bytes){
   if(bytes.length!==bytes[2]+4||bytes[0]!==0x55||bytes.slice(0,-1).reduce((s,n)=>(s+n)&255,0)!==bytes.at(-1))return;
+  this.trace('notify:'+bytes[1].toString(16).padStart(2,'0')+':'+bytes.length);
   if(this.pendingResponses.has(bytes[1])){const pending=this.pendingResponses.get(bytes[1]);this.pendingResponses.delete(bytes[1]);pending.resolve(bytes.slice(3,-1));}
   if(bytes[1]===0x3f&&this.identityRead&&bytes.length===bytes[2]+4&&bytes[0]===0x55&&bytes.slice(0,-1).reduce((a,b)=>(a+b)&255,0)===bytes.at(-1)){const pending=this.identityRead;this.identityRead=null;pending.resolve(new TextDecoder().decode(bytes.slice(3,-1)).replace(/\0.*$/,''));}
   if(bytes[1]===0x33&&this.ssidRead){const pending=this.ssidRead;this.ssidRead=null;pending.resolve(new TextDecoder().decode(bytes.slice(3,-1)).replace(/\0.*$/,''));}
@@ -78,7 +79,9 @@ export class ArkNetwork {
  }
  async write(channel,data,epoch=this.epoch,pace=200){
   if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙已断开，请重新连接。');
+  const command=channel.toString(16).padStart(2,'0');this.trace('write:'+command+':start');
   const prior=this.bleWrite||Promise.resolve();const write=prior.catch(()=>{}).then(()=>{if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙已断开，请重新连接。');return this.characteristic.writeValue(packet(channel,data));});this.bleWrite=write;await write;await this.delay(pace);
+  this.trace('write:'+command+':done');
   if(epoch!==this.epoch)throw new Error('蓝牙已断开，请重新连接。');
  }
  async resumeWifi(){

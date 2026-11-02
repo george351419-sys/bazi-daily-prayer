@@ -1,5 +1,5 @@
 import {readAPIResponse} from './api-response.js?v=20261101-safe-bottom-v3';
-import {setupNetwork} from './ark-network.js?v=20261102-diagnostics-v1';
+import {setupNetwork} from './ark-network.js?v=20261102-diagnostics-v2';
 import './art-style-ui.js?v=20261101-safe-bottom-v3';
 import {setupAccounts} from './account-ui.js?v=20261101-identity-v1';
 import {WISH_GROUPS} from './wishes.js';
