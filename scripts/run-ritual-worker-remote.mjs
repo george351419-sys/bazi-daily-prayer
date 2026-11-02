@@ -91,7 +91,10 @@ let stop=false;const abort=new AbortController();for(const signal of ['SIGINT','
 do{
  try{
   const listing=await (await call('/api/internal/ritual-worker/links')).json();
-  for(const [accountId,deviceId] of Object.entries(listing.work||listing.links))await processAccount(accountId,deviceId);
+  for(const [accountId,deviceId] of Object.entries(listing.work||listing.links)){
+   try{await processAccount(accountId,deviceId);}
+   catch(error){console.error('Ritual account deferred for '+accountId+': '+(error?.message||String(error)));}
+  }
  }catch(error){console.error('Ritual worker bridge unavailable: '+(error?.message||String(error)));}
  if(stop||process.argv.includes('--once'))break;
  try{await delay(15000,undefined,{signal:abort.signal});}catch{}
