@@ -32,3 +32,22 @@ test('remote ritual worker bridge is HMAC-only and exposes account snapshots wit
  const good=signed(c,'/api/internal/ritual-worker/accounts/'+account.id),headers=Object.fromEntries(good.headers),tampered=new Request(good.url,{headers:{...headers,'X-Ritual-Signature':'0'.repeat(64)}});
  assert.equal((await onRequest({request:tampered,env:c})).status,403);
 });
+
+test('conflicting stored bindings do not block preparation or publish to an unverified owner',async t=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'ritual-binding-conflict-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-binding-conflict-test-secret',RITUAL_WORKER_REMOTE:'1'},repo=accountRepository(c);
+ const one='1'.repeat(32),two='2'.repeat(32),device='112233445566';
+ await repo.put('ritual-device/'+one,{accountId:one,deviceId:device});
+ await repo.put('ritual-device/'+two,{accountId:two,deviceId:device});
+ await repo.put('ritual-preparation/'+one,{status:'queued'});
+ let response=await onRequest({request:signed(c,'/api/internal/ritual-worker/links'),env:c});
+ assert.equal(response.status,200);
+ let result=await response.json();
+ assert.deepEqual(result.links,{});assert.equal(result.work[one],null);assert.deepEqual(result.conflicts,[{deviceId:device,reason:'ambiguous_owner'}]);
+ await repo.put('ritual-device-owner/'+device,{accountId:two,deviceId:device});
+ response=await onRequest({request:signed(c,'/api/internal/ritual-worker/links'),env:c});
+ assert.equal(response.status,200);result=await response.json();
+ assert.deepEqual(result.links,{[two]:device});assert.equal(result.work[one],null);assert.deepEqual(result.conflicts,[]);
+ const snapshot=await onRequest({request:signed(c,'/api/internal/ritual-worker/accounts/'+one),env:c});
+ assert.equal(snapshot.status,200);assert.equal((await snapshot.json()).deviceId,null);
+});
