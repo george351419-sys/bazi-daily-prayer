@@ -1,0 +1,5 @@
+.inline-action{display:flex;align-items:stretch;gap:16rpx}.inline-action .field{flex:1}.inline-action button{min-width:132rpx;padding-left:18rpx;padding-right:18rpx}.wish-group{padding-bottom:16rpx}.paper .section-title{margin-bottom:0}
+
+.art-style-heading{margin-top:32rpx}.art-style-row{display:flex;align-items:center;gap:20rpx;margin:14rpx 0}.art-style-row .choice{flex:1}.art-style-row .note{margin-top:4rpx;font-size:22rpx}.art-style-row .text-button{flex-shrink:0}
+
+.generation-panel{margin-top:28rpx;padding:24rpx;background:#F6F1E7;border-radius:16rpx}.generation-steps{display:flex;justify-content:space-between;gap:12rpx;margin:24rpx 0;color:#81796d;font-size:23rpx}.generation-steps .current{color:#415B48;font-weight:600}.generated-image{display:block;width:100%;margin-top:24rpx;border-radius:12rpx}

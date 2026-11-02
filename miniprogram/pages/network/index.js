@@ -2,7 +2,7 @@ const {transferStatus,receiptTime}=require('../../utils/transfer-status');
 const api=require('../../utils/api');const {preparePhoto,authorize}=require('../../utils/photos');const {observeConnection,stopObserving}=require('../../utils/screen-connection');
 const {syncPrayerPair,syncGeneratedPrayer}=require('../../utils/ritual-sync');
 Page({
- data:{releaseVersion:'1.1.7',editingPassword:false,binding:false,bindingError:'',setupExpanded:false,user:null,error:'',message:'',busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false},
+ data:{releaseVersion:'1.1.8',editingPassword:false,binding:false,bindingError:'',setupExpanded:false,user:null,error:'',message:'',busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false},
  onLoad(){},
  changePassword(){this.setData({editingPassword:true,wifiPassword:''});},
  toggleSetup(){this.setData({setupExpanded:!this.data.setupExpanded});},
@@ -26,20 +26,20 @@ Page({
  async upload(){if(!this.photo||this.data.busy)return;const run=this.run;this.setData({busy:true,error:'',message:''});try{const r=await api.request('/api/account/photos',{type:this.photo.type,base64:this.photo.base64,title:this.data.photoTitle||'我的照片'});if(!this.active||run!==this.run)return;this.photo=null;this.setData({catalog:[r.item].concat(this.data.catalog),draft:'',photoTitle:'',message:'照片已保存到账户。请选择两天的画面并保存设置。'});this.populate([r.item.id,r.item.id]);}catch(e){if(this.active&&run===this.run)api.error(this,e);}finally{if(this.active&&run===this.run)this.setData({busy:false});}},
  async save(){if(this.data.busy)return;const d=this.data,ids=d.choices.map(i=>d.artworks[i]&&d.artworks[i].id);if(ids.some(x=>!x)||(d.contentMode==='prayer'&&ids[0]===ids[1])){api.error(this,new Error(d.contentMode==='photo'?'请先上传并选择照片。':'请选择两幅不同的已完成祈福画。'));return;}this.setData({busy:true,error:'',message:''});try{const s=await api.request('/api/account/ritual',{mode:d.mode,contentMode:d.contentMode,showActions:d.contentMode==='prayer'||d.showActions,artworkIds:ids});if(this.active)this.setData({status:s,syncConfigured:s.syncConfigured===true,message:s.syncConfigured?'计划已保存，设备实际显示以回执为准。':'画屏设置已保存；尚未绑定画屏，绑定后才会编译并下发。'});}catch(e){if(this.active)api.error(this,e);}finally{if(this.active)this.setData({busy:false});}},
  async scan(){if(this.data.busy)return;this.setData({busy:true,error:'',bleDevices:[]});try{await authorize();await this.ble.scan();}catch(e){if(this.active)api.error(this,e);}finally{if(this.active)this.setData({busy:false});}},
- async connect(e){if(this.data.busy)return;this.setData({busy:true,error:''});try{await this.ble.connect(e.currentTarget.dataset.id);this.setData({connectedDeviceId:this.connection.snapshot.connectedDeviceId});await this.autoBind();void this.pollSync();}catch(e){if(this.active)api.error(this,e);}finally{if(this.active)this.setData({busy:false});}},
- async wifi(){if(!this.data.paired){api.error(this,new Error('请先连接附近画屏蓝牙。'));return;}if(this.data.busy)return;this.setData({busy:true,error:''});try{await this.ble.configure(this.data.ssid,this.data.wifiPassword);await this.autoBind();void this.pollSync();this.setData({setupExpanded:false,message:this.data.status?.device?.active?'蓝牙与 Wi-Fi 已连接，请查看上方更新状态。':'蓝牙与 Wi-Fi 已连接，正在核对账户关联和更新状态。'});}catch(e){if(this.active)api.error(this,e);}finally{this.setData({wifiPassword:'',editingPassword:false,busy:false});}},
+ async connect(e){if(this.data.busy)return;this.connectionNotice=true;this.setData({busy:true,error:'',message:''});try{await this.ble.connect(e.currentTarget.dataset.id);this.setData({connectedDeviceId:this.connection.snapshot.connectedDeviceId});await this.autoBind();void this.pollSync();}catch(e){if(this.active)api.error(this,e);}finally{if(this.active)this.setData({busy:false});}},
+ async wifi(){if(!this.data.paired){api.error(this,new Error('请先连接附近画屏蓝牙。'));return;}if(this.data.busy)return;this.setData({busy:true,error:''});try{await this.ble.configure(this.data.ssid,this.data.wifiPassword);await this.autoBind();void this.pollSync();this.setData({setupExpanded:false,message:''});}catch(e){if(this.active)api.error(this,e);}finally{this.setData({wifiPassword:'',editingPassword:false,busy:false});}},
  async autoBind(){
   const user=getApp().globalData.user;if(!user||!this.data.paired||!this.data.wifiConnected||this.data.binding)return;
   const known=this.connection.snapshot.connectedDeviceId;
   if(known&&this.data.status?.device?.id===known&&this.data.status.device.active)return;
   const key=user.id+':'+this.connection.target+':'+this.connection.client.epoch;
   if(this.bindAttempt===key)return;this.bindAttempt=key;
-  this.setData({binding:true,bindingError:'',message:'画屏已联网，正在核验设备身份并自动关联账户…'});
+  const epoch=this.connection.client.epoch;this.connectionNotice=true;this.setData({binding:true,bindingError:'',error:'',message:''});
   try{
    const id=known||await this.connection.resolveIdentity(api.request);
-   if(getApp().globalData.user?.id!==user.id)return;
-   await api.request('/api/account/ritual/device',{deviceId:id});this.setData({message:'画屏已自动关联账户，正在检查更新。'});
-  }catch(e){this.setData({bindingError:e.message});api.error(this,e);}
+   if(getApp().globalData.user?.id!==user.id||epoch!==this.connection.client.epoch||!this.connection.snapshot.paired)return;
+   await api.request('/api/account/ritual/device',{deviceId:id});this.setData({message:'',error:''});
+  }catch(e){if(epoch===this.connection.client.epoch&&this.connection.snapshot.paired){this.setData({bindingError:e.message});api.error(this,e);}}
   finally{this.setData({binding:false});}
  },
  async bind(){this.bindAttempt=null;await this.autoBind();await this.pollSync();},

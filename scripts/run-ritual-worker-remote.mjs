@@ -29,6 +29,7 @@ async function saveBuild(accountId,state,revision){return (await call('/api/inte
 
 async function processAccount(accountId,deviceId){
  let state=await snapshot(accountId),plan=state.plan,prior=state.build,tmp;
+ if(state.preparation&&!['complete','superseded'].includes(state.preparation.status)){await call('/api/internal/ritual-worker/accounts/'+accountId+'/preparation',{method:'POST',body:{}});return;}
  if(prior?.status==='retrying'&&prior.attemptedRevision===(plan?.revision||plan?.updatedAt)&&Date.parse(prior.nextAttemptAt)>Date.now())return;
  if(!plan){
   const complete=state.records.filter(record=>ritualArtworkReady(record)&&record.source!=='upload'&&normalizeArtStyle(record.mapping?.art_style)===normalizeArtStyle(state.profile?.artStyle));

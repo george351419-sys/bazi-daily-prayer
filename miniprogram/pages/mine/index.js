@@ -3,13 +3,13 @@ const api=require('../../utils/api');
 const {syncGeneratedPrayer}=require('../../utils/ritual-sync');
 const fresh=()=>({gender:'female',birthDate:'',birthTime:'',calendar:'solar',leap:false,city:'',wishes:[],artStyle:'cute'});
 Page({
- data:{artStyles:[{id:'cute',label:'可爱风',description:'Q版神仙，圆润喜庆'},{id:'spirit',label:'灵兽风',description:'问问兽演绎，保留神像配饰'},{id:'folk',label:'民俗风',description:'传统神像，庄重亲切'}],user:null,error:'',message:'',busy:false,authMode:'wechat',username:'',password:'',nicknameDraft:'',agreed:false,profile:fresh(),groups:[],today:new Date(Date.now()+8*3600000).toISOString().slice(0,10),privacyOpen:false,generation:'',generationPhase:'',generatedImage:'',profileSaved:false,jobReady:false,wechatEnabled:false},
+ data:{artStyles:[{id:'cute',label:'可爱风',description:'Q版神仙，圆润喜庆'},{id:'spirit',label:'灵兽风',description:'问问兽演绎，保留神像配饰'},{id:'folk',label:'民俗风',description:'传统神像，庄重亲切'}],user:null,error:'',message:'',busy:false,authMode:'wechat',username:'',password:'',nicknameDraft:'',agreed:false,profile:fresh(),groups:[],today:new Date(Date.now()+8*3600000).toISOString().slice(0,10),profileCollapsed:false,styleSelected:false,privacyOpen:false,generation:'',generationPhase:'',generatedImage:'',profileSaved:false,jobReady:false,wechatEnabled:false},
  previewArtStyle(e){const id=e.currentTarget.dataset.id;if(!['folk','cute','spirit'].includes(id))return;wx.previewImage({current:'/assets/prayer-styles/'+id+'.jpg',urls:['/assets/prayer-styles/'+id+'.jpg']});},
  async onShow(){
   this.active=true;observeConnection(this);
   api.tab(this,0);await getApp().ready;
   const app=getApp();
-  this.setData({user:app.globalData.user,profile:app.globalData.profile||fresh(),profileSaved:!!app.globalData.profile?.birthDate,nicknameDraft:(app.globalData.user&&app.globalData.user.nickname)||''});
+  this.setData({user:app.globalData.user,profile:app.globalData.profile||fresh(),profileSaved:!!app.globalData.profile?.birthDate,profileCollapsed:!!app.globalData.profile?.birthDate,nicknameDraft:(app.globalData.user&&app.globalData.user.nickname)||''});
   try{const b=await api.init();this.groups=b.wishGroups||[];this.setData({wechatEnabled:!!(b.miniProgram&&b.miniProgram.wechatLoginEnabled)});this.decorate();if(this.data.user)void this.pollSync();}catch(e){api.error(this,e);}
  },
  onHide(){this.active=false;this.syncTurn=(this.syncTurn||0)+1;clearTimeout(this.syncTimer);stopObserving(this);this.setData({password:''});},
@@ -23,11 +23,12 @@ Page({
  },
  decorate(){const selected=this.data.profile.wishes||[];this.setData({groups:(this.groups||[]).map(g=>({name:g.name,items:g.items.map(w=>Object.assign({},w,{selected:selected.indexOf(w.id)>=0}))}))});},
  input(e){this.setData({[e.currentTarget.dataset.field]:e.detail.value});},
- field(e){this.job=null;this.setData({jobReady:false,profileSaved:false});this.setData({['profile.'+e.currentTarget.dataset.field]:e.detail.value});},
- choose(e){this.job=null;this.setData({jobReady:false,profileSaved:false});this.setData({['profile.'+e.currentTarget.dataset.field]:e.currentTarget.dataset.value});},
+ field(e){this.job=null;this.setData({jobReady:false,profileSaved:false,styleSelected:false});this.setData({['profile.'+e.currentTarget.dataset.field]:e.detail.value});},
+ choose(e){const {field,value}=e.currentTarget.dataset;if(field==='artStyle'){if(!this.data.profileSaved)return;this.job=null;this.setData({'profile.artStyle':value,styleSelected:true,jobReady:false});return;}this.job=null;this.setData({jobReady:false,profileSaved:false,styleSelected:false});this.setData({['profile.'+field]:value});},
+ editProfile(){this.setData({profileCollapsed:false,profileSaved:false,styleSelected:false});},
  agree(e){this.setData({agreed:e.detail.value});},
  leap(e){this.job=null;this.setData({'profile.leap':e.detail.value,profileSaved:false,jobReady:false});},
- wish(e){this.job=null;this.setData({jobReady:false,profileSaved:false});const id=e.currentTarget.dataset.id,wishes=(this.data.profile.wishes||[]).slice(),i=wishes.indexOf(id);if(i<0)wishes.push(id);else wishes.splice(i,1);this.setData({'profile.wishes':wishes});this.decorate();},
+ wish(e){this.job=null;this.setData({jobReady:false,profileSaved:false,styleSelected:false});const id=e.currentTarget.dataset.id,wishes=(this.data.profile.wishes||[]).slice(),i=wishes.indexOf(id);if(i<0)wishes.push(id);else wishes.splice(i,1);this.setData({'profile.wishes':wishes});this.decorate();},
  legacy(){this.setData({authMode:this.data.authMode==='legacy'?'wechat':'legacy',password:'',error:'',message:''});},
  accept(data,message){
   const app=getApp();
@@ -76,34 +77,16 @@ Page({
   if(!await this.confirmPrivacy())return;
   if(this.data.busy)return;
   this.setData({busy:true,error:'',message:''});
-  try{const r=await api.request('/api/account/profile',p);getApp().globalData.profile=r.profile;this.setData({profile:r.profile,profileSaved:true,message:'生辰与心愿已保存，可以生成今日造像。'});}
+  try{const r=await api.request('/api/account/profile',p);getApp().globalData.profile=r.profile;this.setData({profile:r.profile,profileSaved:true,profileCollapsed:true,styleSelected:false,message:'生辰与心愿已保存，请选择画面风格。'});}
   catch(e){api.error(this,e);}
   finally{this.setData({busy:false});}
  },
  async generate(){
   if(this.data.busy)return;
-  const p=this.data.profile;
   if(!this.data.profileSaved){api.error(this,new Error('请先保存生辰与心愿，再生成今日造像。'));return;}
-  const user=getApp().globalData.user;if(!user)return;
-  this.setData({busy:true,error:'',message:'',generationPhase:this.job?'drawing':'analyzing',generatedImage:'',generation:this.job?'正在继续绘制造像…':'正在核对生辰、读懂心愿…'});
-  try{
-   if(!this.job){this.job=await api.request('/api/analyze',p);this.setData({jobReady:true,generationPhase:'drawing',generation:'解读已归档，正在绘制画面…'});}
-   const record=await api.request('/api/jobs/'+this.job.id+'/image',{jobToken:this.job.token});
-   if(!getApp().globalData.user||getApp().globalData.user.id!==user.id)return;
-   this.generatedArtworkId=record.id;this.preparingPair=true;this.prepareFailure=null;this.job=null;void this.pollSync();this.setData({jobReady:false,generationPhase:'complete',generation:'今日造像已完成，已保存到账户画册。',message:'今日造像已完成。到「解读陪伴」看画面、微行动与答案之数。'});
-   void this.loadGeneratedImage(record,user.id);
-   try{
-    const synced=await syncGeneratedPrayer();
-    if(!getApp().globalData.user||getApp().globalData.user.id!==user.id)return;
-    const message=synced.reason==='ready'?'祈福图已完成，正在后台准备画屏内容；准备完成后再去「链接神物」。':synced.reason==='photo'?'今日造像已完成；画屏当前使用作品轮播，未自动替换。可到「自定义」手动切回今日造像。':'今日造像已完成；尚未绑定画屏，绑定后才会编译并下发。';
-    this.setData({message});void this.pollSync();
-   }catch(e){this.prepareFailure=e.message;if(getApp().globalData.user&&getApp().globalData.user.id===user.id)this.setData({prepareFailed:true,message:'今日造像已完成；两日画屏同步暂未完成：'+e.message});}
-   finally{this.preparingPair=false;void this.pollSync();}
-  }catch(e){api.error(this,e);this.setData({generationPhase:'failed',generation:this.job?'画面暂未完成，可点击继续完成今日造像。':'本次生成暂未完成，请重试。',jobReady:!!this.job});}
-  finally{this.setData({busy:false});}
- },
- async loadGeneratedImage(record,userId){
-  try{const image=await api.image(record.image||('/api/account/artworks/'+record.id+'/image'));if(getApp().globalData.user?.id===userId&&this.generatedArtworkId===record.id)this.setData({generatedImage:image});}catch{if(getApp().globalData.user?.id===userId)this.setData({generation:'今日造像已保存，图片暂未载入，可到解读陪伴查看。'});}
+  if(!this.data.styleSelected){api.error(this,new Error('请选择画面风格，再生成今日造像。'));return;}
+  getApp().globalData.generationProfile=JSON.parse(JSON.stringify(this.data.profile));
+  wx.navigateTo({url:'/pages/generation/index'});
  },
  async confirmPrivacy(){
   if(this.consentPending)return false;
@@ -117,7 +100,7 @@ Page({
  companion(){wx.switchTab({url:'/pages/today/index'});},
  async logout(){
   this.setData({busy:true,error:''});
-  try{await getApp().logout();this.job=null;this.setData({user:null,status:null,syncState:null,profileSaved:false,generatedImage:'',generation:'',generationPhase:'',agreed:false,profile:fresh(),nicknameDraft:'',message:'已退出登录。',authMode:'wechat'});this.decorate();}
+  try{await getApp().logout();this.job=null;this.setData({user:null,status:null,syncState:null,profileSaved:false,profileCollapsed:false,styleSelected:false,generatedImage:'',generation:'',generationPhase:'',agreed:false,profile:fresh(),nicknameDraft:'',message:'已退出登录。',authMode:'wechat'});this.decorate();}
   catch(e){api.error(this,e);}
   finally{this.setData({busy:false});}
  },

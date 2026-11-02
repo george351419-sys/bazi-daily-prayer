@@ -107,7 +107,7 @@ function copyState(id,phase,step=0,percent=null){
 }
 function transferStatus(result = {}, artworkId = null) {
  if(result.syncConfigured===undefined)return copyState('S01','checking');
- if(!result.syncConfigured&&!result.plan)return copyState('S02','unbound');
+ if(!result.syncConfigured&&!result.plan&&!result.preparation)return copyState('S02','unbound');
  if(artworkId&&result.plan?.contentMode==='photo')return copyState('S03','photo');
  if(artworkId&&!result.plan?.artworkIds?.includes(artworkId))return copyState('S04','preparing');
  if(result.preparation?.stage==='retrying'||(!result.preparation&&result.build?.status==='retrying'))return copyState('S05','retrying');
@@ -147,6 +147,8 @@ function transferAction(state){
 // Live Wi-Fi confirmation is connectivity evidence, not a content-storage receipt.
 function withConnection(state,result,connection,now=Date.now()){
  state=state.connectionBase||state;
+ if(connection?.paired&&!connection.wifiConnected&&state.phase==='connect')return {...state,connectionBase:state,phase:'wifi',title:'蓝牙已连接 · 请确认画屏 Wi-Fi',detail:'已保存的网络会自动尝试连接；尚未收到联网确认时，可在下方检查网络。',action:'wifi'};
+ if(connection&&connection.paired===false&&state.phase==='connect')return {...state,connectionBase:state,title:'画屏内容已准备好 · 请连接画屏',detail:'当前蓝牙未连接，请在下方唤醒并连接画屏。',action:'connect'};
  if(connection?.paired&&!result?.syncConfigured&&state.phase==='connect')return {...state,connectionBase:state,phase:'binding',title:connection.deviceId?'画屏已连接 · 正在关联当前账户':'画屏已连接 · 正在核验设备身份',detail:connection.deviceId?'账户关联由程序自动完成，完成后会领取已准备的内容。':'设备联网后会自动核验身份并关联账户，无需填写设备编号。',action:null};
  if(!connection?.paired||!Number.isFinite(connection.receivedAt)||now-connection.receivedAt>6000||!result?.device?.id||connection.deviceId!==result.device.id)return {...state,action:transferAction(state)};
  if(state.step<1||state.preparation||['stored','rendered','firmware','publishing'].includes(state.phase))return {...state,action:transferAction(state)};

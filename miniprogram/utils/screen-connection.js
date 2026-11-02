@@ -6,9 +6,11 @@ class ScreenConnection{
   this.listeners=new Set();this.snapshot={bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,bleDevices:[],connectedDeviceId:''};
   this.foreground=true;this.allowed=false;this.attempts=0;this.busy=false;this.live=null;this.current=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
   this.client=new ArkBLE((bleText,paired)=>{
+   paired=!!paired&&!!this.client?.id;
    const lost=this.snapshot.paired&&!paired;
    if(!paired||this.client?.status!==true){this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;}
    this.snapshot={...this.snapshot,bleText,paired,wifiConnected:paired&&this.client?.status===true,receivedAt:Date.now(),connectedDeviceId:paired?this.hardwareId||'':''};
+   if(!paired){this.snapshot.savedSSID=null;}
    if(lost){this.live=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;this.reconnect();}
    this.emit();
   },bleDevices=>{this.snapshot={...this.snapshot,bleDevices};this.emit();},value=>{
@@ -80,7 +82,7 @@ function observeConnection(page){
  if(page.stopConnection)page.stopConnection();
  page.stopConnection=connection.subscribe(snapshot=>{
   if(!page.active)return;
-  const data={...snapshot};if(snapshot.savedSSID&&!page.data.ssid)data.ssid=snapshot.savedSSID;if(page.data.status&&!page.preparingPair&&!page.prepareFailure)data.syncState=connection.stateFor(page.data.status,page.generatedArtworkId);
+  const data={...snapshot};const changed=page.data.paired!==snapshot.paired||page.data.wifiConnected!==snapshot.wifiConnected;if(changed||page.connectionNotice){data.message='';data.error='';page.connectionNotice=false;}if(!snapshot.paired){data.binding=false;data.bindingError='';}if(snapshot.savedSSID&&!page.data.ssid)data.ssid=snapshot.savedSSID;if(page.data.status&&!page.preparingPair&&!page.prepareFailure)data.syncState=connection.stateFor(page.data.status,page.generatedArtworkId);
   page.setData(data);
  });
  return connection;

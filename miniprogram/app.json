@@ -4,7 +4,8 @@
     "pages/network/index",
     "pages/today/index",
     "pages/screen/index",
-    "pages/answers/index"
+    "pages/answers/index",
+    "pages/generation/index"
   ],
   "window": {
     "navigationBarTitleText": "生辰造像馆",

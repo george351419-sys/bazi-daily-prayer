@@ -1,3 +1,5 @@
+import {accountRepository} from '../lib/account-store.mjs';
+import {enqueueRitualPreparation} from '../lib/ritual-preparation.mjs';
 import {beginDevicePairing,pairedDeviceIdentity} from '../lib/ark-cloud.mjs';
 import {miniProgramAppId} from '../lib/miniprogram-access.mjs';
 import {bindWechatIdentity,wechatLogin,wechatLoginReady} from '../lib/wechat-auth.mjs';
@@ -42,7 +44,7 @@ export async function handleRequest(req,res,config){
  let session=verifySession(config,req.headers['x-session-token']);
  try{
   if(route==='bootstrap'&&req.method==='GET'){
-   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:config.PRAYER_ENGINE!=='legacy'||!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,analysisEngine:config.PRAYER_ENGINE==='legacy'?'legacy':'rules',accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)},miniProgram:{enabled:miniProgram,wechatLoginEnabled:miniProgram&&wechatReady,identityPairing:true}});
+   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:config.PRAYER_ENGINE!=='legacy'||!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,analysisEngine:config.PRAYER_ENGINE==='legacy'?'legacy':'rules',accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)},miniProgram:{enabled:miniProgram,wechatLoginEnabled:miniProgram&&wechatReady,identityPairing:true,durablePreparation:true}});
   }
   if(!session)return send(res,403,{error:'页面会话已更新，请刷新重试。'});
   if(req.method==='POST'&&req.headers['x-csrf-token']!==csrfFor(config,session))return send(res,403,{error:'页面会话校验失败，请刷新重试。'});
@@ -74,6 +76,7 @@ export async function handleRequest(req,res,config){
    if(route==='account/ritual/device'&&req.method==='POST'){if(body.beginPairing)return send(res,200,await beginDevicePairing(config,account.id));if(body.pairingNonce){const identity=await pairedDeviceIdentity(config,account.id,body.pairingNonce);if(identity.status!=='identified')return send(res,200,identity);return send(res,200,identity);}const result=await bindRitualDevice(config,account,body.deviceId);return send(res,200,{ok:true,device:{id:result.binding.deviceId,status:result.binding.status},ritual:await ritualStatus(config,account)});}
    if(route==='account/ritual/device/unbind'&&req.method==='POST')return send(res,200,{...await unbindRitualDevice(config,account),ritual:await ritualStatus(config,account)});
    if(route==='account/ritual/prepare'&&req.method==='POST'){
+    if(body.background){const repo=accountRepository(config),task=await repo.get('ritual-preparation/'+account.id);return send(res,200,{status:(await repo.get('ritual/'+account.id))?.contentMode==='photo'?'photo':task?.status||'idle',background:true});}
     const prepared=await prepareRitualPair({...config,ANALYSIS_BUDGET_MS:Math.max(1000,100000-(Date.now()-startedAt))},account,{mode:body.mode});
     return send(res,200,{status:prepared.status,artworkIds:prepared.artworkIds||null,job:prepared.record?accountJob(config,account,prepared.record):null});
    }
@@ -117,15 +120,15 @@ export async function handleRequest(req,res,config){
    const account=accountMode?await requireAccount(config,req):null;
    const job=openJob(config,body.jobToken,account?'account:'+account.id:session);if(job.id!==image[1])throw new Error('生成记录不匹配。');
    if(account){
-    const record=await getArtwork(config,account,job.id);if(record.image){await indexArtworkImage(config,account,record);return send(res,200,accountJob(config,account,record));}
+    const record=await getArtwork(config,account,job.id);if(record.image){await indexArtworkImage(config,account,record);if(body.prepareNext)await enqueueRitualPreparation(config,account,record);return send(res,200,accountJob(config,account,record));}
     if(record.source==='automatic')throw new AccountError(409,'这幅每日画作由后台处理，请在我的画屏中查看进度；归档或发布失败时可在该处重试。');
     if(!record.pendingImageURL||record.pendingImageExpires<Date.now()){
      const match=await findReusableImage(config,account,record);
-     if(match){await reuseArchivedImage(config,account,record,match);return send(res,200,accountJob(config,account,record));}
+     if(match){await reuseArchivedImage(config,account,record,match);if(body.prepareNext)await enqueueRitualPreparation(config,account,record);return send(res,200,accountJob(config,account,record));}
      if(!config.ARK_API_KEY)return send(res,503,{error:'服务端尚未配置豆包 API Key。'});
      const result=await doubao({...config,ARK_TIMEOUT_MS:'85000'},buildImagePrompt(record.mapping),fetch,true);record.pendingImageURL=result.url;record.pendingImageExpires=Date.now()+23*3600000;await saveArtwork(config,account,record);
     }
-    await persistImage(config,account,record,record.pendingImageURL);return send(res,200,accountJob(config,account,record));
+    await persistImage(config,account,record,record.pendingImageURL);if(body.prepareNext)await enqueueRitualPreparation(config,account,record);return send(res,200,accountJob(config,account,record));
    }
    // Return URL directly so the browser can show the image without Vercel's response-size limit.
    if(!config.ARK_API_KEY)return send(res,503,{error:'服务端尚未配置豆包 API Key。'});
