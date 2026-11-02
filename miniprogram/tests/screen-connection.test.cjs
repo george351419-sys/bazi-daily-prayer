@@ -4,7 +4,7 @@ function session(){
  class BLE{
   constructor(state,found,download){this.state=state;this.found=found;this.download=download;this.commands=[];this.epoch=0;}
   async connect(id){this.id=id;this.state('蓝牙已连接',true);}
-  async resumeWifi(){this.commands.push('resume-saved-wifi');this.status=true;this.state('Wi-Fi 已连接',true);}
+  async ensureWifi(){this.commands.push('check-saved-wifi');this.status=true;this.state('Wi-Fi 已连接',true);}
   async syncNow(){this.commands.push('check-sync');}
   async write(channel){this.commands.push(channel);}
   async queryDownload(){this.download({state:1,progress:57});}
@@ -24,7 +24,7 @@ test('tab changes retain one BLE session and both pages receive the same device 
  const mine=page();env.observeConnection(mine);assert.equal(network.ble,mine.ble);assert.equal(c.client.id,'native-id');
  await c.poll();assert.equal(mine.data.syncState.percent,57);assert.equal(mine.data.paired,true);
  network.active=true;env.observeConnection(network);assert.equal(network.data.syncState.percent,57);
- assert.equal(c.client.commands.includes('configure'),false);assert.equal(c.client.commands[0],'resume-saved-wifi');
+ assert.equal(c.client.commands.includes('configure'),false);assert.equal(c.client.commands[0],'check-saved-wifi');
 });
 test('new published content triggers a single check, with no action on a mismatched screen or unfinished build',async()=>{
  const env=session(),c=await connected(env),s=ready();
@@ -54,6 +54,16 @@ test('BLE download query validates protocol replies and rejects malformed data',
  client.id='device';client.write=async channel=>{const malformed=packet(channel,[1,99]);malformed[malformed.length-1]^=1;client.receive(malformed);client.receive(packet(channel,[1,57]));};
  assert.deepEqual(await client.queryDownload(),{state:1,progress:57});assert.deepEqual(updates,[{state:1,progress:57}]);
 });
+test('BLE attach checks saved Wi-Fi without restarting an online radio',async()=>{
+ const {ArkBLE,packet}=require('../utils/ble'),client=new ArkBLE(()=>{},()=>{}),writes=[];client.id='screen';
+ client.write=async channel=>{writes.push(channel);if(channel===0x3a)client.receive(packet(0x3a,[1]));};
+ await client.ensureWifi();assert.deepEqual(writes,[0x3a]);assert.equal(client.status,true);
+});
+test('BLE attach starts saved Wi-Fi only when the screen is offline',async()=>{
+ const {ArkBLE,packet}=require('../utils/ble'),client=new ArkBLE(()=>{},()=>{}),writes=[];let online=false;client.id='screen';
+ client.write=async channel=>{writes.push(channel);if(channel===0x38)online=true;if(channel===0x3a)client.receive(packet(0x3a,[+online]));};
+ await client.ensureWifi();assert.deepEqual(writes,[0x3a,0x38,0x3a]);assert.equal(client.status,true);
+});
 test('page hide handlers unsubscribe without closing the shared Bluetooth adapter',()=>{
  for(const name of ['network','screen','mine']){
   let definition,disconnected=false,unsubscribed=false;
@@ -67,7 +77,7 @@ test('an unexpected connection loss reconnects only the same screen using saved 
  const env=session(),c=await connected(env);c.client.id=null;c.client.state('断开',false);
  const retry=[...env.timers.values()].find(t=>t.ms===3000);assert.ok(retry);await retry.fn();
  assert.equal(c.client.id,'native-id');assert.equal(c.snapshot.connectedDeviceId,'aabbccddeeff');
- assert.equal(c.client.commands.filter(v=>v==='resume-saved-wifi').length,2);assert.equal(c.client.commands.includes('configure'),false);
+ assert.equal(c.client.commands.filter(v=>v==='check-saved-wifi').length,2);assert.equal(c.client.commands.includes('configure'),false);
 });
 test('automatic sync waits for Wi-Fi confirmation instead of consuming the request while offline',async()=>{
  const env=session(),c=await connected(env);c.current=ready();c.client.status=false;

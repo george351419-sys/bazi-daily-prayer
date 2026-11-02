@@ -29,7 +29,7 @@ class ScreenConnection{
   await this.connectTarget();this.allowed=true;this.start();
  }
  async connectTarget(){
-  return this.serial(async()=>{this.recovering=true;try{await this.client.connect(this.target);if(!this.client.id)return;if(this.client.readSavedSSID){const savedSSID=await this.client.readSavedSSID().catch(()=>null);this.snapshot={...this.snapshot,savedSSID};this.emit();}await this.client.resumeWifi();}finally{this.recovering=false;}});
+  return this.serial(async()=>{this.recovering=true;try{await this.client.connect(this.target);if(!this.client.id)return;if(this.client.readSavedSSID){const savedSSID=await this.client.readSavedSSID().catch(()=>null);this.snapshot={...this.snapshot,savedSSID};this.emit();}await this.client.ensureWifi();}finally{this.recovering=false;}});
  }
  reconnect(){
   if(this.recovering||!this.allowed||!this.foreground||!this.target||this.retryTimer||this.attempts>=3)return;

@@ -94,6 +94,11 @@ class ArkBLE{
   });
  }
  async resumeWifi(){await this.write(0x38,[],this.epoch);await this.write(0x3a,[],this.epoch);}
+ async ensureWifi(){
+  // ritual.6 reconnects the Wi-Fi radio on 0x38, even when it is online.
+  this.status=null;await this.write(0x3a,[],this.epoch);
+  if(this.status!==true)await this.resumeWifi();
+ }
  async syncNow(){if(!this.id)throw new Error('请先连接画屏蓝牙。');await this.resumeWifi();if(!this.id)throw new Error('蓝牙已断开');this.state('已请求检查云端更新；等待内容保存回执后，可在画屏选择“画面”并按确认键进入。需要 ritual.6 固件。',true);}
  async disconnect(){if(this.identityRead){this.identityRead.reject(new Error('蓝牙已断开'));this.identityRead=null;}this.status=null;this.epoch++;if(this.downloadRead){this.downloadRead.reject(new Error('蓝牙已断开'));this.downloadRead=null;}await this.stopScan();const id=this.id||this.attemptId;this.id=null;this.attemptId=null;if(id)await call('closeBLEConnection',{deviceId:id}).catch(()=>{});if(wx.offBLECharacteristicValueChange)wx.offBLECharacteristicValueChange(this.onValue);if(wx.offBLEConnectionStateChange)wx.offBLEConnectionStateChange(this.onConnection);this.listening=false;await call('closeBluetoothAdapter',{}).catch(()=>{});this.state('蓝牙未连接。',false);}
 }

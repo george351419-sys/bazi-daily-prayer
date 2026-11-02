@@ -2,7 +2,7 @@ const {transferStatus,receiptTime}=require('../../utils/transfer-status');
 const api=require('../../utils/api');const {preparePhoto,authorize}=require('../../utils/photos');const {observeConnection,stopObserving}=require('../../utils/screen-connection');
 const {syncPrayerPair,syncGeneratedPrayer}=require('../../utils/ritual-sync');
 Page({
- data:{releaseVersion:'1.1.11',editingPassword:false,binding:false,bindingError:'',setupExpanded:false,user:null,error:'',message:'',busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false},
+ data:{releaseVersion:'1.1.12',editingPassword:false,binding:false,bindingError:'',setupExpanded:false,user:null,error:'',message:'',busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false},
  diagnostics(){const {bleDiagnostics}=require('../../utils/ble');wx.setClipboardData({data:bleDiagnostics(),success:()=>wx.showToast({title:'连接诊断已复制',icon:'none'})});},
  onLoad(){},
  changePassword(){this.setData({editingPassword:true,wifiPassword:''});},
