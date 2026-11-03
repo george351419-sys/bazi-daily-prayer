@@ -5,11 +5,11 @@ import {generateRuleMapping} from '../lib/prayer-engine.mjs';
 const ids=['natal.year','natal.month','natal.day','natal.hour','transit.luck','transit.year','transit.month','transit.day'];
 const pillars=['庚午','戊寅','己酉','壬申','辛巳','丙午','戊戌','辛巳'];
 const calendar={dayMaster:'己',natal:pillars.slice(0,4),luck:pillars[4],year:pillars[5],month:pillars[6],day:pillars[7],stems:pillars.map((p,i)=>({id:ids[i],stem:p[0]})),rawStemClashes:[{a:{id:'natal.hour',stem:'壬'},b:{id:'transit.year',stem:'丙'}}]};
-test('地支按来源列全，再列合，再列剩余；解除刑不隐去仍剩余的害',()=>{
+test('地支按来源列全，再列合，再列剩余；冲刑害按参与有效合的实例解除',()=>{
  const snapshot=relationSnapshot(calendar),text=branchExplanation(snapshot,'仍有未解除的害，已比较安全生肖候选。');
  for(const branch of snapshot.branches.instances)assert.ok(text.includes(branch.branch));
  assert.ok(text.indexOf('地支：')<text.indexOf('有效合：'));assert.ok(text.indexOf('有效合：')<text.indexOf('合后检查：'));assert.ok(text.indexOf('合后检查：')<text.indexOf('生肖处理：'));
- assert.match(text,/寅午戌三合/);assert.match(text,/申酉戌三会/);assert.match(text,/午午自刑/);assert.match(text,/剩余冲刑害：.*寅巳六害/);
+ assert.match(text,/寅午戌三合/);assert.match(text,/申酉戌三会/);assert.match(text,/午午自刑/);assert.match(text,/寅巳六害/);assert.match(text,/剩余冲刑害：无/);assert.match(text,/原局地支：午、寅、酉、申/);assert.ok(text.length<300);
 });
 test('天干先列八个来源和丙辛五合，再列丙壬冲已抑制，任一端参与合即可',()=>{
  const snapshot=relationSnapshot(calendar),text=stemExplanation(snapshot,'不添加映射物。');
@@ -27,5 +27,5 @@ test('命例前提只匹配本次四柱，不推广成所有寅月己土的自�
 test('已指定命例无需模型，新生成方案和网页均保存有序解释及来源',async()=>{
  const mapping=await generateRuleMapping({}, {today:'2026-11-03',wishes:['W01'],artStyle:'cute'},calendar,[],()=>{throw Error('不应调用模型');});
  assert.deepEqual(mapping.engine.foundation.value.selection_policy.intersections.map(x=>x.stems),[['丙'],['丙'],['丙']]);
- assert.equal(mapping.engine.foundation.origin,'confirmed_profile');assert.ok(mapping.reading.sections[3].body.startsWith('地支：'));assert.ok(mapping.reading.sections[4].body.startsWith('天干：'));assert.match(mapping.reading.sections[0].body,/本次对话指定的命例前提/);
+ assert.equal(mapping.engine.foundation.origin,'confirmed_profile');assert.ok(mapping.reading.sections[3].body.startsWith('原局地支：'));assert.ok(mapping.reading.sections[4].body.startsWith('天干：'));assert.match(mapping.reading.sections[0].body,/本次对话指定的命例前提/);
 });

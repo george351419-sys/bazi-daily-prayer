@@ -105,7 +105,7 @@ test('先剔除必定新增刑害的候选，但不以原始冲提前淘汰可�
  const models=zodiacModels([{id:'natal.month',branch:'寅'},{id:'natal.day',branch:'午'}]);const viable=viableZodiacModels(models);
  assert.ok(viable.length<models.length);assert.equal(viable[0].added.length,0);
  assert.ok(viable.some(m=>m.added.join('')==='戌'));
- assert.ok(!viable.some(m=>m.added.includes('巳'))); // 寅巳害不可由会合自动删除
+ assert.ok(!viable.some(m=>m.added.join('')==='巳'));assert.ok(viable.some(m=>m.added.join('')==='巳申')); // 申参与巳申合后解除涉及巳的害
 });
 test('失败记录保存阶段与具体条件，失败结果不冒充有效档案',async()=>{
  const f=fixture();await assert.rejects(analyzeMapping(f.config,input,calendar,[],async()=>({ok:true,status:200,json:async()=>({choices:[{message:{content:'{}'}}]})})),e=>e.ruleSection==='foundation');
@@ -123,7 +123,7 @@ test('同日完整方案从仓库复用，修改返回对象不污染缓存',asy
 test('原局档案保持独立版本，每日规则更新不重判取用',async()=>{
  const f=fixture();await analyzeMapping(f.config,input,calendar,[],f.fetcher);
  const entry=[...f.records.entries()].find(([key])=>key.includes('/foundation/'));
- assert.ok(entry[0].includes('/2026-11-03-foundation-fgt-v4/'));assert.equal(entry[1].version,'2026-11-03-foundation-fgt-v4');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-03-rules-v8');
+ assert.ok(entry[0].includes('/2026-11-04-foundation-fgt-v5/'));assert.equal(entry[1].version,'2026-11-04-foundation-fgt-v5');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-04-rules-v9');
 });
 test('已确认原局在无模型密钥时跨日生成全部条件与画面',async()=>{
  const f=fixture();let calls=0;
@@ -172,15 +172,15 @@ test('截图八支同时考虑寅午戌与申酉戌，未候选经过比较而�
  const models=zodiacModels([...'午寅酉申巳午戌巳'].map((branch,i)=>({id:ids[i],branch}))),f={primary_element:'土',secondary_element:'火',tiaohou_required_stems:[]};
  const r=selectZodiac(models,assessDailyConditions({stems:[]},f,models),f);
  assert.deepEqual(r.added,[]);
- for(const a of r.baseAlternatives){assert.ok(a.effective_bindings.some(x=>x.type==='三合'));assert.ok(a.effective_bindings.some(x=>x.type==='三会'));assert.ok(!a.residual_relations.some(x=>['相刑','自刑'].includes(x.type)));assert.ok(a.residual_relations.some(x=>x.type==='六害'));}
+ for(const a of r.baseAlternatives){assert.ok(a.effective_bindings.some(x=>x.type==='三合'));assert.ok(a.effective_bindings.some(x=>x.type==='三会'));assert.ok(!a.residual_relations.some(x=>['相刑','自刑'].includes(x.type)));assert.ok(a.suppressed_harms.some(x=>x.type==='六害'));assert.equal(a.residual_relations.length,0);}
  const wei=r.evaluated.find(x=>x.added.join('')==='未');assert.ok(wei);assert.equal(wei.improvement,0);assert.equal(wei.positive,false);assert.equal(wei.selected,false);
 });
-test('v1原局候选直接重排迁移至v4，不重新调用模型判断旺衰',async()=>{
+test('v1原局候选直接重排迁移至v5，不重新调用模型判断旺衰',async()=>{
  const f=fixture();await generateRuleMapping(f.config,input,calendar,[],f.fetcher);
  const [key,record]=[...f.records].find(([k])=>k.includes('/foundation/'));
- f.records.clear();f.records.set(key.replace('foundation-fgt-v4','foundation-fgt-v1'),{...record,version:'2026-11-03-foundation-fgt-v1'});
+ f.records.clear();f.records.set(key.replace('2026-11-04-foundation-fgt-v5','2026-11-03-foundation-fgt-v1'),{...record,version:'2026-11-03-foundation-fgt-v1'});
  const m=await generateRuleMapping(f.config,input,calendar,[],()=>{throw Error('不应重判原局');});
- assert.equal(m.engine.foundation.version,'2026-11-03-foundation-fgt-v4');assert.equal(m.engine.foundation.migratedFrom,'2026-11-03-foundation-fgt-v1');assert.equal(f.calls,2);
+ assert.equal(m.engine.foundation.version,'2026-11-04-foundation-fgt-v5');assert.equal(m.engine.foundation.migratedFrom,'2026-11-03-foundation-fgt-v1');assert.equal(f.calls,2);
 });
 
 test('模型伪造已完成校验不能跳过复判，第二次仍坚持时保留其结论和冲突记录',async()=>{
