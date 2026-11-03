@@ -53,7 +53,7 @@ export async function handleRequest(req,res,config){
  let session=verifySession(config,req.headers['x-session-token']);
  try{
   if(route==='bootstrap'&&req.method==='GET'){
-   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:config.PRAYER_ENGINE!=='legacy'||!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,analysisEngine:config.PRAYER_ENGINE==='legacy'?'legacy':'rules',accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)},miniProgram:{enabled:miniProgram,wechatLoginEnabled:miniProgram&&wechatReady,identityPairing:true,durablePreparation:true}});
+   session=session||createSession(config);return send(res,200,{csrf:csrfFor(config,session),sessionToken:session,date:todayShanghai(),wishGroups:WISH_GROUPS,ready:{text:config.PRAYER_ENGINE!=='legacy'||!!config.DEEPSEEK_API_KEY,image:!!config.ARK_API_KEY},version:RULE_VERSION,analysisEngine:config.PRAYER_ENGINE==='legacy'?'legacy':'rules',accounts:{enabled:accountsEnabled(config),emailEnabled:false},devices:{enabled:accountsEnabled(config)&&devicesEnabled(config)},miniProgram:{wishArtEnabled:true,enabled:miniProgram,wechatLoginEnabled:miniProgram&&wechatReady,identityPairing:true,durablePreparation:true}});
   }
   if(!session)return send(res,403,{error:'页面会话已更新，请刷新重试。'});
   if(req.method==='POST'&&req.headers['x-csrf-token']!==csrfFor(config,session))return send(res,403,{error:'页面会话校验失败，请刷新重试。'});

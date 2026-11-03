@@ -4,7 +4,6 @@
     "pages/network/index",
     "pages/today/index",
     "pages/screen/index",
-    "pages/answers/index",
     "pages/generation/index"
   ],
   "window": {
@@ -26,7 +25,7 @@
       },
       {
         "pagePath": "pages/today/index",
-        "text": "解读陪伴"
+        "text": "画作陪伴"
       },
       {
         "pagePath": "pages/screen/index",

@@ -9,12 +9,12 @@ async function start(profile){
  const key=JSON.stringify(profile);
  if(task?.userId===userId&&task.key===key&&(task.running||task.phase==='complete'))return;
  const previous=task?.userId===userId&&task.key===key?task:null;
- task={userId,key,profile,running:true,phase:'analyzing',text:'正在核对生辰、读懂心愿…',image:'',error:'',job:previous?.job||null};publish({});
+ task={userId,key,profile,running:true,phase:'analyzing',text:'正在整理祈愿与画风…',image:'',error:'',job:previous?.job||null};publish({});
  const own=()=>getApp().globalData.user?.id===userId&&task?.key===key&&task?.userId===userId;
  try{
   const saved=await api.request('/api/account/profile',profile);if(!own())return;getApp().globalData.profile=saved.profile;
   if(!task.job){const job=await api.request('/api/analyze',profile);if(!own())return;publish({job});}
-  publish({phase:'drawing',text:'解读已归档，正在绘制今日造像…'});
+  publish({phase:'drawing',text:'画面方案已保存，正在绘制今日造像…'});
   const record=await api.request('/api/jobs/'+task.job.id+'/image',{jobToken:task.job.token,prepareNext:true});if(!own())return;
   publish({phase:'complete',text:'今日造像已保存，正在载入画面。',record,job:null,preparing:true});
   // Start both immediately. Loading tomorrow must never delay showing today's picture.

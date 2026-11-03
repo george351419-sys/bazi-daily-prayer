@@ -34,7 +34,7 @@ test('first-time users prepare screen content before any device binding',async()
 });
 test('tab order starts at wishes and guides connection second',()=>{
  const app=JSON.parse(fs.readFileSync(path.join(__dirname,'../app.json'),'utf8'));
- assert.deepEqual(app.tabBar.list.map(item=>item.text),['许愿池','链接神物','解读陪伴','自定义']);assert.equal(app.pages[0],'pages/mine/index');
+ assert.deepEqual(app.tabBar.list.map(item=>item.text),['许愿池','链接神物','画作陪伴','自定义']);assert.equal(app.pages[0],'pages/mine/index');
 });
 
 test('saved Wi-Fi uses peripheral credentials only for an exact SSID match',async()=>{

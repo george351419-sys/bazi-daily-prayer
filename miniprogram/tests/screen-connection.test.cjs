@@ -69,7 +69,7 @@ test('page hide handlers unsubscribe without closing the shared Bluetooth adapte
   let definition,disconnected=false,unsubscribed=false;
   const context={Page:value=>definition=value,require:name=>name.includes('screen-connection')?{observeConnection(){},stopObserving(){unsubscribed=true;}}:name.includes('api')?{}:name.includes('ritual-sync')?{}:name.includes('photos')?{}:name.includes('transfer-status')?{}:{},Date,clearTimeout(){}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../pages',name,'index.js'),'utf8'),context);
-  const page={active:true,run:0,setData(){},ble:{disconnect(){disconnected=true;}}};definition.onHide.call(page);
+  const page={data:{profile:{}},active:true,run:0,setData(){},ble:{disconnect(){disconnected=true;}}};definition.onHide.call(page);
   assert.equal(disconnected,false,name);assert.equal(unsubscribed,true,name);assert.equal(page.active,false,name);
  }
 });

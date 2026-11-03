@@ -1,18 +1,19 @@
 const {observeConnection,stopObserving}=require('../../utils/screen-connection');
 const api=require('../../utils/api');
 const {syncGeneratedPrayer}=require('../../utils/ritual-sync');
+const WISH_GROUPS=[{"name":"生活丰足","items":[{"id":"W01","label":"生活富足"},{"id":"W02","label":"财源广进"},{"id":"W03","label":"生意兴旺"},{"id":"W04","label":"债务结清"},{"id":"W05","label":"投资顺利"},{"id":"W06","label":"衣食无忧"}]},{"name":"事业向前","items":[{"id":"W07","label":"上岸考编"},{"id":"W08","label":"面试顺利"},{"id":"W09","label":"升职加薪"},{"id":"W10","label":"创业顺利"},{"id":"W11","label":"同事相处融洽"},{"id":"W12","label":"步步向前"}]},{"name":"学业精进","items":[{"id":"W13","label":"金榜题名"},{"id":"W14","label":"考试顺利"},{"id":"W15","label":"考研考证顺利"},{"id":"W16","label":"学业进步"},{"id":"W17","label":"论文顺利"}]},{"name":"健康平安","items":[{"id":"W18","label":"身体康健"},{"id":"W19","label":"早日康复"},{"id":"W20","label":"家人安康"},{"id":"W21","label":"老人长寿"},{"id":"W22","label":"生活平安"},{"id":"W23","label":"出入平安"}]},{"name":"情感家庭","items":[{"id":"W24","label":"遇见良缘"},{"id":"W25","label":"脱单"},{"id":"W26","label":"婚姻和睦"},{"id":"W27","label":"珍惜真诚关系"},{"id":"W28","label":"迎接新生命"},{"id":"W29","label":"家庭和顺"}]},{"name":"人际相伴","items":[{"id":"W30","label":"遇见同行伙伴"},{"id":"W31","label":"减少口舌矛盾"},{"id":"W32","label":"修复亲友或亲子关系"}]},{"name":"心境迎新","items":[{"id":"W33","label":"迎接新生活"},{"id":"W34","label":"重拾好心情"},{"id":"W35","label":"内心安宁"},{"id":"W36","label":"放下执念"}]}];
 const fresh=()=>({gender:'female',birthDate:'',birthTime:'',calendar:'solar',leap:false,city:'',wishes:[],artStyle:'cute'});
 Page({
- data:{artStyles:[{id:'cute',label:'可爱风',description:'Q版神仙，圆润喜庆'},{id:'spirit',label:'灵兽风',description:'问问兽演绎，保留神像配饰'},{id:'folk',label:'民俗风',description:'传统神像，庄重亲切'}],user:null,error:'',message:'',busy:false,authMode:'wechat',username:'',password:'',nicknameDraft:'',agreed:false,profile:fresh(),groups:[],today:new Date(Date.now()+8*3600000).toISOString().slice(0,10),profileCollapsed:false,styleSelected:false,privacyOpen:false,generation:'',generationPhase:'',generatedImage:'',profileSaved:false,jobReady:false,wechatEnabled:false},
+ data:{artStyles:[{id:'cute',label:'可爱风',description:'Q版神仙，圆润喜庆'},{id:'spirit',label:'灵兽风',description:'问问兽演绎，保留神像配饰'},{id:'folk',label:'民俗风',description:'传统神像，庄重亲切'}],birthdayOpen:false,loginOpen:false,user:null,error:'',message:'',busy:false,authMode:'wechat',username:'',password:'',nicknameDraft:'',agreed:false,profile:fresh(),groups:WISH_GROUPS,today:new Date(Date.now()+8*3600000).toISOString().slice(0,10),profileCollapsed:false,styleSelected:false,privacyOpen:false,generation:'',generationPhase:'',generatedImage:'',profileSaved:false,jobReady:false,wechatEnabled:false},
  previewArtStyle(e){const id=e.currentTarget.dataset.id;if(!['folk','cute','spirit'].includes(id))return;wx.previewImage({current:'/assets/prayer-styles/'+id+'.jpg',urls:['/assets/prayer-styles/'+id+'.jpg']});},
  async onShow(){
-  this.active=true;observeConnection(this);
+  this.active=true;observeConnection(this);this.groups=WISH_GROUPS;this.decorate();
   api.tab(this,0);await getApp().ready;
   const app=getApp();
-  this.setData({user:app.globalData.user,profile:app.globalData.profile||fresh(),profileSaved:!!app.globalData.profile?.birthDate,profileCollapsed:!!app.globalData.profile?.birthDate,nicknameDraft:(app.globalData.user&&app.globalData.user.nickname)||''});
-  try{const b=await api.init();this.groups=b.wishGroups||[];this.setData({wechatEnabled:!!(b.miniProgram&&b.miniProgram.wechatLoginEnabled)});this.decorate();if(this.data.user)void this.pollSync();}catch(e){api.error(this,e);}
+  this.setData({user:app.globalData.user,profile:this.draft||this.data.profile,profileCollapsed:false,nicknameDraft:(app.globalData.user&&app.globalData.user.nickname)||''});
+  try{const b=await api.init();this.setData({wechatEnabled:!!(b.miniProgram&&b.miniProgram.wechatLoginEnabled)});this.decorate();if(this.data.user)void this.pollSync();}catch(e){api.error(this,e);}
  },
- onHide(){this.active=false;this.syncTurn=(this.syncTurn||0)+1;clearTimeout(this.syncTimer);stopObserving(this);this.setData({password:''});},
+ onHide(){this.draft=JSON.parse(JSON.stringify(this.data.profile));this.active=false;this.syncTurn=(this.syncTurn||0)+1;clearTimeout(this.syncTimer);stopObserving(this);this.setData({password:''});},
  onUnload(){this.onHide();},
  async pollSync(){
   clearTimeout(this.syncTimer);if(!this.active||!getApp().globalData.user)return;
@@ -23,17 +24,17 @@ Page({
  },
  decorate(){const selected=this.data.profile.wishes||[];this.setData({groups:(this.groups||[]).map(g=>({name:g.name,items:g.items.map(w=>Object.assign({},w,{selected:selected.indexOf(w.id)>=0}))}))});},
  input(e){this.setData({[e.currentTarget.dataset.field]:e.detail.value});},
- field(e){this.job=null;this.setData({jobReady:false,profileSaved:false,styleSelected:false});this.setData({['profile.'+e.currentTarget.dataset.field]:e.detail.value});},
- choose(e){const {field,value}=e.currentTarget.dataset;if(field==='artStyle'){if(!this.data.profileSaved)return;this.job=null;this.setData({'profile.artStyle':value,styleSelected:true,jobReady:false});return;}this.job=null;this.setData({jobReady:false,profileSaved:false,styleSelected:false});this.setData({['profile.'+field]:value});},
- editProfile(){this.setData({profileCollapsed:false,profileSaved:false,styleSelected:false});},
+ field(e){this.job=null;this.setData({jobReady:false,profileSaved:false});this.setData({['profile.'+e.currentTarget.dataset.field]:e.detail.value});},
+ choose(e){const {field,value}=e.currentTarget.dataset;if(field==='artStyle'){this.job=null;this.setData({'profile.artStyle':value,styleSelected:true,jobReady:false});return;}this.job=null;this.setData({jobReady:false,profileSaved:false});this.setData({['profile.'+field]:value});},
+ editProfile(){this.setData({profileCollapsed:false,profileSaved:false});},
  agree(e){this.setData({agreed:e.detail.value});},
  leap(e){this.job=null;this.setData({'profile.leap':e.detail.value,profileSaved:false,jobReady:false});},
- wish(e){this.job=null;this.setData({jobReady:false,profileSaved:false,styleSelected:false});const id=e.currentTarget.dataset.id,wishes=(this.data.profile.wishes||[]).slice(),i=wishes.indexOf(id);if(i<0)wishes.push(id);else wishes.splice(i,1);this.setData({'profile.wishes':wishes});this.decorate();},
+ wish(e){this.job=null;this.setData({jobReady:false,profileSaved:false});const id=e.currentTarget.dataset.id,wishes=(this.data.profile.wishes||[]).slice(),i=wishes.indexOf(id);if(i<0)wishes.push(id);else wishes.splice(i,1);this.setData({'profile.wishes':wishes});this.decorate();},
  legacy(){this.setData({authMode:this.data.authMode==='legacy'?'wechat':'legacy',password:'',error:'',message:''});},
  accept(data,message){
   const app=getApp();
-  app.globalData.user=data.user;app.globalData.profile=data.profile||fresh();
-  this.job=null;this.setData({user:data.user,profile:data.profile||fresh(),nicknameDraft:data.user.nickname||'',message,generation:'',jobReady:false});
+  app.globalData.user=data.user;app.globalData.profile=data.profile||null;
+  this.job=null;this.setData({user:data.user,loginOpen:false,nicknameDraft:data.user.nickname||'',message,generation:'',jobReady:false});
   this.decorate();void this.pollSync();
  },
  async wechatAuth(){
@@ -43,6 +44,7 @@ Page({
   try{const data=await api.wechatLogin();this.accept(data,data.user.authProvider==='wechat'?'已通过微信建立账户。':'已通过绑定的微信登录。');}
   catch(e){api.error(this,e);}
   finally{this.setData({busy:false});}
+  if(this.pendingGeneration&&this.data.user)await this.generate();
  },
  async auth(){
   if(this.data.busy)return;
@@ -51,6 +53,7 @@ Page({
   try{const data=await api.request('/api/account/login',{username:this.data.username,password:this.data.password});this.accept(data,'已登录已有账户。');}
   catch(e){api.error(this,e);}
   finally{this.setData({password:'',busy:false});}
+  if(this.pendingGeneration&&this.data.user)await this.generate();
  },
  async saveNickname(){
   if(this.data.busy)return;
@@ -70,28 +73,29 @@ Page({
   }catch(e){api.error(this,e);}
   finally{this.setData({busy:false});}
  },
- async save(){
-  if(this.data.busy)return;
-  const p=this.data.profile;
-  if(!p.birthDate||!p.birthTime||!p.wishes?.length){const message='请填写出生日期、时间，并选择至少一个愿望。';api.error(this,new Error(message));wx.showToast({title:message,icon:'none'});return;}
-  if(!await this.confirmPrivacy())return;
-  if(this.data.busy)return;
-  this.setData({busy:true,error:'',message:''});
-  try{const r=await api.request('/api/account/profile',p);getApp().globalData.profile=r.profile;this.setData({profile:r.profile,profileSaved:true,profileCollapsed:true,styleSelected:false,message:'生辰与心愿已保存，请选择画面风格。'});}
-  catch(e){api.error(this,e);}
-  finally{this.setData({busy:false});}
- },
+ toggleBirthday(){this.setData({birthdayOpen:!this.data.birthdayOpen});},
+ cancelLogin(){this.pendingGeneration=false;this.setData({loginOpen:false,password:'',message:'已保留祈愿和画风，可继续浏览。'});},
  async generate(){
   if(this.data.busy)return;
-  if(!this.data.profileSaved){api.error(this,new Error('请先保存生辰与心愿，再生成今日造像。'));return;}
-  if(!this.data.styleSelected){api.error(this,new Error('请选择画面风格，再生成今日造像。'));return;}
-  getApp().globalData.generationProfile=JSON.parse(JSON.stringify(this.data.profile));
+  const profile=JSON.parse(JSON.stringify(this.data.profile));
+  if(!profile.wishes.length){api.error(this,new Error('请先选择至少一个祈愿。'));return;}
+  if(!this.data.styleSelected){api.error(this,new Error('请先选择画面风格。'));return;}
+  if(profile.birthDate&&!profile.birthTime){this.setData({birthdayOpen:true});api.error(this,new Error('使用生日个性化时，请补充时刻；也可清除生日，直接按祈愿生成。'));return;}
+  if(!profile.birthDate){profile.contentMode='wish-art';profile.birthTime='';profile.city='';}
+  else delete profile.contentMode;
+  this.draft=JSON.parse(JSON.stringify(this.data.profile));
+  if(!this.data.user){this.pendingGeneration=true;this.setData({loginOpen:true,error:''},()=>{if(wx.pageScrollTo)wx.pageScrollTo({selector:'#generation-login',duration:200});});return;}
+  if(!await this.confirmPrivacy())return;
+  this.pendingGeneration=false;
+  getApp().globalData.generationProfile=profile;
   wx.navigateTo({url:'/pages/generation/index'});
  },
+ clearBirthday(){this.setData({'profile.birthDate':'','profile.birthTime':'','profile.city':''});},
  async confirmPrivacy(){
+  if(this.data.agreed)return true;
   if(this.consentPending)return false;
   this.consentPending=true;
-  try{const result=await new Promise(resolve=>wx.showModal({title:'账户与隐私说明',content:'生辰、城市与心愿用于保存个人资料、生成造像与解读；画作与照片保存在你的私有账户。登录会话保存在本机，退出后清除。Wi-Fi 密码仅通过蓝牙发送给所选设备，不上传后台。是否同意并继续？',confirmText:'同意继续',cancelText:'暂不同意',success:resolve,fail:()=>{const message='隐私确认暂未打开，请再次点击保存重试。';api.error(this,new Error(message));wx.showToast({title:message,icon:'none'});resolve({confirm:false});}}));if(result.confirm)this.setData({agreed:true});return !!result.confirm;}finally{this.consentPending=false;}
+  try{const result=await new Promise(resolve=>wx.showModal({title:'账户与隐私说明',content:'所选祈愿、画风及自愿填写的生日纪念资料用于生成个性化祈福画；画作与照片保存在你的私有账户。登录会话保存在本机，退出后清除。Wi-Fi 密码仅通过蓝牙发送给所选设备，不上传后台。是否同意并继续？',confirmText:'同意继续',cancelText:'暂不同意',success:resolve,fail:()=>{const message='隐私确认暂未打开，请再次点击保存重试。';api.error(this,new Error(message));wx.showToast({title:message,icon:'none'});resolve({confirm:false});}}));if(result.confirm)this.setData({agreed:true});return !!result.confirm;}finally{this.consentPending=false;}
  },
  async retryPreparation(){if(this.data.busy)return;this.setData({busy:true});this.prepareFailure=null;this.preparingPair=true;try{await syncGeneratedPrayer();}catch(e){this.prepareFailure=e.message;}finally{this.preparingPair=false;this.setData({busy:false});void this.pollSync();}},
  async syncNow(){try{await this.connection.syncNow();await this.pollSync();}catch(e){api.error(this,e);}},
