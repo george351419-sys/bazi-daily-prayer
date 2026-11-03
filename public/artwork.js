@@ -11,7 +11,7 @@ async function load(){
   const a=data.artwork;$('title').textContent=a.title;$('date').textContent=a.date;$('theme').textContent='这幅画的祈愿：'+a.theme;$('note').textContent=a.note;
   $('birth-context').textContent=a.birthContext||(a.mode==='wish-art'?'本幅作品未使用生辰。':'此作品没有保存四柱摘要。');
   $('overview').textContent=[a.intro,a.overview].filter(Boolean).join('\n\n');
-  $('selection-summary').textContent='主色取向：'+(a.primaryElement||'未设置')+'；辅色取向：'+(a.secondaryElement||'未设置独立次喜用')+'。\n主尊：'+(a.deity||'未记录')+'。\n生肖：'+(a.zodiac.length?a.zodiac.join('、'):'未额外添加')+'。\n天干映射物：'+(a.stemSymbols.length?a.stemSymbols.map(s=>s.stem+' · '+s.motif).join('；'):'未额外添加')+'。';
+  $('selection-summary').textContent='主色取向：'+(a.primaryElement||'未设置')+'；辅色取向：'+(a.secondaryElement||'未设置独立次喜用')+'；点缀色取向：'+(a.tertiaryElement||'未设置独立第三喜用')+'。\n主尊：'+(a.deity||'未记录')+'。\n生肖：'+(a.zodiac.length?a.zodiac.join('、'):'未额外添加')+'。\n天干映射物：'+(a.stemSymbols.length?a.stemSymbols.map(s=>s.stem+' · '+s.motif).join('；'):'未额外添加')+'。';
   $('consistency-warning').hidden=!a.consistencyIssues?.length;$('consistency-text').textContent=(a.consistencyIssues||[]).join('\n')+'\n下方保留的是这幅旧画的归档方案，不能把旧图改写成新配色。请使用修正规则重新生成画作。';
   $('basis').replaceChildren();$('colors').replaceChildren();
   for(const item of a.sections){const section=document.createElement('section');paragraph(section,item.title,item.body);$('basis').append(section);}

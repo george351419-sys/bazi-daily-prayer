@@ -7,7 +7,7 @@ test('three empty intersections fall back F then G then T; same-element duplicat
  assert.equal(r.primary_element,'火');assert.equal(r.secondary_element,'金');assert.equal(r.selection_policy.fallback_used,true);assert.match(r.reason,/回退扶抑→格局→调候/);
  const g=applyFoundationPolicy({...f,selection_basis:{...f.selection_basis,fuyi_stems:[],pattern_stems:['庚']},tiaohou_required_stems:['壬']});assert.equal(g.primary_element,'金');assert.equal(g.secondary_element,'水');
 });
-test('one-element intersection is supplemented from F without claiming all intersections were empty',()=>{const r=applyFoundationPolicy(f);assert.equal(r.selection_policy.fallback_used,false);assert.equal(r.secondary_element,'土');assert.equal(r.selection_policy.supplement_used,true);assert.deepEqual(r.selection_policy.supplements,[{stem:'戊',element:'土',method:'扶抑'}]);});
+test('one-element intersection is supplemented from F without claiming all intersections were empty',()=>{const r=applyFoundationPolicy(f);assert.equal(r.selection_policy.fallback_used,false);assert.equal(r.secondary_element,'土');assert.equal(r.selection_policy.supplement_used,true);assert.deepEqual(r.selection_policy.supplements,[{stem:'戊',element:'土',method:'扶抑'},{stem:'癸',element:'水',method:'调候'}]);});
 test('all 120 stem-month cells return typed, source-attributed baseline candidates',()=>{
  for(const dayMaster of '甲乙丙丁戊己庚辛壬癸')for(const month of '寅卯辰巳午未申酉戌亥子丑'){
   const r=tiaohouRule({dayMaster,natal:['甲子','甲'+month,dayMaster+'子','甲子']});assert.ok(r.stems.length);assert.ok(r.stems.every(x=>'甲乙丙丁戊己庚辛壬癸'.includes(x)&&x.length===1));assert.ok(r.source.includes('oldid=2294674'));assert.equal(new Set(r.stems).size,r.stems.length);

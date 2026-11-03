@@ -3,7 +3,7 @@ import {applyFoundationPolicy} from '../lib/foundation-policy.mjs';import {confi
 const ids=['natal.year','natal.month','natal.day','natal.hour','transit.luck','transit.year','transit.month','transit.day'],pillars=['庚午','戊寅','己酉','壬申','辛巳','丙午','戊戌','甲午'];
 const c={dayMaster:'己',natal:pillars.slice(0,4),luck:pillars[4],year:pillars[5],month:pillars[6],day:pillars[7],stems:pillars.map((p,i)=>({id:ids[i],stem:p[0]}))};
 test('命例交集丙火后跳过丁火，从扶抑补戊土且说明不用花括号',()=>{
- const r=applyFoundationPolicy(confirmedFoundationCase(c));assert.equal(r.primary_element,'火');assert.equal(r.secondary_element,'土');assert.deepEqual(r.selection_policy.supplements,[{stem:'戊',element:'土',method:'扶抑'}]);assert.doesNotMatch(r.reason,/[{}]/);
+ const r=applyFoundationPolicy(confirmedFoundationCase(c));assert.equal(r.primary_element,'火');assert.equal(r.secondary_element,'土');assert.deepEqual(r.selection_policy.supplements,[{stem:'戊',element:'土',method:'扶抑'},{stem:'癸',element:'水',method:'调候'}]);assert.doesNotMatch(r.reason,/[{}]/);
 });
 test('三法仅一种五行时不会制造第二喜用',()=>{
  const f=confirmedFoundationCase(c);f.selection_basis.fuyi_stems=['丙','丁'];f.selection_basis.pattern_stems=['丙'];f.tiaohou_required_stems=['丙'];f.unmet_tiaohou_stems=['丙'];f.tiaohou_groups=[];

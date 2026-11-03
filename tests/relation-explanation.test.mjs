@@ -26,6 +26,6 @@ test('命例前提只匹配本次四柱，不推广成所有寅月己土的自�
 });
 test('已指定命例无需模型，新生成方案和网页均保存有序解释及来源',async()=>{
  const mapping=await generateRuleMapping({}, {today:'2026-11-03',wishes:['W01'],artStyle:'cute'},calendar,[],()=>{throw Error('不应调用模型');});
- assert.deepEqual(mapping.engine.foundation.value.selection_policy.intersections.map(x=>x.stems),[['丙'],['丙'],['丙']]);
+ assert.deepEqual(mapping.engine.foundation.value.selection_policy.intersections.map(x=>x.stems),[['丙'],['丙'],['丙'],['丙']]);
  assert.equal(mapping.engine.foundation.origin,'confirmed_profile');assert.ok(mapping.reading.sections[3].body.startsWith('原局地支：'));assert.ok(mapping.reading.sections[4].body.startsWith('天干：'));assert.match(mapping.reading.sections[0].body,/本次对话指定的命例前提/);
 });
