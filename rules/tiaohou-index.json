@@ -1,0 +1,1310 @@
+{
+  "version": "2026-11-03-tiaohou-index-v1",
+  "source": "https://zh.wikisource.org/w/index.php?oldid=2294674&title=穷通宝鉴",
+  "basis": "既有120格审阅稿的基础候选索引；未穷尽条件性支路，不声称全书条件均已编码。",
+  "entries": [
+    {
+      "day_master": "甲",
+      "month_branch": "寅",
+      "stems": [
+        "丙",
+        "癸"
+      ],
+      "review_note": "丙、癸；另审庚戊支路",
+      "conditions_pending": [
+        "支路",
+        "另审"
+      ]
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "卯",
+      "stems": [
+        "庚"
+      ],
+      "review_note": "庚与财资杀；火泄木另审",
+      "conditions_pending": [
+        "另审"
+      ]
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "辰",
+      "stems": [
+        "庚",
+        "壬"
+      ],
+      "review_note": "先庚后壬",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "巳",
+      "stems": [
+        "癸",
+        "丁"
+      ],
+      "review_note": "先癸后丁",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "午",
+      "stems": [
+        "癸",
+        "丁",
+        "庚"
+      ],
+      "review_note": "先癸后丁，庚次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "未",
+      "stems": [
+        "丁",
+        "庚"
+      ],
+      "review_note": "先丁后庚；木盛、金盛另判",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "申",
+      "stems": [
+        "丁",
+        "庚"
+      ],
+      "review_note": "丁主、庚次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "酉",
+      "stems": [
+        "丁",
+        "丙",
+        "庚"
+      ],
+      "review_note": "丁先、丙次、庚再次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "戌",
+      "stems": [
+        "丁",
+        "癸"
+      ],
+      "review_note": "丁癸；壬、庚等条件支路",
+      "conditions_pending": [
+        "支路",
+        "条件"
+      ]
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "亥",
+      "stems": [
+        "庚",
+        "丁",
+        "丙"
+      ],
+      "review_note": "庚丁，丙次；水泛加戊",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "子",
+      "stems": [
+        "丁",
+        "庚",
+        "丙"
+      ],
+      "review_note": "丁先庚后，丙佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "甲",
+      "month_branch": "丑",
+      "stems": [
+        "庚",
+        "丁"
+      ],
+      "review_note": "庚引丁；结语强调丁不可缺",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "寅",
+      "stems": [
+        "丙",
+        "癸"
+      ],
+      "review_note": "先丙后癸",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "卯",
+      "stems": [
+        "丙",
+        "癸"
+      ],
+      "review_note": "丙主、癸辅",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "辰",
+      "stems": [
+        "癸",
+        "丙"
+      ],
+      "review_note": "先癸后丙",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "巳",
+      "stems": [
+        "癸"
+      ],
+      "review_note": "癸主，丙酌用，金佐水源",
+      "conditions_pending": [
+        "酌"
+      ]
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "午",
+      "stems": [
+        "癸"
+      ],
+      "review_note": "前段癸；后段丙癸，金水多先丙",
+      "conditions_pending": [
+        "前段",
+        "后段",
+        "金水多",
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "未",
+      "stems": [
+        "癸"
+      ],
+      "review_note": "癸；金水多丙主",
+      "conditions_pending": [
+        "金水多",
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "申",
+      "stems": [
+        "己"
+      ],
+      "review_note": "己的重要性；庚多用丙另审",
+      "conditions_pending": [
+        "另审",
+        "庚多",
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "酉",
+      "stems": [
+        "癸"
+      ],
+      "review_note": "白露后癸；秋分后丙先癸次",
+      "conditions_pending": [
+        "白露",
+        "秋分"
+      ]
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "戌",
+      "stems": [
+        "癸",
+        "辛"
+      ],
+      "review_note": "癸主、辛发源",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "亥",
+      "stems": [
+        "丙",
+        "戊"
+      ],
+      "review_note": "丙主、戊次；水量须审",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "子",
+      "stems": [
+        "丙"
+      ],
+      "review_note": "丙主",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "乙",
+      "month_branch": "丑",
+      "stems": [
+        "丙"
+      ],
+      "review_note": "丙专用；财多身弱且戊重时甲救应；从财另判",
+      "conditions_pending": [
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "寅",
+      "stems": [
+        "壬",
+        "庚"
+      ],
+      "review_note": "壬主、庚佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "卯",
+      "stems": [
+        "壬"
+      ],
+      "review_note": "壬主，水源条件",
+      "conditions_pending": [
+        "条件"
+      ]
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "辰",
+      "stems": [
+        "壬"
+      ],
+      "review_note": "壬；土重甲辅",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "巳",
+      "stems": [
+        "壬",
+        "庚"
+      ],
+      "review_note": "壬主、庚发源",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "午",
+      "stems": [
+        "壬",
+        "庚"
+      ],
+      "review_note": "壬主、庚发源",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "未",
+      "stems": [
+        "壬",
+        "庚"
+      ],
+      "review_note": "壬主、庚佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "申",
+      "stems": [
+        "壬"
+      ],
+      "review_note": "壬",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "酉",
+      "stems": [
+        "壬"
+      ],
+      "review_note": "壬",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "戌",
+      "stems": [
+        "甲",
+        "壬"
+      ],
+      "review_note": "先甲后壬",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "亥",
+      "stems": [
+        "甲",
+        "戊",
+        "庚"
+      ],
+      "review_note": "甲戊庚；按木水火旺分别酌取",
+      "conditions_pending": [
+        "按",
+        "酌"
+      ]
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "子",
+      "stems": [
+        "壬",
+        "戊"
+      ],
+      "review_note": "壬主、戊佐；水多另审",
+      "conditions_pending": [
+        "另审",
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "丙",
+      "month_branch": "丑",
+      "stems": [
+        "壬"
+      ],
+      "review_note": "壬；土多甲不可少",
+      "conditions_pending": [
+        "土多",
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "寅",
+      "stems": [
+        "庚",
+        "甲"
+      ],
+      "review_note": "庚劈甲引丁；另审丁壬化木",
+      "conditions_pending": [
+        "另审"
+      ]
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "卯",
+      "stems": [
+        "庚",
+        "甲"
+      ],
+      "review_note": "先庚后甲",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "辰",
+      "stems": [
+        "甲",
+        "庚"
+      ],
+      "review_note": "先甲后庚；木局先庚",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "巳",
+      "stems": [
+        "甲",
+        "庚"
+      ],
+      "review_note": "甲庚配用，甲多先庚",
+      "conditions_pending": [
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "午",
+      "stems": [
+        "庚",
+        "壬"
+      ],
+      "review_note": "火局庚壬；无火局有水另用甲庚",
+      "conditions_pending": [
+        "火局"
+      ]
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "未",
+      "stems": [
+        "甲",
+        "壬",
+        "庚"
+      ],
+      "review_note": "甲主、壬次，庚配合",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "申",
+      "stems": [
+        "甲",
+        "丙",
+        "庚"
+      ],
+      "review_note": "甲、丙，庚配合",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "酉",
+      "stems": [
+        "甲",
+        "丙",
+        "庚"
+      ],
+      "review_note": "甲、丙、庚；从财另判",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "戌",
+      "stems": [
+        "甲",
+        "庚"
+      ],
+      "review_note": "甲庚；土多无甲另判",
+      "conditions_pending": [
+        "土多",
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "亥",
+      "stems": [
+        "甲",
+        "庚"
+      ],
+      "review_note": "甲主、庚佐，癸戊权宜",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "子",
+      "stems": [
+        "甲",
+        "庚"
+      ],
+      "review_note": "甲主、庚佐；从杀另判",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "丁",
+      "month_branch": "丑",
+      "stems": [
+        "甲",
+        "庚"
+      ],
+      "review_note": "甲主、庚佐，癸戊权宜",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "寅",
+      "stems": [
+        "丙",
+        "甲",
+        "癸"
+      ],
+      "review_note": "先丙后甲，癸佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "卯",
+      "stems": [
+        "丙",
+        "甲",
+        "癸"
+      ],
+      "review_note": "先丙后甲，癸佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "辰",
+      "stems": [
+        "甲",
+        "丙",
+        "癸"
+      ],
+      "review_note": "先甲后丙，癸佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "巳",
+      "stems": [
+        "甲",
+        "丙",
+        "癸"
+      ],
+      "review_note": "先甲，丙癸佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "午",
+      "stems": [
+        "壬",
+        "甲"
+      ],
+      "review_note": "先壬后甲，丙酌用",
+      "conditions_pending": [
+        "酌"
+      ]
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "未",
+      "stems": [
+        "癸",
+        "丙",
+        "甲"
+      ],
+      "review_note": "先癸，丙甲次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "申",
+      "stems": [
+        "丙",
+        "癸",
+        "甲"
+      ],
+      "review_note": "先丙后癸，甲次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "酉",
+      "stems": [
+        "丙",
+        "癸"
+      ],
+      "review_note": "先丙后癸，不必木疏",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "戌",
+      "stems": [
+        "甲",
+        "癸"
+      ],
+      "review_note": "先甲后癸；见金转癸丙支路",
+      "conditions_pending": [
+        "支路"
+      ]
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "亥",
+      "stems": [
+        "甲",
+        "丙"
+      ],
+      "review_note": "先甲后丙",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "子",
+      "stems": [
+        "丙",
+        "甲"
+      ],
+      "review_note": "丙主、甲佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "戊",
+      "month_branch": "丑",
+      "stems": [
+        "丙",
+        "甲"
+      ],
+      "review_note": "丙主、甲佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "己",
+      "month_branch": "寅",
+      "stems": [
+        "丙",
+        "癸"
+      ],
+      "review_note": "丙主；癸佐，壬多戊制",
+      "conditions_pending": [
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "己",
+      "month_branch": "卯",
+      "stems": [
+        "甲",
+        "癸",
+        "丙"
+      ],
+      "review_note": "先甲后癸，丙配合",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "己",
+      "month_branch": "辰",
+      "stems": [
+        "丙",
+        "癸",
+        "甲"
+      ],
+      "review_note": "先丙后癸，甲疏",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "己",
+      "month_branch": "巳",
+      "stems": [
+        "癸",
+        "丙",
+        "辛"
+      ],
+      "review_note": "癸主、丙次，辛发源",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "己",
+      "month_branch": "午",
+      "stems": [
+        "癸",
+        "丙",
+        "辛"
+      ],
+      "review_note": "癸主、丙次，辛发源",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "己",
+      "month_branch": "未",
+      "stems": [
+        "癸",
+        "丙",
+        "辛"
+      ],
+      "review_note": "癸主、丙次，辛发源",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "己",
+      "month_branch": "申",
+      "stems": [
+        "癸",
+        "丙",
+        "辛"
+      ],
+      "review_note": "癸先丙后，辛佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "己",
+      "month_branch": "酉",
+      "stems": [
+        "癸",
+        "丙",
+        "辛"
+      ],
+      "review_note": "癸先丙后，辛佐；金局无火另审",
+      "conditions_pending": [
+        "另审"
+      ]
+    },
+    {
+      "day_master": "己",
+      "month_branch": "戌",
+      "stems": [
+        "癸",
+        "丙",
+        "辛"
+      ],
+      "review_note": "癸先丙后，辛佐；土盛甲疏",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "己",
+      "month_branch": "亥",
+      "stems": [
+        "丙"
+      ],
+      "review_note": "丙主、甲酌用；壬旺戊制",
+      "conditions_pending": [
+        "酌"
+      ]
+    },
+    {
+      "day_master": "己",
+      "month_branch": "子",
+      "stems": [
+        "丙"
+      ],
+      "review_note": "丙主、甲酌用",
+      "conditions_pending": [
+        "酌"
+      ]
+    },
+    {
+      "day_master": "己",
+      "month_branch": "丑",
+      "stems": [
+        "丙"
+      ],
+      "review_note": "丙主、甲酌用",
+      "conditions_pending": [
+        "酌"
+      ]
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "寅",
+      "stems": [
+        "丙",
+        "甲",
+        "丁"
+      ],
+      "review_note": "丙甲，丁次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "卯",
+      "stems": [
+        "丁",
+        "甲"
+      ],
+      "review_note": "丁主、甲引丁",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "辰",
+      "stems": [
+        "甲",
+        "丁"
+      ],
+      "review_note": "先甲后丁",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "巳",
+      "stems": [
+        "壬",
+        "戊",
+        "丙"
+      ],
+      "review_note": "壬戊丙，按病取用",
+      "conditions_pending": [
+        "按"
+      ]
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "午",
+      "stems": [
+        "壬",
+        "癸"
+      ],
+      "review_note": "壬主、癸次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "未",
+      "stems": [
+        "丁",
+        "甲"
+      ],
+      "review_note": "丁主、甲次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "申",
+      "stems": [
+        "丁",
+        "甲"
+      ],
+      "review_note": "丁主、甲次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "酉",
+      "stems": [
+        "丁",
+        "甲",
+        "丙"
+      ],
+      "review_note": "丁甲，丙不可少",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "戌",
+      "stems": [
+        "甲",
+        "壬"
+      ],
+      "review_note": "先甲后壬",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "亥",
+      "stems": [
+        "丁",
+        "甲",
+        "丙"
+      ],
+      "review_note": "丁甲，丙暖",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "子",
+      "stems": [
+        "丁",
+        "甲",
+        "丙"
+      ],
+      "review_note": "丁甲，丙次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "庚",
+      "month_branch": "丑",
+      "stems": [
+        "丙",
+        "丁",
+        "甲"
+      ],
+      "review_note": "先丙后丁，甲不可少",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "寅",
+      "stems": [
+        "己",
+        "壬",
+        "庚"
+      ],
+      "review_note": "先己后壬，庚佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "卯",
+      "stems": [
+        "壬"
+      ],
+      "review_note": "壬主；土病甲制",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "辰",
+      "stems": [
+        "壬",
+        "甲"
+      ],
+      "review_note": "先壬后甲",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "巳",
+      "stems": [
+        "壬"
+      ],
+      "review_note": "壬主；土病木制",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "午",
+      "stems": [
+        "壬",
+        "己",
+        "癸"
+      ],
+      "review_note": "壬己并用，癸参用",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "未",
+      "stems": [
+        "壬",
+        "庚"
+      ],
+      "review_note": "壬主、庚佐；土量另审甲",
+      "conditions_pending": [
+        "另审"
+      ]
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "申",
+      "stems": [
+        "壬"
+      ],
+      "review_note": "壬主，甲戊酌用",
+      "conditions_pending": [
+        "酌"
+      ]
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "酉",
+      "stems": [
+        "壬"
+      ],
+      "review_note": "壬主；有土病才审甲",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "戌",
+      "stems": [
+        "壬",
+        "甲"
+      ],
+      "review_note": "先壬后甲",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "亥",
+      "stems": [
+        "壬",
+        "丙"
+      ],
+      "review_note": "先壬后丙",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "子",
+      "stems": [
+        "壬",
+        "丙"
+      ],
+      "review_note": "壬丙；冬月丙暖关键",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "辛",
+      "month_branch": "丑",
+      "stems": [
+        "丙",
+        "壬",
+        "戊",
+        "己"
+      ],
+      "review_note": "先丙后壬，戊己次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "寅",
+      "stems": [
+        "庚",
+        "丙",
+        "戊"
+      ],
+      "review_note": "庚发源，丙戊配合",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "卯",
+      "stems": [
+        "戊",
+        "辛",
+        "庚"
+      ],
+      "review_note": "先戊后辛，庚次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "辰",
+      "stems": [
+        "甲",
+        "庚"
+      ],
+      "review_note": "先甲后庚",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "巳",
+      "stems": [
+        "壬",
+        "辛",
+        "庚"
+      ],
+      "review_note": "壬比助、辛发源，庚佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "午",
+      "stems": [
+        "癸",
+        "庚",
+        "辛"
+      ],
+      "review_note": "癸主、庚佐，辛癸参用",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "未",
+      "stems": [
+        "辛",
+        "甲",
+        "癸"
+      ],
+      "review_note": "辛甲癸；前后文主次须保留",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "申",
+      "stems": [
+        "戊",
+        "丁"
+      ],
+      "review_note": "戊主、丁佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "酉",
+      "stems": [
+        "甲",
+        "庚"
+      ],
+      "review_note": "甲主，庚次；甲受庚破须审",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "戌",
+      "stems": [
+        "甲",
+        "丙"
+      ],
+      "review_note": "甲主、丙次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "亥",
+      "stems": [
+        "戊",
+        "丙"
+      ],
+      "review_note": "戊丙，庚次；润下另判",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "子",
+      "stems": [
+        "戊",
+        "丙"
+      ],
+      "review_note": "先戊后丙，结语丙戊并用",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "壬",
+      "month_branch": "丑",
+      "stems": [
+        "丙",
+        "丁",
+        "甲"
+      ],
+      "review_note": "丙主，丁甲佐，前后段另审",
+      "conditions_pending": [
+        "后段",
+        "另审"
+      ]
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "寅",
+      "stems": [
+        "辛",
+        "丙"
+      ],
+      "review_note": "辛主、丙暖；庚替补支路",
+      "conditions_pending": [
+        "支路"
+      ]
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "卯",
+      "stems": [
+        "庚",
+        "辛"
+      ],
+      "review_note": "庚主、辛次",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "辰",
+      "stems": [
+        "丙"
+      ],
+      "review_note": "清明后丙；谷雨后辛甲辅",
+      "conditions_pending": [
+        "清明",
+        "谷雨"
+      ]
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "巳",
+      "stems": [
+        "辛"
+      ],
+      "review_note": "辛主，无辛用庚；壬救支路",
+      "conditions_pending": [
+        "支路"
+      ]
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "午",
+      "stems": [
+        "庚",
+        "辛",
+        "壬"
+      ],
+      "review_note": "庚辛与壬参酌并用",
+      "conditions_pending": [
+        "酌"
+      ]
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "未",
+      "stems": [
+        "庚",
+        "辛"
+      ],
+      "review_note": "庚辛；前段火烈加比劫",
+      "conditions_pending": [
+        "前段"
+      ]
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "申",
+      "stems": [
+        "丁",
+        "甲"
+      ],
+      "review_note": "丁主、甲引丁",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "酉",
+      "stems": [
+        "辛",
+        "丙"
+      ],
+      "review_note": "辛主、丙佐",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "戌",
+      "stems": [
+        "辛",
+        "甲"
+      ],
+      "review_note": "辛甲并用，比水滋甲",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "亥",
+      "stems": [
+        "庚",
+        "辛"
+      ],
+      "review_note": "庚辛；水多戊、金多丁另审",
+      "conditions_pending": [
+        "另审",
+        "数量条件待复核"
+      ]
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "子",
+      "stems": [
+        "丙",
+        "辛"
+      ],
+      "review_note": "丙主、辛滋扶",
+      "conditions_pending": []
+    },
+    {
+      "day_master": "癸",
+      "month_branch": "丑",
+      "stems": [
+        "丙"
+      ],
+      "review_note": "丙解冻，壬戊等按原局另审",
+      "conditions_pending": [
+        "按",
+        "另审"
+      ]
+    }
+  ]
+}
