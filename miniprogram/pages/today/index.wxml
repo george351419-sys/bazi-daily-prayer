@@ -18,6 +18,8 @@
  <view class="row"><text class="badge">{{sample?'示例画面':'今日画作'}}</text><button class="text-button" bindtap="refresh" disabled="{{loading}}">刷新内容</button></view>
  <view wx:if="{{sample}}" class="notice">这是一张示例画。你可以自由欣赏；前往许愿池选择自己的祈愿和画风。</view>
  <text wx:if="{{!sample&&image}}" class="section-title">{{artworkTitle}}</text>
+ <button wx:if="{{!sample&&image&&artworkId}}" class="secondary spaced wide" bindtap="explanation" loading="{{openingExplanation}}" disabled="{{openingExplanation}}">查看这幅画的网页说明</button>
+ <button wx:if="{{image&&artworkId}}" class="text-button spaced wide" bindtap="copyExplanation" disabled="{{openingExplanation}}">复制网页说明链接</button>
  <view class="paper companion-section"><text class="section-title">画中寄语</text><text class="companion-lead">把今天的心愿放进画里，也留一点时间给自己。愿你在每一次观看时，记起自己珍惜的人和事。</text></view>
  <view class="paper companion-section"><text class="section-title">此刻的小休息</text><text class="companion-lead">放松肩膀，慢慢呼吸片刻。动作以身体舒适为准。</text></view>
  <view class="stack spaced"><button wx:if="{{sample}}" class="primary" bindtap="open">选择我的祈愿</button><button wx:else class="primary" bindtap="open">管理我的画屏</button></view>

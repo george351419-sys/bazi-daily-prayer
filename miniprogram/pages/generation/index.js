@@ -1,9 +1,10 @@
+const {openArtworkExplanation,copyArtworkExplanation}=require('../../utils/artwork-link');
 const generation=require('../../utils/generation');
 const privacy=require('../../utils/privacy');
 Page({
  data:{phase:'analyzing',text:'正在准备今日造像…',image:'',error:'',preparing:false,savingImage:false,saveError:''},
  onLoad(){const profile=getApp().globalData.generationProfile;if(!profile){wx.navigateBack();return;}void generation.start(profile);},
- onShow(){this.stop=generation.subscribe(task=>{if(task.userId===getApp().globalData.user?.id){const {phase,text,image,error,preparing,preparation,preparationError,imageError}=task;this.setData({phase,text,image,error,preparing,preparation,preparationError,imageError});}});},
+ onShow(){this.stop=generation.subscribe(task=>{if(task.userId===getApp().globalData.user?.id){const {phase,text,image,error,preparing,preparation,preparationError,imageError}=task;this.setData({phase,text,image,error,preparing,preparation,preparationError,imageError,artworkId:task.record?.id||''});}});},
  onHide(){this.stop?.();this.stop=null;},onUnload(){this.onHide();},
  retry(){void generation.start(getApp().globalData.generationProfile);},
  reloadImage(){void generation.reloadImage();},retryPreparation(){void generation.retryPreparation();},
@@ -22,5 +23,7 @@ Page({
    else wx.showToast({title:/cancel/i.test(message)?'已取消保存':/privacy/i.test(message)?'隐私授权未完成，请重试':'图片暂未保存，请查看原因',icon:'none'});
   }finally{this.setData({savingImage:false});}
  },
+ copyExplanation(){return copyArtworkExplanation(this);},
+ explanation(){return openArtworkExplanation(this);},
  connectScreen(){wx.switchTab({url:'/pages/network/index'});}
 });

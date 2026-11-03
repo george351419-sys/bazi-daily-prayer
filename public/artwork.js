@@ -1,0 +1,23 @@
+let token=new URLSearchParams(location.hash.slice(1)).get('view')||'';
+const $=id=>document.getElementById(id);let imageURL='',running=false;
+function paragraph(parent,name,text){const box=document.createElement('div'),h=document.createElement('h3'),p=document.createElement('p');h.textContent=name;p.textContent=text;box.append(h,p);parent.append(box);}
+async function load(){
+ if(running)return;running=true;$('retry').hidden=true;$('artwork').hidden=true;$('state').textContent='正在读取这幅画…';
+ try{
+  if(!/^[a-f0-9]{64}$/.test(token))throw Error('请在小程序中打开具体画作的“查看网页说明”，或粘贴完整的说明链接。');
+  const boot=await fetch('/api/bootstrap',{credentials:'omit',cache:'no-store'});if(!boot.ok)throw Error('服务暂不可用，请稍后重试。');const session=await boot.json();
+  const headers={'X-Session-Token':session.sessionToken,'X-Artwork-View-Token':token};
+  const response=await fetch('/api/artwork-view',{headers,credentials:'omit',cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||'这幅画的说明暂不可用。');
+  const a=data.artwork;$('title').textContent=a.title;$('date').textContent=a.date;$('theme').textContent='这幅画的祈愿：'+a.theme;$('note').textContent=a.note;
+  for(const id of ['composition','colors','symbols'])$(id).replaceChildren();
+  for(const item of a.composition)paragraph($('composition'),item.name,item.text);
+  for(const item of a.symbols)paragraph($('symbols'),item.name,item.text);
+  for(const color of a.colors){const row=document.createElement('div'),swatch=document.createElement('span'),copy=document.createElement('div'),name=document.createElement('strong'),hex=document.createElement('p');row.className='color';swatch.className='swatch';swatch.setAttribute('aria-hidden','true');if(/^#[a-f0-9]{6}$/i.test(color.hex))swatch.style.backgroundColor=color.hex;name.textContent=color.name;hex.textContent=color.hex+' · '+color.text;copy.append(name,hex);row.append(swatch,copy);$('colors').append(row);}
+  const image=await fetch('/api/artwork-view/image',{headers,credentials:'omit',cache:'no-store'});if(!image.ok)throw Error('作品图片暂未载入，请重试。');
+  if(imageURL)URL.revokeObjectURL(imageURL);imageURL=URL.createObjectURL(await image.blob());$('image').src=imageURL;$('image').alt=a.title;$('artwork').hidden=false;$('state').textContent='本链接仅供查看这一幅作品，有效期为生成后 10 分钟。请勿转发私人作品链接。';
+ }catch(e){$('state').textContent=e.message;$('retry').hidden=false;}
+ finally{running=false;}
+}
+$('retry').addEventListener('click',load);void load();
+
+window.addEventListener('hashchange',()=>location.reload());

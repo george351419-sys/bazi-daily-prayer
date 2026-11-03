@@ -1,3 +1,4 @@
+import {createArtworkView,readArtworkView,artworkExplanation} from '../lib/artwork-view.mjs';
 import {wishCopy} from '../lib/wish-copy.mjs';
 import {accountRepository} from '../lib/account-store.mjs';
 import {enqueueRitualPreparation} from '../lib/ritual-preparation.mjs';
@@ -61,6 +62,11 @@ export async function handleRequest(req,res,config){
   const body=typeof req.body==='string'?JSON.parse(req.body):req.body||{};
   const accountMode=accountsEnabled(config);
   if(accountMode&&req.method==='POST'&&!origin&&!miniProgram)return send(res,403,{error:'请从祈福网站提交账户请求。'});
+  if((route==='artwork-view'||route==='artwork-view/image')&&req.method==='GET'){
+   const view=await readArtworkView(config,String(req.headers['x-artwork-view-token']||''));
+   if(route.endsWith('/image')){const image=await privateImage(config,view.account,view.record);res.setHeader('Content-Type',image.type);res.setHeader('Cache-Control','private, no-store');res.setHeader('Cross-Origin-Resource-Policy','same-origin');return res.status(200).end(image.bytes);}
+   return send(res,200,{artwork:artworkExplanation(view.record),expiresAt:view.expiresAt});
+  }
   if(route.startsWith('account/')){
    if(!accountMode)throw new AccountError(503,'账户服务尚未开启。');
    const client=String(req.headers['eo-connecting-ip']||req.headers['x-real-ip']||req.headers['x-forwarded-for']||'unknown').split(',')[0].trim().slice(0,80);
@@ -104,6 +110,8 @@ export async function handleRequest(req,res,config){
    const deviceRoute=route.match(/^account\/devices\/([a-zA-Z0-9_-]{8,64})\/(artwork|unbind)$/);
    if(deviceRoute&&req.method==='POST')return send(res,200,await (deviceRoute[2]==='artwork'?selectDeviceArtwork(config,account,deviceRoute[1],body):unbindDevice(config,account,deviceRoute[1])));
    if(route==='account/profile'&&req.method==='POST'){return send(res,200,{profile:await saveProfileSafely(config,account,body)});}
+   const viewLink=route.match(/^account\/artworks\/([a-f0-9]{36})\/view-link$/);
+   if(viewLink&&req.method==='POST')return send(res,200,await createArtworkView(config,account,viewLink[1]));
    if(route==='account/artworks'&&req.method==='GET')return send(res,200,await listArtworks(config,account,new URL(req.url,'http://localhost').searchParams.get('cursor')||''));
    const saved=route.match(/^account\/artworks\/([a-f0-9]{36})(\/image)?$/);
    if(saved&&req.method==='GET'){

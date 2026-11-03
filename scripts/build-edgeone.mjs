@@ -60,3 +60,8 @@ async function stampEntries(directory){
 }
 await stampEntries('cloud-functions');
 console.log('Function entries reference content-addressed server bundles.');
+
+// Artwork explanation: account-owned link issuance and scoped read-only view.
+for(const [file,relative]of [['artwork-view.js','../../.edgeone-build/'+versioned.handler],['artwork-view/image.js','../../../.edgeone-build/'+versioned.handler],['account/artworks/[id]/view-link.js','../../../../../.edgeone-build/'+versioned.handler]]){
+ const output='cloud-functions/api/'+file;await mkdir(path.dirname(output),{recursive:true});await writeFile(output,`import handler from '${relative}';\nexport default async function onRequest(context){return handler(context); }\n`);
+}

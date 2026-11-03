@@ -1,30 +1,33 @@
+const {openArtworkExplanation,copyArtworkExplanation}=require('../../utils/artwork-link');
 const {observeConnection,stopObserving}=require('../../utils/screen-connection');
 const api=require('../../utils/api');
 const {shanghaiDate,todayArtwork}=require('../../utils/today-artwork');
 Page({
- data:{loading:true,error:'',user:null,status:null,image:'',sample:true,date:'',artworkTitle:''},
+ data:{loading:true,error:'',user:null,status:null,image:'',sample:true,date:'',artworkTitle:'',artworkId:''},
  onShow(){this.active=true;observeConnection(this);api.tab(this,2);void this.refresh();},
  onHide(){this.active=false;stopObserving(this);this.run=(this.run||0)+1;clearTimeout(this.timer);},onUnload(){this.onHide();},
  async refresh(){
   const run=this.run=(this.run||0)+1,today=shanghaiDate();clearTimeout(this.timer);
   // Never leave yesterday's picture visible while today's request is in flight.
-  if(this.contentDate!==today){this.contentDate=today;this.artworkImageKey='';this.setData({image:'',status:null,artworkTitle:''});}
+  if(this.contentDate!==today){this.contentDate=today;this.artworkImageKey='';this.setData({image:'',status:null,artworkTitle:'',artworkId:''});}
   this.setData({error:'',date:today.replace(/-/g,' . ')});
   const own=()=>this.active&&run===this.run&&today===shanghaiDate();
   try{
    const app=getApp();await app.ready;if(!own())return;
    const user=app.globalData.user;
-   if(!user){this.artworkImageKey='';this.setData({user,sample:true,status:null,image:'/assets/prayer-example.jpg',loading:false,artworkTitle:''});return;}
+   if(!user){this.artworkImageKey='';this.setData({user,sample:true,status:null,image:'/assets/prayer-example.jpg',loading:false,artworkTitle:'',artworkId:''});return;}
    const status=await api.request('/api/account/ritual');if(!own())return;this.connection.acceptStatus(status);
    let artwork=todayArtwork(status,today);
    if(!artwork){const gallery=await api.request('/api/account/artworks');if(!own())return;artwork=(gallery.items||[]).find(item=>item.date===today&&item.status==='complete'&&item.source!=='upload'&&item.image)||null;}
    const imagePath=artwork?.image||'',cached=imagePath===this.artworkImageKey?this.data.image:'';
    if(!imagePath)this.artworkImageKey='';
-   this.setData({user,sample:false,status,image:cached,loading:false,artworkTitle:artwork?.title||''});
+   this.setData({user,sample:false,status,image:cached,loading:false,artworkTitle:artwork?.title||'',artworkId:artwork?.id||artwork?.artworkId||''});
    if(imagePath&&!cached){const image=await api.image(imagePath);if(!own())return;this.artworkImageKey=imagePath;this.setData({image});}
   }catch(e){if(own()){api.error(this,e);this.setData({loading:false});}}
   finally{if(this.active&&run===this.run)this.timer=setTimeout(()=>this.refresh(),30000);}
  },
+ copyExplanation(){return copyArtworkExplanation(this);},
+ explanation(){return openArtworkExplanation(this);},
  open(){if(this.data.sample)this.login();else this.screen();},
  login:api.goLogin,screen(){wx.switchTab({url:'/pages/screen/index'});}
 });

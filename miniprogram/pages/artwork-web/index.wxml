@@ -1,0 +1,2 @@
+<web-view wx:if="{{url&&!failed}}" src="{{url}}" binderror="failed"/>
+<view wx:else class="page"><text class="title">画作网页说明</text><text class="note">{{message}}</text><button wx:if="{{url}}" class="primary spaced wide" bindtap="copy">复制说明链接</button><button class="secondary spaced wide" bindtap="back">返回画作</button></view>
