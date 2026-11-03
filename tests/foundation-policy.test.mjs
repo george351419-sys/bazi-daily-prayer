@@ -17,7 +17,7 @@ test('inconsistent archived mapped job is blocked before any paid image provider
  const dir=await mkdtemp(path.join(os.tmpdir(),'inconsistent-mapped-'));t.after(()=>rm(dir,{recursive:true,force:true}));const c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'inconsistent-image-test-secret-12345',ARK_API_KEY:'test-only'},repo=accountRepository(c),credentials={id:'d'.repeat(32),username:'invalid_picture',version:1},id='e'.repeat(36);await repo.put('credentials/'+createHash('sha256').update(credentials.username).digest('hex'),credentials);const token=await createAccountSession(c,credentials),old={...base};delete old.selection_basis;await repo.put('artworks/'+credentials.id+'/'+id,{id,userId:credentials.id,status:'mapped',image:null,mapping:{primary_element:'木',secondary_element:'金',engine:{foundation:{value:old}}}});
  const bootstrap=await(await onRequest({request:new Request('https://playmath.cn/api/bootstrap'),env:c})).json(),jobToken=sealJob(c,{id,owner:'account:'+credentials.id,expires:Date.now()+60000});let calls=0;const before=globalThis.fetch;globalThis.fetch=async()=>{calls++;throw Error('不得启动付费调用');};t.after(()=>{globalThis.fetch=before;});const result=await onRequest({request:new Request('https://playmath.cn/api/jobs/'+id+'/image',{method:'POST',headers:{Origin:'https://playmath.cn','X-Session-Token':bootstrap.sessionToken,'X-CSRF-Token':bootstrap.csrf,'X-Account-Token':token},body:JSON.stringify({jobToken})}),env:c});assert.equal(result.status,409);assert.equal(calls,0);assert.match((await result.json()).error,/不一致/);
 });
-test('an incomplete paired climate requirement does not count as a complete F/T consensus',()=>{const f={...base,day_master:'壬',reason:'本例只验证并用组合的候选排序。',tiaohou_required_stems:['甲','庚'],unmet_tiaohou_stems:['甲','庚'],tiaohou_groups:[['甲','庚']],selection_basis:{structure:'ordinary',strength:'balanced',fuyi_stems:['戊','甲'],pattern_stems:[]}};assert.throws(()=>applyFoundationPolicy(f),/三组交集均为空/);});
+test('unfulfilled paired climate motifs do not erase membership of the natal T set',()=>{const f={...base,day_master:'壬',reason:'本例只验证并用组合的候选排序。',tiaohou_required_stems:['甲','庚'],unmet_tiaohou_stems:['甲','庚'],tiaohou_groups:[['甲','庚']],selection_basis:{structure:'ordinary',strength:'balanced',fuyi_stems:['戊','甲'],pattern_stems:[]}};const r=applyFoundationPolicy(f);assert.equal(r.primary_element,'木');assert.equal(r.secondary_element,'');assert.deepEqual(r.selection_policy.intersections[1].stems,['甲']);assert.deepEqual(r.selection_policy.incomplete_tiaohou_groups,[['甲','庚']]);});
 
 test('pairwise priority retains F order within FG, without elevating a triple intersection',()=>{
  const r=applyFoundationPolicy({...base,tiaohou_required_stems:['丙','癸'],tiaohou_groups:[],selection_basis:{...base.selection_basis,fuyi_stems:['戊','己','丙'],pattern_stems:['丙','戊']}});
@@ -37,4 +37,9 @@ test('旧地支规则的归档被明确标注，不伪称旧图已经采用解�
  const record={mapping:{content_mode:'birth',primary_element:'火',secondary_element:'土',engine:{foundation:{value:applyFoundationPolicy(base)}},branch_analysis:{policy_version:'2026-11-01-v2',alternatives:[]}}};
  assert.ok(artworkFoundationIssues(record).some(x=>x.includes('旧版地支规则')));
  assert.equal(record.mapping.branch_analysis.policy_version,'2026-11-01-v2');
+});
+
+test('用户本次命例三组交集均为丙；丙癸并用缺项不删丙',()=>{
+ const r=applyFoundationPolicy({...base,tiaohou_required_stems:['丙','癸'],unmet_tiaohou_stems:['丙','癸'],tiaohou_groups:[['丙','癸']],selection_basis:{...base.selection_basis,fuyi_stems:['丙','丁','戊','己'],pattern_stems:['丙']}});
+ assert.deepEqual(r.selection_policy.intersections.map(x=>x.stems),[['丙'],['丙'],['丙']]);assert.equal(r.primary_element,'火');assert.equal(r.secondary_element,'');assert.match(r.reason,/候选集合：扶抑=\{丙、丁、戊、己\}/);
 });

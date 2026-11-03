@@ -43,10 +43,10 @@ test('真实文件仓库可跨调用实例读取补判档案，出生变更不�
   await assert.rejects(analyzeMapping({...config,DEEPSEEK_API_KEY:''},changed,calendarFor(changed)),e=>e.code==='rule_gap_model_unavailable');
  }finally{await rm(dir,{recursive:true,force:true});}
 });
-test('生肖枚举重算并以整组为单位比较，合消涉及成员的刑而保留害',()=>{
+test('无剩余冲刑害时不为补一个喜用三合额外加入生肖',()=>{
  const base=[... '寅午'].map((branch,i)=>({id:'natal.'+i,branch})),models=zodiacModels(base);
  const values=[];for(const m of models)for(const r of m.relations)if(r.type==='三合'&&r.branches.includes('戌'))values.push({key:relationKey(r),effective:true});
- const selected=selectZodiac(models,{values},foundation);assert.deepEqual(selected.added,['戌']);assert.ok(selected.evaluated.length===79);
+ const selected=selectZodiac(models,{values},foundation);assert.deepEqual(selected.added,[]);assert.ok(selected.evaluated.length===79);assert.equal(selected.evaluated.find(x=>x.added.join('')==='戌').improvement,0);
 });
 test('天干调候豁免与关键用干保护；不能解决的冲明确保留',()=>{
  const c={...calendar,stems:[{id:'natal.year',stem:'壬'},{id:'transit.year',stem:'丙'}],rawStemClashes:[{a:{id:'natal.year',stem:'壬'},b:{id:'transit.year',stem:'丙'}}]};
@@ -62,14 +62,14 @@ test('跨日保留稳定取用，动态条件由规则更新；同愿望轮换�
  const next=await analyzeMapping(f.config,nextInput,nextCalendar,[{date:input.today,deity:today.deity,wish:'W02'}],f.fetcher);
  assert.equal(f.calls,1);assert.deepEqual(next.engine.foundation,today.engine.foundation);assert.equal(next.primary_element,today.primary_element);assert.notEqual(next.deity,today.deity);assert.ok(next.rotation_reason);
 });
-test('双生肖共同补全三合通过实际成员和象征成员分离校验',async()=>{
+test('只有合的缺项而没有剩余冲刑害，不主动添加双生肖',async()=>{
  const f=fixture();f.fetcher=async(url,options)=>{const q=JSON.parse(JSON.parse(options.body).messages[1].content);if(!q.schema?.decisions)return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify(supplementFoundation(foundation))}}]})};
  const decisions=q.models.map(m=>({model:m.id,effective_indices:m.relation_indices.filter(i=>q.relation_catalog[i].type==='三合'&&q.relation_catalog[i].branches.every(b=>'寅午戌'.includes(b))),unfavorable_indices:[],critical_indices:[],reason:'本测试的火三合满足已给定的有效牵合条件，按主喜火方向比较候选。'}));
  return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify({decisions,unmet_tiaohou_stems:[],effective_stem_bindings:[]})}}]})};};
  const c={...calendar,natal:['甲寅','乙卯','丙卯','丁卯'],dayMaster:'丙',luck:null,year:'乙卯',month:'乙卯',day:'乙卯',stems:[],rawStemClashes:[],rawStemBindings:[]};
  const custom={...foundation,day_master:'丙',month_branch:'卯'};
  const config={...f.config,PRAYER_FOUNDATION:{signature:natalFingerprint(input,c),value:custom}};
- const mapping=await analyzeMapping(config,input,c,[],f.fetcher);assert.deepEqual(new Set(mapping.zodiac),new Set(['马','狗']));assert.ok(mapping.professional.includes('三合取象'));
+ const mapping=await analyzeMapping(config,input,c,[],f.fetcher);assert.deepEqual(mapping.zodiac,[]);assert.match(mapping.reading.sections[3].body,/剩余冲刑害：无/);
 });
 test('新的天干意象不能引入新冲，并用调候不能只补一半',()=>{
  const c={...calendar,stems:[{id:'natal.year',stem:'壬'},{id:'natal.month',stem:'乙'},{id:'transit.year',stem:'丙'}],rawStemClashes:[{a:{id:'natal.year',stem:'壬'},b:{id:'transit.year',stem:'丙'}}]};
@@ -123,7 +123,7 @@ test('同日完整方案从仓库复用，修改返回对象不污染缓存',asy
 test('原局档案保持独立版本，每日规则更新不重判取用',async()=>{
  const f=fixture();await analyzeMapping(f.config,input,calendar,[],f.fetcher);
  const entry=[...f.records.entries()].find(([key])=>key.includes('/foundation/'));
- assert.ok(entry[0].includes('/2026-11-03-foundation-fgt-v2/'));assert.equal(entry[1].version,'2026-11-03-foundation-fgt-v2');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-03-rules-v6');
+ assert.ok(entry[0].includes('/2026-11-03-foundation-fgt-v3/'));assert.equal(entry[1].version,'2026-11-03-foundation-fgt-v3');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-03-rules-v7');
 });
 test('已确认原局在无模型密钥时跨日生成全部条件与画面',async()=>{
  const f=fixture();let calls=0;
@@ -175,10 +175,10 @@ test('截图八支同时考虑寅午戌与申酉戌，未候选经过比较而�
  for(const a of r.baseAlternatives){assert.ok(a.effective_bindings.some(x=>x.type==='三合'));assert.ok(a.effective_bindings.some(x=>x.type==='三会'));assert.ok(!a.residual_relations.some(x=>['相刑','自刑'].includes(x.type)));assert.ok(a.residual_relations.some(x=>x.type==='六害'));}
  const wei=r.evaluated.find(x=>x.added.join('')==='未');assert.ok(wei);assert.equal(wei.improvement,0);assert.equal(wei.positive,false);assert.equal(wei.selected,false);
 });
-test('v1原局候选直接重排迁移至v2，不重新调用模型判断旺衰',async()=>{
+test('v1原局候选直接重排迁移至v3，不重新调用模型判断旺衰',async()=>{
  const f=fixture();await generateRuleMapping(f.config,input,calendar,[],f.fetcher);
  const [key,record]=[...f.records].find(([k])=>k.includes('/foundation/'));
- f.records.clear();f.records.set(key.replace('foundation-fgt-v2','foundation-fgt-v1'),{...record,version:'2026-11-03-foundation-fgt-v1'});
+ f.records.clear();f.records.set(key.replace('foundation-fgt-v3','foundation-fgt-v1'),{...record,version:'2026-11-03-foundation-fgt-v1'});
  const m=await generateRuleMapping(f.config,input,calendar,[],()=>{throw Error('不应重判原局');});
- assert.equal(m.engine.foundation.version,'2026-11-03-foundation-fgt-v2');assert.equal(m.engine.foundation.migratedFrom,'2026-11-03-foundation-fgt-v1');assert.equal(f.calls,1);
+ assert.equal(m.engine.foundation.version,'2026-11-03-foundation-fgt-v3');assert.equal(m.engine.foundation.migratedFrom,'2026-11-03-foundation-fgt-v1');assert.equal(f.calls,1);
 });
