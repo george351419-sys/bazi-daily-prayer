@@ -1,3 +1,4 @@
+import {wishCopy} from '../lib/wish-copy.mjs';
 import {accountRepository} from '../lib/account-store.mjs';
 import {enqueueRitualPreparation} from '../lib/ritual-preparation.mjs';
 import {beginDevicePairing,pairedDeviceIdentity} from '../lib/ark-cloud.mjs';
@@ -18,7 +19,7 @@ import {doubao,publicProviderError} from '../lib/providers.mjs';
 import {devicesEnabled,listDevices,claimDevice,selectDeviceArtwork,unbindDevice,devicePreview} from '../lib/devices.mjs';
 import {accountsEnabled,AccountError,userView,accountCookie,register,login,recover,logout,currentAccount,requireAccount,getProfile,saveNickname,newArtworkId,saveArtwork,getArtwork,listArtworks,accountHistory,profileSignature,persistImage,privateImage} from '../lib/accounts.mjs';
 const rate=new Map();
-const accountJob=(c,account,record)=>({id:record.id,source:record.source||'generated',status:record.status==='complete'?'complete':'mapped',phase:record.status==='complete'?'已从画册载入':record.source==='automatic'?'每日画作正在后台准备':'解读已归档，待绘制画面',date:record.date,createdAt:record.createdAt,input:record.input,calendar:record.calendar,mapping:record.mapping,image:record.image?'/api/account/artworks/'+record.id+'/image':null,token:sealJob(c,{id:record.id,owner:'account:'+account.id,accountId:account.id,mapping:record.mapping,expires:Date.now()+86400000}),error:null,archived:true,managedAutomatically:record.source==='automatic',imageReuse:record.imageReuse?{sourceArtworkId:record.imageReuse.sourceArtworkId,sourceDate:record.imageReuse.sourceDate}:null});
+const accountJob=(c,account,record)=>({id:record.id,source:record.source||'generated',status:record.status==='complete'?'complete':'mapped',phase:record.status==='complete'?'已从画册载入':record.source==='automatic'?'每日画作正在后台准备':'解读已归档，待绘制画面',date:record.date,createdAt:record.createdAt,input:record.input,calendar:record.calendar,mapping:wishCopy(record.mapping),image:record.image?'/api/account/artworks/'+record.id+'/image':null,token:sealJob(c,{id:record.id,owner:'account:'+account.id,accountId:account.id,mapping:record.mapping,expires:Date.now()+86400000}),error:null,archived:true,managedAutomatically:record.source==='automatic',imageReuse:record.imageReuse?{sourceArtworkId:record.imageReuse.sourceArtworkId,sourceDate:record.imageReuse.sourceDate}:null});
 
 const send=(res,status,data)=>res.status(status).json(data);
 export default function handler(req,res){return handleRequest(req,res,process.env);}

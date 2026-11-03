@@ -2,14 +2,12 @@
  <view class="row"><text class="kicker">YOUR DAILY COMPANION / 03</text><text class="date">{{date}}</text></view>
  <text class="title">画作陪伴</text>
  <text class="subtitle">欣赏今日画面，留一刻安静陪伴。</text>
- <view wx:if="{{!sample&&syncState}}" class="paper"><text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
-  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/></view>
  <view class="loading" wx:if="{{loading}}">正在载入今日内容…</view>
  <view class="error" role="alert">{{error}}</view>
 
  <view class="artwork {{status.displayPlan.contentMode==='photo'?'photo':''}}">
   <image wx:if="{{image}}" src="{{image}}" mode="aspectFit" class="painting"/>
-  <view wx:elif="{{!sample}}" class="blank">还没有选择画面<text class="note">先在画屏页选择照片或已有祈福图。</text></view>
+  <view wx:elif="{{!sample}}" class="blank">今天的画作尚未就绪<text class="note">可前往许愿池生成今日祈福画。</text></view>
   <block wx:if="{{sample||status.displayPlan.contentMode!=='photo'}}">
    <view class="art-title">今日祈愿</view>
    <view class="seal">愿</view>
@@ -17,13 +15,9 @@
   <view class="art-action" wx:if="{{sample}}"><text class="action-label">此刻 · 一件小事</text><text class="action-text">放松肩膀，慢慢呼吸片刻</text></view>
  </view>
 
- <view class="row"><text class="badge">{{sample?'示例画面':status.displaySource==='device_report'?'设备最近回报':'计划预览'}}</text><button class="text-button" bindtap="refresh" disabled="{{loading}}">刷新内容</button></view>
+ <view class="row"><text class="badge">{{sample?'示例画面':'今日画作'}}</text><button class="text-button" bindtap="refresh" disabled="{{loading}}">刷新内容</button></view>
  <view wx:if="{{sample}}" class="notice">这是一张示例画。你可以自由欣赏；前往许愿池选择自己的祈愿和画风。</view>
- <text wx:if="{{status.deviceReport.lastSeen}}" class="note">设备最近联网：{{status.deviceReport.lastSeen}}</text>
- <text wx:if="{{status.notice}}" class="note">{{status.notice}}</text>
- <view wx:if="{{!sample}}" class="notice">{{progress}}</view>
- <view class="day-previews"><view wx:for="{{days}}" wx:key="artworkId" class="day-preview" wx:if="{{item.preview}}"><image src="{{item.preview}}" mode="aspectFit"/><text>{{item.label}} · {{item.date}}</text><text class="note">{{item.title}}</text></view></view>
-
+ <text wx:if="{{!sample&&image}}" class="section-title">{{artworkTitle}}</text>
  <view class="paper companion-section"><text class="section-title">画中寄语</text><text class="companion-lead">把今天的心愿放进画里，也留一点时间给自己。愿你在每一次观看时，记起自己珍惜的人和事。</text></view>
  <view class="paper companion-section"><text class="section-title">此刻的小休息</text><text class="companion-lead">放松肩膀，慢慢呼吸片刻。动作以身体舒适为准。</text></view>
  <view class="stack spaced"><button wx:if="{{sample}}" class="primary" bindtap="open">选择我的祈愿</button><button wx:else class="primary" bindtap="open">管理我的画屏</button></view>
