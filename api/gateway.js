@@ -1,3 +1,4 @@
+import {artworkFoundationIssues} from '../lib/reading-display.mjs';
 import {createArtworkView,readArtworkView,artworkExplanation} from '../lib/artwork-view.mjs';
 import {wishCopy} from '../lib/wish-copy.mjs';
 import {accountRepository} from '../lib/account-store.mjs';
@@ -140,6 +141,7 @@ export async function handleRequest(req,res,config){
    if(account){
     const record=await getArtwork(config,account,job.id);if(record.image){await indexArtworkImage(config,account,record);if(body.prepareNext)await enqueueRitualPreparation(config,account,record);return send(res,200,accountJob(config,account,record));}
     if(record.source==='automatic')throw new AccountError(409,'这幅每日画作由后台处理，请在我的画屏中查看进度；归档或发布失败时可在该处重试。');
+    if(artworkFoundationIssues(record).length)throw new AccountError(409,'这份旧方案的喜用与画面依据不一致，请重新生成方案，尚未启动绘图。');
     if(!record.pendingImageURL||record.pendingImageExpires<Date.now()){
      const match=await findReusableImage(config,account,record);
      if(match){await reuseArchivedImage(config,account,record,match);if(body.prepareNext)await enqueueRitualPreparation(config,account,record);return send(res,200,accountJob(config,account,record));}

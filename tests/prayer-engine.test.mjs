@@ -11,8 +11,9 @@ import {PRAYER_CATALOG} from '../lib/prayer-catalog.mjs';
 import {buildImagePrompt} from '../lib/domain.mjs';
 const profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']};
 const input=validateInput(profile,'2026-11-01'),calendar=calendarFor(input);
+const supplementFoundation=value=>({...value,selection_basis:{structure:'ordinary',strength:'weak',fuyi_reason:value.reason,pattern_reason:'本回归使用已确认的格局辅助候选，不增加其他候选。',fuyi_stems:value.primary_element==='木'?['甲','丙']:['丙','甲'],pattern_stems:['丙','甲']}});
 const foundation={day_master:calendar.dayMaster,month_branch:calendar.natal[1][1],primary_element:'火',secondary_element:'木',reason:'本测试以既定火主木辅档案为前提，原局取用与每日动态分开保存。',tiaohou_reason:'具体调候按已确认档案安排，本例不额外增加未确认的景物。',tiaohou_required_stems:[],unmet_tiaohou_stems:[],tiaohou_groups:[],protected_stems:[]};
-function fixture(){const records=new Map();let calls=0;const config={ENGINE_OWNER_ID:'test-account',PRAYER_RULE_STORE:{get:async k=>records.get(k),put:async(k,v)=>records.set(k,structuredClone(v))},DEEPSEEK_API_KEY:'test'};const fetcher=async(url,options)=>{calls++;const request=JSON.parse(JSON.parse(options.body).messages[1].content);const result=request.schema?.decisions?{unmet_tiaohou_stems:[],effective_stem_bindings:[],decisions:request.models.map(m=>({model:m.id,effective_indices:[],unfavorable_indices:[],critical_indices:[],reason:'本测试未确认有效牵合条件，成员关系不自动当作已成局。'}))}:foundation;return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify(result)}}]})};};return {config,fetcher,records,get calls(){return calls;}};}
+function fixture(){const records=new Map();let calls=0;const config={ENGINE_OWNER_ID:'test-account',PRAYER_RULE_STORE:{get:async k=>records.get(k),put:async(k,v)=>records.set(k,structuredClone(v))},DEEPSEEK_API_KEY:'test'};const fetcher=async(url,options)=>{calls++;const request=JSON.parse(JSON.parse(options.body).messages[1].content);const result=request.schema?.decisions?{unmet_tiaohou_stems:[],effective_stem_bindings:[],decisions:request.models.map(m=>({model:m.id,effective_indices:[],unfavorable_indices:[],critical_indices:[],reason:'本测试未确认有效牵合条件，成员关系不自动当作已成局。'}))}:supplementFoundation(foundation);return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify(result)}}]})};};return {config,fetcher,records,get calls(){return calls;}};}
 test('默认入口由规则组装完整方案；首次只判断原局，随后断网复用',async()=>{
  const f=fixture();const first=await analyzeMapping(f.config,input,calendar,[],f.fetcher);
  assert.equal(first.engine.version,PRAYER_ENGINE_VERSION);assert.equal(first.deity,'陈九公');assert.equal(first.engine.zodiac_candidates.length,79);assert.equal(f.calls,1);
@@ -62,7 +63,7 @@ test('跨日保留稳定取用，动态条件由规则更新；同愿望轮换�
  assert.equal(f.calls,1);assert.deepEqual(next.engine.foundation,today.engine.foundation);assert.equal(next.primary_element,today.primary_element);assert.notEqual(next.deity,today.deity);assert.ok(next.rotation_reason);
 });
 test('双生肖共同补全三合通过实际成员和象征成员分离校验',async()=>{
- const f=fixture();f.fetcher=async(url,options)=>{const q=JSON.parse(JSON.parse(options.body).messages[1].content);if(!q.schema?.decisions)return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify(foundation)}}]})};
+ const f=fixture();f.fetcher=async(url,options)=>{const q=JSON.parse(JSON.parse(options.body).messages[1].content);if(!q.schema?.decisions)return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify(supplementFoundation(foundation))}}]})};
  const decisions=q.models.map(m=>({model:m.id,effective_indices:m.relation_indices.filter(i=>q.relation_catalog[i].type==='三合'&&q.relation_catalog[i].branches.every(b=>'寅午戌'.includes(b))),unfavorable_indices:[],critical_indices:[],reason:'本测试的火三合满足已给定的有效牵合条件，按主喜火方向比较候选。'}));
  return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify({decisions,unmet_tiaohou_stems:[],effective_stem_bindings:[]})}}]})};};
  const c={...calendar,natal:['甲寅','乙卯','丙卯','丁卯'],dayMaster:'丙',luck:null,year:'乙卯',month:'乙卯',day:'乙卯',stems:[],rawStemClashes:[],rawStemBindings:[]};
@@ -122,7 +123,7 @@ test('同日完整方案从仓库复用，修改返回对象不污染缓存',asy
 test('原局档案保持独立版本，每日规则更新不重判取用',async()=>{
  const f=fixture();await analyzeMapping(f.config,input,calendar,[],f.fetcher);
  const entry=[...f.records.entries()].find(([key])=>key.includes('/foundation/'));
- assert.ok(entry[0].includes('/2026-11-01-rules-v2/'));assert.equal(entry[1].version,'2026-11-01-rules-v2');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-01-rules-v4');
+ assert.ok(entry[0].includes('/2026-11-03-foundation-fgt-v1/'));assert.equal(entry[1].version,'2026-11-03-foundation-fgt-v1');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-03-rules-v5');
 });
 test('已确认原局在无模型密钥时跨日生成全部条件与画面',async()=>{
  const f=fixture();let calls=0;
