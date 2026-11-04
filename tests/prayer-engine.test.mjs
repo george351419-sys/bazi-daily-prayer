@@ -11,9 +11,9 @@ import {PRAYER_CATALOG} from '../lib/prayer-catalog.mjs';
 import {buildImagePrompt} from '../lib/domain.mjs';
 const profile={gender:'female',birthDate:'1992-10-17',birthTime:'22:30',city:'上海',calendar:'solar',wishes:['W02']};
 const input=validateInput(profile,'2026-11-01'),calendar=calendarFor(input);
-const supplementFoundation=value=>({...value,review_reason:'本回归维持已给定候选，用于验证复判后仍保留原局路线及画面的一致性。',selection_basis:{structure:'ordinary',strength:'weak',fuyi_reason:value.reason,pattern_reason:'本回归使用已确认的格局辅助候选，不增加其他候选。',fuyi_stems:value.primary_element==='木'?['甲','丙']:['丙','甲'],pattern_stems:['丙','甲'],fuyi_exclusions:[{stem:'乙',reason:'本回归使用限定候选测试缓存与取色，排除项不表示该生日实际取用。'},{stem:'丁',reason:'本回归使用限定候选测试缓存与取色，排除项不表示该生日实际取用。'}]}});
+const supplementFoundation=(value,corrected=false)=>({...value,review_reason:'本回归维持已给定候选，用于验证复判后仍保留原局路线及画面的一致性。',selection_basis:{structure:'ordinary',strength:'weak',fuyi_reason:value.reason,pattern_reason:'本回归使用已确认的格局辅助候选，不增加其他候选。',fuyi_stems:value.primary_element==='木'?['甲','丙']:['丙','甲'],pattern_stems:corrected?['庚','辛']:['丙','甲'],...(corrected?{pattern_route:'食神生财',pattern_rescue_stems:['丙','甲'],pattern_rescue_reason:'本缓存用例单列印比救应，不将其替换为食神生财的财星方向。'}:{}),fuyi_exclusions:[{stem:'乙',reason:'本回归使用限定候选测试缓存与取色，排除项不表示该生日实际取用。'},{stem:'丁',reason:'本回归使用限定候选测试缓存与取色，排除项不表示该生日实际取用。'}]}});
 const foundation={day_master:calendar.dayMaster,month_branch:calendar.natal[1][1],primary_element:'火',secondary_element:'木',reason:'本测试以既定火主木辅档案为前提，原局取用与每日动态分开保存。',tiaohou_reason:'具体调候按已确认档案安排，本例不额外增加未确认的景物。',tiaohou_required_stems:[],unmet_tiaohou_stems:[],tiaohou_groups:[],protected_stems:[]};
-function fixture(){const records=new Map();let calls=0;const config={ENGINE_OWNER_ID:'test-account',PRAYER_RULE_STORE:{get:async k=>records.get(k),put:async(k,v)=>records.set(k,structuredClone(v))},DEEPSEEK_API_KEY:'test'};const fetcher=async(url,options)=>{calls++;const request=JSON.parse(JSON.parse(options.body).messages[1].content);const result=request.schema?.decisions?{unmet_tiaohou_stems:[],effective_stem_bindings:[],decisions:request.models.map(m=>({model:m.id,effective_indices:[],unfavorable_indices:[],critical_indices:[],reason:'本测试未确认有效牵合条件，成员关系不自动当作已成局。'}))}:supplementFoundation(foundation);return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify(result)}}]})};};return {config,fetcher,records,get calls(){return calls;}};}
+function fixture(){const records=new Map();let calls=0;const config={ENGINE_OWNER_ID:'test-account',PRAYER_RULE_STORE:{get:async k=>records.get(k),put:async(k,v)=>records.set(k,structuredClone(v))},DEEPSEEK_API_KEY:'test'};const fetcher=async(url,options)=>{calls++;const request=JSON.parse(JSON.parse(options.body).messages[1].content);const result=request.schema?.decisions?{unmet_tiaohou_stems:[],effective_stem_bindings:[],decisions:request.models.map(m=>({model:m.id,effective_indices:[],unfavorable_indices:[],critical_indices:[],reason:'本测试未确认有效牵合条件，成员关系不自动当作已成局。'}))}:supplementFoundation(foundation,!!request.initial);return {ok:true,status:200,json:async()=>({choices:[{message:{content:JSON.stringify(result)}}]})};};return {config,fetcher,records,get calls(){return calls;}};}
 test('默认入口由规则组装完整方案；首次只判断原局，随后断网复用',async()=>{
  const f=fixture();const first=await analyzeMapping(f.config,input,calendar,[],f.fetcher);
  assert.equal(first.engine.version,PRAYER_ENGINE_VERSION);assert.equal(first.deity,'萧升');assert.equal(first.engine.zodiac_candidates.length,79);assert.equal(f.calls,2);
@@ -123,7 +123,7 @@ test('同日完整方案从仓库复用，修改返回对象不污染缓存',asy
 test('原局档案保持独立版本，每日规则更新不重判取用',async()=>{
  const f=fixture();await analyzeMapping(f.config,input,calendar,[],f.fetcher);
  const entry=[...f.records.entries()].find(([key])=>key.includes('/foundation/'));
- assert.ok(entry[0].includes('/2026-11-04-foundation-fgt-v6/'));assert.equal(entry[1].version,'2026-11-04-foundation-fgt-v6');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-04-rules-v10');
+ assert.ok(entry[0].includes('/2026-11-04-foundation-fgt-v7/'));assert.equal(entry[1].version,'2026-11-04-foundation-fgt-v7');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-04-rules-v11');
 });
 test('已确认原局在无模型密钥时跨日生成全部条件与画面',async()=>{
  const f=fixture();let calls=0;
@@ -175,18 +175,18 @@ test('截图八支同时考虑寅午戌与申酉戌，未候选经过比较而�
  for(const a of r.baseAlternatives){assert.ok(a.effective_bindings.some(x=>x.type==='三合'));assert.ok(a.effective_bindings.some(x=>x.type==='三会'));assert.ok(!a.residual_relations.some(x=>['相刑','自刑'].includes(x.type)));assert.ok(a.suppressed_harms.some(x=>x.type==='六害'));assert.equal(a.residual_relations.length,0);}
  const wei=r.evaluated.find(x=>x.added.join('')==='未');assert.ok(wei);assert.equal(wei.improvement,0);assert.equal(wei.positive,false);assert.equal(wei.selected,false);
 });
-test('v1原局候选直接重排迁移至v6，不重新调用模型判断旺衰',async()=>{
+test('v1原局候选直接重排迁移至v7，不重新调用模型判断旺衰',async()=>{
  const f=fixture();await generateRuleMapping(f.config,input,calendar,[],f.fetcher);
  const [key,record]=[...f.records].find(([k])=>k.includes('/foundation/'));
- f.records.clear();f.records.set(key.replace('2026-11-04-foundation-fgt-v6','2026-11-03-foundation-fgt-v1'),{...record,version:'2026-11-03-foundation-fgt-v1'});
+ f.records.clear();f.records.set(key.replace('2026-11-04-foundation-fgt-v7','2026-11-03-foundation-fgt-v1'),{...record,version:'2026-11-03-foundation-fgt-v1'});
  const m=await generateRuleMapping(f.config,input,calendar,[],()=>{throw Error('不应重判原局');});
- assert.equal(m.engine.foundation.version,'2026-11-04-foundation-fgt-v6');assert.equal(m.engine.foundation.migratedFrom,'2026-11-03-foundation-fgt-v1');assert.equal(f.calls,2);
+ assert.equal(m.engine.foundation.version,'2026-11-04-foundation-fgt-v7');assert.equal(m.engine.foundation.migratedFrom,'2026-11-03-foundation-fgt-v1');assert.equal(f.calls,2);
 });
 
-test('模型伪造已完成校验不能跳过复判，第二次仍坚持时保留其结论和冲突记录',async()=>{
+test('模型伪造已完成校验不能跳过复判，修正核心与救应后保存两次记录',async()=>{
  const f=fixture();const fetcher=async(url,options)=>{const result=await f.fetcher(url,options),payload=await result.json(),value=JSON.parse(payload.choices[0].message.content);value.cross_check={version:'2026-11-04-crosscheck-v2',status:'agreed'};payload.choices[0].message.content=JSON.stringify(value);return Response.json(payload);};
  const m=await generateRuleMapping(f.config,input,calendar,[],fetcher),audit=m.engine.foundation.value.cross_check;
- assert.equal(f.calls,2);assert.equal(audit.status,'model_second_retained');assert.ok(audit.initial_checks.conflicts.some(x=>x.section==='pattern'));assert.deepEqual(m.engine.foundation.value.selection_basis.pattern_stems,['丙','甲']);assert.match(m.reading.sections[0].body,/触发复判的差异为格局顺逆用方向/);
+ assert.equal(f.calls,2);assert.equal(audit.status,'model_second_agreed');assert.ok(audit.initial_checks.conflicts.some(x=>x.section==='pattern_contract'));assert.deepEqual(m.engine.foundation.value.selection_basis.pattern_stems,['庚','辛']);assert.deepEqual(audit.initial.selection_basis.pattern_stems,['丙','甲']);assert.match(m.reading.sections[0].body,/触发复判的差异为格局顺逆用方向/);
 });
 test('复判服务失败不把初判存成通过校验的有效档案',async()=>{
  const f=fixture();await assert.rejects(generateRuleMapping(f.config,input,calendar,[],async(url,options)=>{const q=JSON.parse(JSON.parse(options.body).messages[1].content);if(q.initial)throw Error('模拟复判网络失败');return f.fetcher(url,options);}),e=>e.ruleSection==='foundation');

@@ -13,21 +13,21 @@ test('截图中的三组候选按新规则得到金、水、火，不以白黑�
 });
 test('普通身弱须考虑印比四干，不能单凭庚未透就排除',()=>{
  const check=fuyiCoverageCheck(c,f);assert.deepEqual(check.expected_stems,['庚','辛','壬','癸']);assert.deepEqual(check.unexplained,['庚']);
- const absent={...f,selection_basis:{...f.selection_basis,fuyi_exclusions:[{stem:'庚',reason:'庚金在原局没有透出，所以本次不予考虑。'}]}};assert.deepEqual(fuyiCoverageCheck(c,absent).unexplained,['庚']);
+ const absent={...f,selection_basis:{...f.selection_basis,pattern_stems:['丙','丁'],fuyi_exclusions:[{stem:'庚',reason:'庚金在原局没有透出，所以本次不予考虑。'}]}};assert.deepEqual(fuyiCoverageCheck(c,absent).unexplained,['庚']);
 });
 test('具体格局排除理由可保留，遗漏且无理由的第二次输出不能冒充复判完成',async()=>{
- const second={...f,review_reason:'复核后保留辛印扶身路线，并明确列出庚未纳入的结构依据。',selection_basis:{...f.selection_basis,fuyi_exclusions:[{stem:'庚',reason:'本回归采用辛正印救应的假设路线，庚偏印涉及食神取用，另行排除并保留依据。'}]}};
+ const second={...f,review_reason:'复核后保留辛印扶身路线，并明确列出庚未纳入的结构依据。',selection_basis:{...f.selection_basis,pattern_stems:['丙','丁'],fuyi_exclusions:[{stem:'庚',reason:'本回归采用辛正印救应的假设路线，庚偏印涉及食神取用，另行排除并保留依据。'}]}};
  let calls=0;const reviewed=await reviewFoundation(c,f,async()=>{calls++;return second;});assert.equal(calls,1);assert.ok(reviewed.cross_check.initial_checks.conflicts.some(x=>x.section==='fuyi_coverage'));assert.deepEqual(reviewed.selection_basis.fuyi_stems,['辛','壬','癸']);assert.equal(reviewed.cross_check.final_checks.fuyi.unexplained.length,0);
- await assert.rejects(reviewFoundation(c,f,async()=>({...f,review_reason:'本次仍维持原来的判断，需要有完整记录。'})),/漏列印比候选庚/);
+ await assert.rejects(reviewFoundation(c,f,async()=>({...f,review_reason:'本次仍维持原来的判断，需要有完整记录。',selection_basis:{...f.selection_basis,pattern_stems:['丙','丁']}})),/漏列印比候选庚/);
 });
 test('补齐庚后的三项喜用贯穿映射、点缀说明、实际提示词和图片复用标识',async()=>{
  let calls=0;const records=new Map(),config={DEEPSEEK_API_KEY:'offline-test-only',ENGINE_OWNER_ID:'three-element-regression',PRAYER_RULE_STORE:{get:async k=>records.get(k),put:async(k,v)=>records.set(k,structuredClone(v))}};
  const mapping=await generateRuleMapping(config,{today:'2026-11-04',wishes:['W01'],artStyle:'cute'},c,[],async(url,options)=>{
-  calls++;const q=JSON.parse(JSON.parse(options.body).messages[1].content);const value=q.initial?{...f,review_reason:'复核后把庚偏印加入扶抑候选，不再只看已透天干。',selection_basis:{...f.selection_basis,fuyi_stems:['庚','辛','壬','癸']}}:f;
+  calls++;const q=JSON.parse(JSON.parse(options.body).messages[1].content);const value=q.initial?{...f,review_reason:'复核后把庚偏印加入扶抑候选，不再只看已透天干。',selection_basis:{...f.selection_basis,fuyi_stems:['庚','辛','壬','癸'],pattern_stems:['丙','丁'],pattern_rescue_stems:['辛','壬'],pattern_rescue_reason:'印比另列用于身弱支持，不替代食神生财方向。'}}:f;
   return Response.json({choices:[{message:{content:JSON.stringify(value)}}]});
  });
- assert.equal(calls,2);assert.deepEqual(mapping.favorable_elements,['金','水','火']);assert.equal(mapping.tertiary_element,'火');assert.deepEqual(mapping.colors.map(x=>x.name),['白','蓝','红']);assert.match(mapping.reading.sections[1].body,/第三喜用五行为火/);assert.doesNotMatch(mapping.reading.sections[1].body,/中性|审美配色/);assert.match(mapping.image_prompt,/点缀：红.*第3喜用火/);assert.match(buildImagePrompt(mapping),/第三喜用火仅作少量点缀/);
- assert.equal(visualMapping(mapping).content.tertiaryElement,'火');assert.notEqual(visualMapping(mapping).fingerprint,visualMapping({...mapping,tertiary_element:'土'}).fingerprint);
+ assert.equal(calls,2);assert.deepEqual(mapping.favorable_elements,['金','火','水']);assert.equal(mapping.tertiary_element,'水');assert.deepEqual(mapping.colors.map(x=>x.name),['白','红','蓝']);assert.match(mapping.reading.sections[1].body,/第三喜用五行为水/);assert.doesNotMatch(mapping.reading.sections[1].body,/中性|审美配色/);assert.match(mapping.image_prompt,/点缀：蓝.*第3喜用水/);assert.match(buildImagePrompt(mapping),/第三喜用水仅作少量点缀/);
+ assert.equal(visualMapping(mapping).content.tertiaryElement,'水');assert.notEqual(visualMapping(mapping).fingerprint,visualMapping({...mapping,tertiary_element:'土'}).fingerprint);
 });
 test('第三喜用点缀色不能被声明为中性替代',()=>{
  const input=validateInput({gender:'female',birthDate:'1992-10-17',birthTime:'22:30',calendar:'solar',wishes:['W02']},'2026-11-04'),cal=calendarFor(input),m=makeMapping(input,cal);

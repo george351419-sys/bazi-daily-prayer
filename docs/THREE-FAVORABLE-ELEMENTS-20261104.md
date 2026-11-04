@@ -1,6 +1,8 @@
 # 2026-11-04 七档取用与三种喜用配色
 
-版本：rules-v10 / foundation-fgt-v6 / crosscheck-v2。
+版本：rules-v11 / foundation-fgt-v7 / crosscheck-v3。
+
+格局方向与救应已拆分，见 [格局校验修订](PATTERN-CORE-RESCUE-20261104.md)。下文旧截图候选仅演示排序，不表示其格局候选已通过新版语义校验。
 
 ## 排序
 
