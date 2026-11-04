@@ -120,7 +120,7 @@ test('BLE attach reconnects saved Wi-Fi only when the screen is offline',async()
 });
 
 test('custom BLE names resolve a cloud-authenticated device identity and restore heartbeat settings',async()=>{
- const client=new ArkNetwork({delay:async()=>{}}),normal='https://playmath.cn/api/v1/device/heartbeat',nonce='d'.repeat(32),writes=[];client.characteristic={};client.device={name:'FRAMEFILMARK-Elink'};
+ const client=new ArkNetwork({delay:async()=>{}}),normal='https://playmath.cn/api/v1/device/heartbeat',nonce='d'.repeat(32),writes=[];client.characteristic={};client.device={name:'FRAMEFILMARK-Elink'};client.request=async()=>new Uint8Array([1]);
  client.write=async(ch,body=[])=>{writes.push({ch,body});if(ch===0x3f)client.receive(packet(ch,new TextEncoder().encode(normal)));};
  const id=await client.resolveIdentity(async(path,body)=>body.beginPairing?{nonce,heartbeatURL:normal+'?link='+nonce+'&device_id='}:{status:'identified',deviceId:'112233445566'});assert.equal(id,'112233445566');assert.equal(new TextDecoder().decode(writes.at(-1).body),normal);assert.equal(client.identifying,false);
 });
@@ -148,4 +148,27 @@ test('disconnect cancels queued Wi-Fi work before credentials can reach another 
  const configure=client.configure('home','test-password');const rejected=assert.rejects(configure,/蓝牙已断开/);
  client.disconnect();release();await pending;await rejected;
  assert.equal(p.writes.some(bytes=>[0x32,0x34,0x39].includes(bytes[1])),false);
+});
+
+test('online identity polling preserves Wi-Fi and never sends a reconnect or credential command',async()=>{
+ const p=peripheral(),states=[],client=new ArkNetwork({bluetooth:p.bluetooth,onState:s=>states.push(s),delay:async()=>{}});
+ await client.connect();await client.configure('home','test-password');p.writes.length=0;states.length=0;
+ const normal='https://playmath.cn/api/v1/device/heartbeat',nonce='e'.repeat(32);client.readHeartbeatURL=async()=>normal;
+ let polls=0;
+ const id=await client.resolveIdentity(async(path,body)=>body.beginPairing?{nonce,heartbeatURL:normal+'?link='+nonce+'&device_id='}:++polls<3?{status:'waiting'}:{status:'identified',deviceId:'112233445566'});
+ assert.equal(id,'112233445566');assert.equal(polls,3);
+ const channels=p.writes.map(bytes=>bytes[1]);
+ assert.equal(channels.some(ch=>[0x30,0x32,0x34,0x35,0x38,0x39].includes(ch)),false);
+ assert.ok(channels.filter(ch=>ch===0x3a).length>=3);
+ assert.equal(states.some(s=>!s.connected),false);
+ assert.equal(new TextDecoder().decode(Uint8Array.from(p.writes.at(-1).slice(3,-1))),normal);
+ client.disconnect();
+});
+
+test('offline identity reconnects at most once then polls without restarting Wi-Fi',async()=>{
+ const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();p.writes.length=0;
+ const normal='https://playmath.cn/api/v1/device/heartbeat',nonce='f'.repeat(32);client.readHeartbeatURL=async()=>normal;
+ let polls=0;await client.resolveIdentity(async(path,body)=>body.beginPairing?{nonce,heartbeatURL:normal+'?link='+nonce+'&device_id='}:++polls<3?{status:'waiting'}:{status:'identified',deviceId:'112233445566'});
+ assert.equal(p.writes.filter(bytes=>bytes[1]===0x38).length,1);
+ assert.equal(client.lastStatus,true);client.disconnect();
 });

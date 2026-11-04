@@ -1,7 +1,7 @@
 import {readAPIResponse} from './api-response.js?v=20261101-safe-bottom-v3';
-import {setupNetwork} from './ark-network.js?v=20261104-network-serial-v1';
+import {setupNetwork} from './ark-network.js?v=20261104-preserve-wifi-v2';
 import './art-style-ui.js?v=20261101-safe-bottom-v3';
-import {setupAccounts} from './account-ui.js?v=20261104-binding-resume-v1';
+import {setupAccounts} from './account-ui.js?v=20261104-binding-once-v2';
 import {WISH_GROUPS} from './wishes.js';
 import {normalizeBirthDate} from './date-input.js?v=20261017-solar';
 import {setupBirthInputs} from './birth-picker.js?v=20261017-solar';

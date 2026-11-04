@@ -22,7 +22,7 @@ export function arkDeviceId(name){
 export class ArkNetwork {
  constructor({bluetooth,onState=()=>{},onDownload=()=>{},onOta=()=>{},delay=sleep,timeout=30000}={}){this.bluetooth=bluetooth;this.onState=onState;this.onDownload=onDownload;this.onOta=onOta;this.delay=delay;this.timeout=timeout;this.pendingResponses=new Map();this.epoch=0;}
  trace(stage){this.diagnostics=this.diagnostics||[];this.diagnostics.push({time:new Date().toISOString(),stage});if(this.diagnostics.length>120)this.diagnostics.shift();}
- state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic,deviceName:this.device?.name||null,deviceId:this.deviceId||null,savedSSID:this.savedSSID||''});}
+ state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic,deviceName:this.device?.name||null,deviceId:this.deviceId||null,connectionId:this.epoch,savedSSID:this.savedSSID||''});}
  async open(device){
   this.trace(device.gatt.connected?'open:existing-connection-reset':'open:disconnected');
   if(device.gatt.connected)device.gatt.disconnect();
@@ -129,10 +129,11 @@ export class ArkNetwork {
   if(!/^[a-f0-9]{32}$/.test(challenge.nonce||'')||challenge.heartbeatURL!==normal+'?link='+challenge.nonce+'&device_id=')throw new Error('设备识别服务回复无效。');
   let changed=false;
   try{
-   changed=true;await this.write(0x3e,new TextEncoder().encode(challenge.heartbeatURL),epoch);await this.resumeWifiSession();
+   changed=true;await this.write(0x3e,new TextEncoder().encode(challenge.heartbeatURL),epoch);await this.ensureWifiSession();
    const end=Date.now()+60000;
    while(Date.now()<end){
     if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙连接已断开，请重新连接画屏。');
+    await this.request(0x3a,[],1500);
     const result=await request('/api/account/ritual/device',{pairingNonce:challenge.nonce});
     if(result.status==='identified'&&/^[a-f0-9]{12}$/.test(result.deviceId||''))return result.deviceId;
     await this.delay(2000);
@@ -293,7 +294,7 @@ export function setupNetwork(){
  const client=new ArkNetwork({bluetooth:navigator.bluetooth,onState:status=>{
   if(!status.connected){syncSha=null;syncRequestedAt=null;requestedSha=null;}
   state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;firmwareButton.disabled=!status.paired||busy;
-  connectedDevice=status.paired?{deviceId:status.deviceId,deviceName:status.deviceName,resolveIdentity:async request=>{const id=await client.resolveIdentity(request);client.deviceId=id;client.state('设备身份已核验，正在关联当前账户。',client.lastStatus===true);return id;}}:null;
+  connectedDevice=status.paired?{deviceId:status.deviceId,deviceName:status.deviceName,connectionId:status.connectionId,resolveIdentity:async request=>{const id=await client.resolveIdentity(request);client.deviceId=id;client.state('设备身份已核验，正在关联当前账户。',client.lastStatus===true);return id;}}:null;
   binding.hidden=!status.paired;bind.disabled=!status.paired;updateConnectionControls();
   if(!status.paired){bindingState.textContent='';delete bindingState.dataset.deviceId;}
   else if(status.deviceId&&bindingState.dataset.deviceId!==status.deviceId){bindingState.dataset.deviceId=status.deviceId;bindingState.textContent='当前画屏：'+status.deviceName+' · 设备编号 '+status.deviceId;}
@@ -340,7 +341,7 @@ export function setupNetwork(){
   if(force)forceSync=true;
   const sha=latestStatus?.build?.sha256;
   if(busy||downloadBusy||syncBusy||client.networkBusy||client.identifying||!client.characteristic||client.lastStatus!==true||!sha||(syncSha===sha&&!forceSync)||latestStatus.pendingUpdate||latestStatus.build.status!=='published'||latestStatus.device?.id!==client.deviceId)return;
-  syncBusy=true;try{await client.resumeWifi();if(client.lastStatus===true){syncSha=sha;forceSync=false;requestedSha=sha;syncRequestedAt=Date.now();announceConnection();}}finally{syncBusy=false;}
+  syncBusy=true;try{await client.ensureWifi();if(client.lastStatus===true){syncSha=sha;forceSync=false;requestedSha=sha;syncRequestedAt=Date.now();announceConnection();}}finally{syncBusy=false;}
  }
  document.addEventListener('prayer:transfer-status',event=>{
   latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();

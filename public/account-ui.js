@@ -2,7 +2,7 @@ import {setupRitual} from './ritual-ui.js?v=20261101-connected-sync-v2';
 import {setupDevices} from './device-ui.js?v=20261101-approved-copy-v1';
 import {setupCustomPhoto} from './custom-photo.js?v=20261101-connected-sync-v2';
 export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUserChange,onOpenArtwork,isBusy}){
- const $=s=>document.querySelector(s),auth=$('#auth-dialog'),panel=$('#account-dialog');let enabled=false,user=null,profile=null,mode='login',afterLogin=null,cursor=null,urls=[],pairedDevice=null,bindingDevice=false;
+ const $=s=>document.querySelector(s),auth=$('#auth-dialog'),panel=$('#account-dialog');let enabled=false,user=null,profile=null,mode='login',afterLogin=null,cursor=null,urls=[],pairedDevice=null,bindingDevice=false,lastAutoBindingAttempt=null;
  const text=(s,v)=>{$(s).textContent=v||'';},visible=(s,v)=>{$(s).hidden=!v;};
  const devices=setupDevices({request,fetchImage,getUser:()=>user}),ritual=setupRitual({request,fetchImage,getUser:()=>user}),customPhoto=setupCustomPhoto({request,fetchImage,getUser:()=>user});
  document.querySelector('#custom-login')?.addEventListener('click',()=>open('login',()=>{location.hash='custom';}));
@@ -13,6 +13,9 @@ export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUs
   const state=$('#network-device-state'),button=$('#bind-ark-device');
   if(!user){if(manual)open('login',bindPairedDevice);return;}
   if(bindingDevice)return;
+  const attemptKey=device.connectionId===undefined?null:user.id+':'+device.connectionId;
+  if(!manual&&attemptKey&&attemptKey===lastAutoBindingAttempt)return;
+  if(attemptKey)lastAutoBindingAttempt=attemptKey;
   bindingDevice=true;button.disabled=true;state.textContent='已识别画屏，正在自动绑定到当前账户…';
   try{const id=device.deviceId||await device.resolveIdentity(request);device.deviceId=id;await ritual.bindDevice(id);document.dispatchEvent(new CustomEvent('prayer:ark-sync'));state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';}
   catch(e){state.textContent='绑定暂未完成：'+e.message;}
