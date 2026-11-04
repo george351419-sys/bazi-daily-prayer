@@ -124,3 +124,28 @@ test('custom BLE names resolve a cloud-authenticated device identity and restore
  client.write=async(ch,body=[])=>{writes.push({ch,body});if(ch===0x3f)client.receive(packet(ch,new TextEncoder().encode(normal)));};
  const id=await client.resolveIdentity(async(path,body)=>body.beginPairing?{nonce,heartbeatURL:normal+'?link='+nonce+'&device_id='}:{status:'identified',deviceId:'112233445566'});assert.equal(id,'112233445566');assert.equal(new TextDecoder().decode(writes.at(-1).body),normal);assert.equal(client.identifying,false);
 });
+
+test('Wi-Fi configuration cannot interrupt the authenticated identity heartbeat',async()=>{
+ const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});
+ await client.connect();client.readHeartbeatURL=async()=>'https://playmath.cn/api/v1/device/heartbeat';
+ let release,entered;const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r),nonce='d'.repeat(32);
+ const identity=client.resolveIdentity(async(path,body)=>{
+  if(body.beginPairing)return {nonce,heartbeatURL:'https://playmath.cn/api/v1/device/heartbeat?link='+nonce+'&device_id='};
+  entered();await gate;return {status:'identified',deviceId:'112233445566'};
+ });
+ await started;
+ const configure=client.configure('home','test-password');
+ await Promise.resolve();assert.equal(p.writes.some(bytes=>bytes[1]===0x39),false);
+ release();assert.equal(await identity,'112233445566');await configure;
+ const channels=p.writes.map(bytes=>bytes[1]);assert.ok(channels.lastIndexOf(0x3e)<channels.indexOf(0x39));
+ assert.equal(client.lastStatus,true);assert.equal(client.networkBusy,false);client.disconnect();
+});
+
+test('disconnect cancels queued Wi-Fi work before credentials can reach another connection',async()=>{
+ const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();
+ let release,entered;const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r);
+ const pending=client.networkOperation(async()=>{entered();await gate;});await started;
+ const configure=client.configure('home','test-password');const rejected=assert.rejects(configure,/蓝牙已断开/);
+ client.disconnect();release();await pending;await rejected;
+ assert.equal(p.writes.some(bytes=>[0x32,0x34,0x39].includes(bytes[1])),false);
+});

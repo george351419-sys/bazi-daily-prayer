@@ -72,6 +72,7 @@ export class ArkNetwork {
   if(bytes[1]===0x3d&&bytes[2]===2){const state=bytes[3],progress=bytes[4];this.onDownload({state,progress});if(this.downloadRead){this.downloadRead.resolve({state,progress});this.downloadRead=null;}}
   if(bytes[1]===0x3a&&bytes[2]===1){
    const connected=bytes[3]===1;
+   this.trace(connected?'wifi:online':'wifi:offline');
    this.lastStatus=connected;
    if(connected&&this.waiting){this.waiting.resolve();this.waiting=null;}
    this.state(connected?'画屏 Wi-Fi 已连接。':'蓝牙已连接，画屏 Wi-Fi 尚未连接；会尝试使用已保存的网络，首次使用或更换网络时再填写密码。',connected);
@@ -84,16 +85,29 @@ export class ArkNetwork {
   this.trace('write:'+command+':done');
   if(epoch!==this.epoch)throw new Error('蓝牙已断开，请重新连接。');
  }
- async resumeWifi(){
+ // Serialize whole network operations, not just individual BLE writes. A
+ // credential change must not disconnect Wi-Fi during identity authentication.
+ networkOperation(operation){
+  const epoch=this.epoch,prior=this.networkOperationTail||Promise.resolve();
+  const next=prior.catch(()=>{}).then(async()=>{
+   if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙已断开，请重新连接。');
+   this.networkBusy=true;
+   try{return await operation();}finally{this.networkBusy=false;}
+  });
+  this.networkOperationTail=next;return next;
+ }
+ async resumeWifi(){return this.networkOperation(()=>this.resumeWifiSession());}
+ async resumeWifiSession(){
   // 0x38 uses credentials already held by the peripheral; never read the password.
   await this.write(0x38,[]);
   await this.write(0x3a,[]);
  }
- async ensureWifi(){
+ async ensureWifi(){return this.networkOperation(()=>this.ensureWifiSession());}
+ async ensureWifiSession(){
   // ritual.6's 0x38 calls esp_wifi_disconnect() before reconnecting. On an
   // already-online screen, avoid interrupting its Wi-Fi on every BLE attach.
   const status=await this.request(0x3a,[],1500);
-  if(status[0]!==1)await this.resumeWifi();
+  if(status[0]!==1)await this.resumeWifiSession();
  }
  async readHeartbeatURL(){
   const epoch=this.epoch;const read=new Promise((resolve,reject)=>{this.identityRead={resolve,reject};});read.catch(()=>{});
@@ -101,10 +115,12 @@ export class ArkNetwork {
   try{await this.write(0x3f,[],epoch);return await read;}finally{clearTimeout(timer);this.identityRead=null;}
  }
  async resolveIdentity(request){
-  if(this.identifying)throw new Error('正在核验设备身份，请稍候。');
-  while(this.configuring)await this.delay(25);
-  this.identifying=true;
-  try{return await this.resolveIdentitySession(request);}finally{this.identifying=false;}
+  return this.networkOperation(async()=>{
+   this.identifying=true;this.trace('identity:begin');
+   try{const id=await this.resolveIdentitySession(request);this.trace('identity:identified');return id;}
+   catch(error){this.trace('identity:failed');throw error;}
+   finally{this.identifying=false;}
+  });
  }
  async resolveIdentitySession(request){
   const epoch=this.epoch,original=await this.readHeartbeatURL(),normal='https://playmath.cn/api/v1/device/heartbeat';
@@ -113,7 +129,7 @@ export class ArkNetwork {
   if(!/^[a-f0-9]{32}$/.test(challenge.nonce||'')||challenge.heartbeatURL!==normal+'?link='+challenge.nonce+'&device_id=')throw new Error('设备识别服务回复无效。');
   let changed=false;
   try{
-   changed=true;await this.write(0x3e,new TextEncoder().encode(challenge.heartbeatURL),epoch);await this.resumeWifi();
+   changed=true;await this.write(0x3e,new TextEncoder().encode(challenge.heartbeatURL),epoch);await this.resumeWifiSession();
    const end=Date.now()+60000;
    while(Date.now()<end){
     if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙连接已断开，请重新连接画屏。');
@@ -130,7 +146,8 @@ export class ArkNetwork {
   const timer=setTimeout(()=>{this.ssidRead?.reject(new Error('未读到已保存的网络，请重新连接画屏。'));this.ssidRead=null;},1500);
   try{await this.write(0x33,[],epoch);const ssid=await read;if(epoch!==this.epoch)throw new Error('蓝牙已断开');this.savedSSID=ssid;return ssid;}finally{clearTimeout(timer);this.ssidRead=null;}
  }
- async resumeSaved(ssid){
+ async resumeSaved(ssid){return this.networkOperation(()=>this.resumeSavedSession(ssid));}
+ async resumeSavedSession(ssid){
   if(this.configuring)throw new Error('正在连接 Wi-Fi，请稍候。');this.configuring=true;const epoch=this.epoch;
   try{const saved=await this.readSavedSSID();if(!saved||ssid!==saved)throw new Error('这是新的 Wi-Fi，请填写该网络的现有密码。');
    this.lastStatus=null;await this.write(0x30,[1],epoch);await this.write(0x38,[],epoch);const end=Date.now()+this.timeout;
@@ -138,8 +155,9 @@ export class ArkNetwork {
    if(this.lastStatus!==true)throw new Error('使用已保存的密码尚未确认联网；请检查网络，密码变更时再填写新密码。');
   }finally{this.configuring=false;}
  }
- async configure(ssid,password){
-  if(!password)return this.resumeSaved(ssid);
+ async configure(ssid,password){return this.networkOperation(()=>this.configureSession(ssid,password));}
+ async configureSession(ssid,password){
+  if(!password)return this.resumeSavedSession(ssid);
   if(this.configuring)throw new Error('正在配网，请等待当前操作结束。');
   const {name,secret}=wifiCredentials(ssid,password),epoch=this.epoch;this.configuring=true;
   try{
@@ -277,8 +295,9 @@ export function setupNetwork(){
   state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;firmwareButton.disabled=!status.paired||busy;
   connectedDevice=status.paired?{deviceId:status.deviceId,deviceName:status.deviceName,resolveIdentity:async request=>{const id=await client.resolveIdentity(request);client.deviceId=id;client.state('设备身份已核验，正在关联当前账户。',client.lastStatus===true);return id;}}:null;
   binding.hidden=!status.paired;bind.disabled=!status.paired;updateConnectionControls();
-  if(status.deviceId)bindingState.textContent='当前画屏：'+status.deviceName+' · 设备编号 '+status.deviceId;
-  else if(status.paired)bindingState.textContent='设备联网后会通过认证心跳核验身份，并自动关联当前账户。';
+  if(!status.paired){bindingState.textContent='';delete bindingState.dataset.deviceId;}
+  else if(status.deviceId&&bindingState.dataset.deviceId!==status.deviceId){bindingState.dataset.deviceId=status.deviceId;bindingState.textContent='当前画屏：'+status.deviceName+' · 设备编号 '+status.deviceId;}
+  else if(!bindingState.textContent)bindingState.textContent='设备联网后会通过认证心跳核验身份，并自动关联当前账户。';
   const announceKey=status.paired?(status.connected?'online':'paired')+':'+(status.deviceId||'pending'):null;
   if(announceKey!==announcedDevice){announcedDevice=announceKey;if(!status.paired||status.connected)document.dispatchEvent(new CustomEvent('prayer:ark-device',{detail:connectedDevice}));}
   if(status.savedSSID&&!form.elements.ssid.value)form.elements.ssid.value=status.savedSSID;
@@ -309,7 +328,7 @@ export function setupNetwork(){
  }});
  root.append(firmwareBox);
  async function pollDownload(){
-  if(!client.characteristic||downloadBusy||busy||client.identifying)return;downloadBusy=true;
+  if(!client.characteristic||downloadBusy||busy||client.networkBusy||client.identifying)return;downloadBusy=true;
   try{await client.write(0x3a,[]);await client.queryDownload();}
   catch(error){if(client.characteristic)state.textContent='正在确认画屏连接状态，请稍候。';document.dispatchEvent(new CustomEvent('prayer:ark-download',{detail:{deviceId:client.deviceId,unavailable:true,error:error.message}}));}
   finally{downloadBusy=false;}
@@ -320,7 +339,7 @@ export function setupNetwork(){
  async function syncPublished(force=false){
   if(force)forceSync=true;
   const sha=latestStatus?.build?.sha256;
-  if(busy||downloadBusy||syncBusy||client.identifying||!client.characteristic||client.lastStatus!==true||!sha||(syncSha===sha&&!forceSync)||latestStatus.pendingUpdate||latestStatus.build.status!=='published'||latestStatus.device?.id!==client.deviceId)return;
+  if(busy||downloadBusy||syncBusy||client.networkBusy||client.identifying||!client.characteristic||client.lastStatus!==true||!sha||(syncSha===sha&&!forceSync)||latestStatus.pendingUpdate||latestStatus.build.status!=='published'||latestStatus.device?.id!==client.deviceId)return;
   syncBusy=true;try{await client.resumeWifi();if(client.lastStatus===true){syncSha=sha;forceSync=false;requestedSha=sha;syncRequestedAt=Date.now();announceConnection();}}finally{syncBusy=false;}
  }
  document.addEventListener('prayer:transfer-status',event=>{
