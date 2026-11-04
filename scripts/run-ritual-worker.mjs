@@ -1,3 +1,4 @@
+import {compactRitualBuild,legacyPhotoIds} from '../lib/ritual-worker-state.mjs';
 import {normalizeArtStyle} from '../lib/art-styles.mjs';
 // Isolated content compiler/uploader. No model calls. Run one instance per account store.
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
@@ -23,6 +24,8 @@ do{
  const links=await listRitualWork(c);
  for(const [id,mac] of Object.entries(links)){
   let tmp,plan;try{
+   const binding=await ritualDeviceForAccount(c,id),bindingId=binding?.bindingId||null;
+   if(mac&&binding?.deviceId!==mac)continue;
    plan=await repo.get('ritual/'+id);
    const prior=await repo.get('ritual-build/'+id);
    if(prior?.status==='retrying'&&prior.attemptedRevision===(plan?.revision||plan?.updatedAt)&&Date.parse(prior.nextAttemptAt)>Date.now())continue;
@@ -37,7 +40,7 @@ do{
    }
    let records=await Promise.all(plan.artworkIds.map(art=>getArtwork(c,{id},art))),startsAt=plan.startsAt;
    if(plan.contentMode==='photo'){
-    const pair=ritualPhotoPair(plan.artworkIds,plan.rotationStartDate,Date.now()),today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+    const pair=ritualPhotoPair(legacyPhotoIds(plan.artworkIds),plan.rotationStartDate,Date.now()),today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
     records=await Promise.all(pair.artworkIds.map(art=>getArtwork(c,{id},art)));startsAt=today+'T01:00:00+08:00';
    }
    if(records.length!==2)throw new Error('Ritual plan artwork is missing');
@@ -51,7 +54,7 @@ do{
    const personalized=records.map((record,index)=>personalizeActionOptions(record.mapping)[index]);
    const manifest={...plan,actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-balanced-v4':'prayer-overlay-balanced-v4',artworkIds:records.map(r=>r.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((r,i)=>({date:r.date,artworkId:r.id,actions:personalized[i]}))};
    const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),state=await repo.get('ritual-build/'+id);
-   if(mac&&ritualPublication(state)?.signature===signature){if(state.status!=='published')await repo.put('ritual-build/'+id,{...state,status:'published',nextAttemptAt:null});continue;}
+   if(mac&&ritualPublication(state)?.deviceId===mac&&ritualPublication(state)?.bindingId===bindingId&&ritualPublication(state)?.signature===signature){if(state.status!=='published')await repo.put('ritual-build/'+id,{...state,status:'published',nextAttemptAt:null});continue;}
    let prepared=state?.prepared?.signature===signature?state.prepared:null;
    async function save(next){if((await repo.get('ritual/'+id))?.revision!==plan.revision)return false;await repo.put('ritual-build/'+id,next);return true;}
    async function progress(stage,counts=null){if(!await save({...state,status:'preparing',stage,progress:counts,attemptedRevision:plan.revision}))throw new Error('Ritual plan superseded');}
@@ -67,9 +70,9 @@ do{
     if(!await save({...state,prepared,status:'ready',stage:'ready',progress:null,attemptedRevision:plan.revision}))continue;
    }
    if(!mac)continue;
-   const result=await commitRitualPackage(c,mac,prepared,{beforeCommit:async()=>JSON.stringify(await repo.get('ritual/'+id))===JSON.stringify(plan)&&(await ritualDeviceForAccount(c,id))?.deviceId===mac});
+   const result=await commitRitualPackage(c,mac,prepared,{beforeCommit:async()=>{const latest=await ritualDeviceForAccount(c,id);return latest?.deviceId===mac&&(latest?.bindingId||null)===bindingId&&JSON.stringify(await repo.get('ritual/'+id))===JSON.stringify(plan);}});
    if(result.superseded)continue;
-   await save({previousPublication:ritualPublication(state)?.sha256!==result.sha256?ritualPublication(state):state?.previousPublication,prepared,publication:{signature,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString()},signature,status:'published',stage:'ready',mode:plan.mode,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString(),note:'waiting_for_device_storage_receipt'});
+   await save({previousPublication:ritualPublication(state)?.sha256!==result.sha256?ritualPublication(state):state?.previousPublication,prepared,publication:{deviceId:mac,bindingId,signature,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString()},signature,status:'published',stage:'ready',mode:plan.mode,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString(),note:'waiting_for_device_storage_receipt'});
    console.log('Two-day ritual package published; awaiting device receipt.');
   }catch{const state=await repo.get('ritual-build/'+id).catch(()=>null),failures=state?.attemptedRevision===(plan?.revision||plan?.updatedAt)?(state?.failures||0)+1:1;if((await repo.get('ritual/'+id))?.revision===plan?.revision)await repo.put('ritual-build/'+id,{...state,status:'retrying',stage:'retrying',progress:null,failures,attemptedRevision:plan?.revision||plan?.updatedAt,lastAttempt:new Date().toISOString(),nextAttemptAt:new Date(Date.now()+Math.min(900000,15000*2**Math.min(failures-1,6))).toISOString(),note:'Content compiler or device service unavailable; previous device cache retained'}).catch(()=>{});console.error('Ritual compilation/publication deferred; retrying later.');}
   finally{if(tmp)await rm(tmp,{recursive:true,force:true});}

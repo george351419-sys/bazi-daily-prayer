@@ -53,7 +53,7 @@ test('unknown package reports are ignored, daily preview expires, and pending au
  const initial=await repo.get('ritual/'+account.id);await configureRitual(c,account,{mode:'test',artworkIds:ids.slice(2)},{onlyIfNew:true});assert.deepEqual(await repo.get('ritual/'+account.id),initial);
  const expired=ritualPosition({mode:'daily',startsAt:'2026-10-29T01:00:00+08:00'},Date.parse('2026-10-31T12:00:00+08:00'));assert.equal(expired.actionIndex,null);assert.equal(expired.expired,true);
 });
-test('account-owned Ark binding is exclusive and the worker discovers it from storage',async t=>{
+test('latest binding wins and unbinding an old account cannot release the current owner',async t=>{
  const dir=await mkdtemp(path.join(os.tmpdir(),'ritual-binding-'));t.after(()=>rm(dir,{recursive:true,force:true}));
  const one={id:'1'.repeat(32)},two={id:'2'.repeat(32)},device='112233445566',map=new Map();
  const c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-binding-test-secret-123456',RITUAL_CLOUD_STORE:{async get(key){return map.get(key)||null;}}};
@@ -61,10 +61,11 @@ test('account-owned Ark binding is exclusive and the worker discovers it from st
  map.set('devices/'+device,encryptAccountData(c,Buffer.from(JSON.stringify(config))));
  await bindRitualDevice(c,one,device);
  assert.equal((await ritualStatus(c,one)).device.id,device);
- await assert.rejects(()=>bindRitualDevice(c,two,device),e=>e.status===409);
- assert.deepEqual(await listRitualDeviceLinks(c),{[one.id]:device});
+ await bindRitualDevice(c,two,device);
+ assert.deepEqual(await listRitualDeviceLinks(c),{[two.id]:device});
+ assert.equal((await ritualStatus(c,one)).syncConfigured,false);
  await unbindRitualDevice(c,one);
- assert.deepEqual(await listRitualDeviceLinks(c),{});
+ assert.deepEqual(await listRitualDeviceLinks(c),{[two.id]:device});
  await bindRitualDevice(c,two,device);
  assert.equal((await ritualStatus(c,two)).syncConfigured,true);
 });

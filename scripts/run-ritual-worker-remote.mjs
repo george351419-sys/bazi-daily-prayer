@@ -1,3 +1,4 @@
+import {compactRitualBuild,legacyPhotoIds} from '../lib/ritual-worker-state.mjs';
 import {normalizeArtStyle} from '../lib/art-styles.mjs';
 // Long-running remote worker for an HTTPS site connected to the same account store.
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
@@ -25,10 +26,11 @@ async function call(pathname,{method='GET',body}={}){
 }
 async function snapshot(accountId){return (await call('/api/internal/ritual-worker/accounts/'+accountId)).json();}
 async function image(accountId,artworkId,file){const response=await call('/api/internal/ritual-worker/accounts/'+accountId+'/artworks/'+artworkId+'/image');await writeFile(file,Buffer.from(await response.arrayBuffer()),{mode:0o600});}
-async function saveBuild(accountId,state,revision){return (await call('/api/internal/ritual-worker/accounts/'+accountId+'/build',{method:'POST',body:{state,revision}})).json();}
+async function saveBuild(accountId,state,revision){return (await call('/api/internal/ritual-worker/accounts/'+accountId+'/build',{method:'POST',body:{state:compactRitualBuild(state),revision}})).json();}
 
 async function processAccount(accountId,deviceId){
  let state=await snapshot(accountId),plan=state.plan,prior=state.build,tmp;
+ deviceId=state.deviceId;const bindingId=state.bindingId||null;
  if(state.preparation&&!['complete','superseded'].includes(state.preparation.status)){await call('/api/internal/ritual-worker/accounts/'+accountId+'/preparation',{method:'POST',body:{}});return;}
  if(prior?.status==='retrying'&&prior.attemptedRevision===(plan?.revision||plan?.updatedAt)&&Date.parse(prior.nextAttemptAt)>Date.now())return;
  if(!plan){
@@ -41,7 +43,7 @@ async function processAccount(accountId,deviceId){
  }
  let records=plan.artworkIds.map(id=>state.records.find(record=>record.id===id)).filter(Boolean),startsAt=plan.startsAt;
  if(plan.contentMode==='photo'){
-  const pair=ritualPhotoPair(plan.artworkIds,plan.rotationStartDate,Date.now()),today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+  const pair=ritualPhotoPair(legacyPhotoIds(plan.artworkIds),plan.rotationStartDate,Date.now()),today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
   records=pair.artworkIds.map(id=>state.records.find(record=>record.id===id)).filter(Boolean);startsAt=today+'T01:00:00+08:00';
  }
  if(records.length!==2)throw new Error('Ritual plan artwork is missing');
@@ -54,7 +56,7 @@ async function processAccount(accountId,deviceId){
  const actionDays=records.map((record,index)=>personalizeActionOptions(record.mapping)[index]);
  const manifest={...plan,actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-balanced-v4':'prayer-overlay-balanced-v4',artworkIds:records.map(record=>record.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((record,index)=>({date:record.date,artworkId:record.id,actions:actionDays[index]}))};
  const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex');
- if(deviceId&&ritualPublication(prior)?.signature===signature){if(prior.status!=='published')await saveBuild(accountId,{...prior,status:'published',nextAttemptAt:null});return;}
+ if(deviceId&&ritualPublication(prior)?.deviceId===deviceId&&ritualPublication(prior)?.bindingId===bindingId&&ritualPublication(prior)?.signature===signature){if(prior.status!=='published')await saveBuild(accountId,{...prior,status:'published',nextAttemptAt:null});return;}
  try{
   let prepared=prior?.prepared?.signature===signature?prior.prepared:null;
   const progress=async(stage,counts=null)=>{
@@ -75,9 +77,9 @@ async function processAccount(accountId,deviceId){
    if(saved.superseded)return;
   }
   if(!deviceId)return;
-  const result=await commitRitualPackage(c,deviceId,prepared,{beforeCommit:async()=>{const latest=await snapshot(accountId);return latest.deviceId===deviceId&&JSON.stringify(latest.plan)===JSON.stringify(plan);}});
+  const result=await commitRitualPackage(c,deviceId,prepared,{beforeCommit:async()=>{const latest=await snapshot(accountId);return latest.deviceId===deviceId&&latest.bindingId===bindingId&&JSON.stringify(latest.plan)===JSON.stringify(plan);}});
   if(result.superseded)return;
-  const publication={signature,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString()};
+  const publication={deviceId,bindingId,signature,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:new Date().toISOString()};
   await saveBuild(accountId,{previousPublication:ritualPublication(prior)?.sha256!==result.sha256?ritualPublication(prior):prior?.previousPublication,prepared,publication,signature,status:'published',stage:'ready',mode:plan.mode,manifest,sha256:result.sha256,bytes:result.bytes,publishedAt:publication.publishedAt,note:'waiting_for_device_storage_receipt'},plan.revision);
   console.log('Two-day ritual package published for '+accountId+'; awaiting device receipt.');
  }catch(error){
