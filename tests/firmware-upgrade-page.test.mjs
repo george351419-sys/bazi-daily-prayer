@@ -51,3 +51,6 @@ test('known legacy firmware rejecting HTTPS OTA always uses BLE and never calls 
 });
 
 test('verified ritual.6 upgrades to ritual.8 through BLE without Wi-Fi OTA',async()=>{const x=await setup({version:'3.2.5-ritual.6',sha:'e22776bd34de9bb23da9a8f8c942ede949cbdefa1e9eeac507bd80d0eec8fb1c'});await x.elements.get('#connect').onclick();await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),1);assert.equal(x.wifiStarts(),0);assert.match(x.elements.get('#state').textContent,/3.2.5-ritual.8/);});
+
+test('reported factory 3.2.5 build upgrades through BLE and is verified after reboot',async()=>{const x=await setup({version:'3.2.5',sha:'de9eb5af62fe38e54fa90a15472bb49f4dbbaac35a59f1d0321a536885041469'});await x.elements.get('#connect').onclick();await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),1);assert.equal(x.wifiStarts(),0);assert.match(x.elements.get('#state').textContent,/升级成功并已核验/);});
+test('unrecognised factory 3.2.5 fingerprint is still blocked before firmware writes',async()=>{const x=await setup({version:'3.2.5',sha:'f'.repeat(64)});await x.elements.get('#connect').onclick();await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),0);assert.equal(x.wifiStarts(),0);assert.match(x.elements.get('#state').textContent,/升级起点不同/);});
