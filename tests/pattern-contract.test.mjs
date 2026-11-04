@@ -32,7 +32,7 @@ test('其他食神路线保留明确分支，须有原局条件及独立依据',
 });
 test('救应字段必须有具体理由，旧版错误复核标记不能直接命中缓存',async()=>{
  const invalid={...corrected,selection_basis:{...corrected.selection_basis,pattern_rescue_reason:''}};assert.ok(patternCheck(c,invalid).contract.errors.length);
- const cached={...f,cross_check:{version:'2026-11-04-crosscheck-v3',status:'model_second_retained'}};let calls=0;await reviewFoundation(c,cached,async()=>{calls++;return corrected;},{reuseRecordedReview:true});assert.equal(calls,1);
+ const cached={...f,cross_check:{version:'2026-11-04-crosscheck-v4',status:'model_second_retained'}};let calls=0;await reviewFoundation(c,cached,async()=>{calls++;return corrected;},{reuseRecordedReview:true});assert.equal(calls,1);
 });
 test('旧作品只标明归档方向问题，不把旧图冒充新方案',()=>{
  const record={calendar:c,mapping:{primary_element:'金',secondary_element:'水',rationale:{foundation:f}}};assert.ok(artworkFoundationIssues(record).some(x=>x.includes('归档格局方向与救应混用')));assert.deepEqual(record.mapping.rationale.foundation.selection_basis.pattern_stems,['辛','庚']);
@@ -52,7 +52,7 @@ test('旧v6缓存中的印星核心需重新校验，不能直接重排为新档
  const mock=value=>Response.json({choices:[{message:{content:JSON.stringify(value)}}]});
  await generateRuleMapping(config,input,{...c,stems:[],rawStemClashes:[]},[],async()=>mock(corrected));
  const [key,record]=[...records].find(([k])=>k.includes('/foundation/'));
- records.clear();records.set(key.replace('foundation-fgt-v7','foundation-fgt-v6'),{...record,version:'2026-11-04-foundation-fgt-v6',value:{...f,review_reason:'旧版复判仍以印星救应替代格局生财方向。',cross_check:{version:'2026-11-04-crosscheck-v2',status:'model_second_retained',initial:f,second:f,initial_checks:foundationChecks(c,f),final_checks:foundationChecks(c,f)}}});
+ records.clear();records.set(key.replace('foundation-fgt-v8','foundation-fgt-v6'),{...record,version:'2026-11-04-foundation-fgt-v6',value:{...f,review_reason:'旧版复判仍以印星救应替代格局生财方向。',cross_check:{version:'2026-11-04-crosscheck-v2',status:'model_second_retained',initial:f,second:f,initial_checks:foundationChecks(c,f),final_checks:foundationChecks(c,f)}}});
  let calls=0;const result=await generateRuleMapping(config,input,{...c,stems:[],rawStemClashes:[]},[],async(url,options)=>{calls++;const req=JSON.parse(JSON.parse(options.body).messages[1].content);assert.ok(req.checks.conflicts.some(x=>x.section==='pattern_contract'));return mock(corrected);});
  assert.equal(calls,1);assert.equal(result.engine.foundation.migratedFrom,'2026-11-04-foundation-fgt-v6');assert.deepEqual(result.engine.foundation.value.selection_basis.pattern_stems,['丙','丁']);assert.deepEqual(result.engine.foundation.value.cross_check.initial.selection_basis.pattern_stems,['辛','庚']);
 });

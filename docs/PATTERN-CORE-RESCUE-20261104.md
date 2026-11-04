@@ -1,6 +1,8 @@
 # 格局核心方向与救应分离
 
-版本：rules-v11 / foundation-fgt-v7 / crosscheck-v3。
+版本：rules-v12 / foundation-fgt-v8 / crosscheck-v4。
+
+补充修订：[格局名称解析与补判反馈](FOUNDATION-FAILURE-FEEDBACK-20261104.md)。
 
 ## 问题与边界
 

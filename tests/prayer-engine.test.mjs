@@ -123,7 +123,7 @@ test('同日完整方案从仓库复用，修改返回对象不污染缓存',asy
 test('原局档案保持独立版本，每日规则更新不重判取用',async()=>{
  const f=fixture();await analyzeMapping(f.config,input,calendar,[],f.fetcher);
  const entry=[...f.records.entries()].find(([key])=>key.includes('/foundation/'));
- assert.ok(entry[0].includes('/2026-11-04-foundation-fgt-v7/'));assert.equal(entry[1].version,'2026-11-04-foundation-fgt-v7');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-04-rules-v11');
+ assert.ok(entry[0].includes('/2026-11-04-foundation-fgt-v8/'));assert.equal(entry[1].version,'2026-11-04-foundation-fgt-v8');assert.equal(PRAYER_ENGINE_VERSION,'2026-11-04-rules-v12');
 });
 test('已确认原局在无模型密钥时跨日生成全部条件与画面',async()=>{
  const f=fixture();let calls=0;
@@ -175,12 +175,12 @@ test('截图八支同时考虑寅午戌与申酉戌，未候选经过比较而�
  for(const a of r.baseAlternatives){assert.ok(a.effective_bindings.some(x=>x.type==='三合'));assert.ok(a.effective_bindings.some(x=>x.type==='三会'));assert.ok(!a.residual_relations.some(x=>['相刑','自刑'].includes(x.type)));assert.ok(a.suppressed_harms.some(x=>x.type==='六害'));assert.equal(a.residual_relations.length,0);}
  const wei=r.evaluated.find(x=>x.added.join('')==='未');assert.ok(wei);assert.equal(wei.improvement,0);assert.equal(wei.positive,false);assert.equal(wei.selected,false);
 });
-test('v1原局候选直接重排迁移至v7，不重新调用模型判断旺衰',async()=>{
+test('v1原局候选直接重排迁移至v8，不重新调用模型判断旺衰',async()=>{
  const f=fixture();await generateRuleMapping(f.config,input,calendar,[],f.fetcher);
  const [key,record]=[...f.records].find(([k])=>k.includes('/foundation/'));
- f.records.clear();f.records.set(key.replace('2026-11-04-foundation-fgt-v7','2026-11-03-foundation-fgt-v1'),{...record,version:'2026-11-03-foundation-fgt-v1'});
+ f.records.clear();f.records.set(key.replace('2026-11-04-foundation-fgt-v8','2026-11-03-foundation-fgt-v1'),{...record,version:'2026-11-03-foundation-fgt-v1'});
  const m=await generateRuleMapping(f.config,input,calendar,[],()=>{throw Error('不应重判原局');});
- assert.equal(m.engine.foundation.version,'2026-11-04-foundation-fgt-v7');assert.equal(m.engine.foundation.migratedFrom,'2026-11-03-foundation-fgt-v1');assert.equal(f.calls,2);
+ assert.equal(m.engine.foundation.version,'2026-11-04-foundation-fgt-v8');assert.equal(m.engine.foundation.migratedFrom,'2026-11-03-foundation-fgt-v1');assert.equal(f.calls,2);
 });
 
 test('模型伪造已完成校验不能跳过复判，修正核心与救应后保存两次记录',async()=>{
