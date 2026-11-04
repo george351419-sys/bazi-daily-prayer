@@ -91,3 +91,30 @@ test('BLE pairing uses an authenticated legacy heartbeat, is scoped to its accou
  // If the app disappears before restoring the URL, expiry must not break the device's normal cloud sync.
  assert.equal((await handleArkCloud(new Request(legacy,{headers:{authorization}}),env,{store:c.store,now:now+90001})).status,200);
 });
+
+test('v4 reading packages never reach v1–v3 firmware; v4 downloads exact SHA',async()=>{
+ const c=context();await setup(c);
+ const legacy=packageFixture(),answer=64+2*172832+80*7680,b=Buffer.alloc(answer+100*6300);legacy.copy(b,0,0,64+2*172832);
+ b.writeUInt32LE(b.length,8);b.writeUInt32LE(answer,32);b.writeUInt32LE(4,36);
+ for(let a=0;a<100;a++){const off=answer+a*6300;b.writeUInt32LE(300,off);for(let i=0;i<150;i++){b[off+4+i*2]=255;b[off+5+i*2]=0;}}
+ await publishRitualPackage({SESSION_SECRET:secret,RITUAL_PUBLIC_ORIGIN:'https://playmath.cn'},deviceId,b,{fetcher:(url,options)=>handleArkCloud(new Request(url,options),env,{store:c.store,now:Date.now()})});
+ for(const v of [1,2,3]){
+  const old=await(await invoke(c,hb+'&ritual_v='+v+'&ritual_active=1',{headers:{authorization}})).json();
+  assert.equal(old.data.firmware_update_required,true);assert.ok(!old.data.commands.some(c=>['download_film','download_ritual','disable_ritual'].includes(c.cmd)));
+ }
+ const result=await(await invoke(c,hb+'&ritual_v=4',{headers:{authorization}})).json();assert.equal(result.data.firmware_update_required,false);
+ const command=result.data.commands.find(c=>c.cmd==='download_ritual');assert.equal(command.params.sha256,hash(b));
+ const url=new URL(command.params.url);const downloaded=await invoke(c,url.pathname+url.search);assert.equal(hash(Buffer.from(await downloaded.arrayBuffer())),hash(b));
+});
+
+import {packageZiFixture} from './fixtures/ritual-zi-package.mjs';
+test('v5 nine-slot package gates v1–v4 and accepts Zi variant44 report only for v5',async()=>{
+ const c=context();await setup(c);const b=packageZiFixture();
+ await publishRitualPackage({SESSION_SECRET:secret,RITUAL_PUBLIC_ORIGIN:'https://playmath.cn'},deviceId,b,{fetcher:(url,options)=>handleArkCloud(new Request(url,options),env,{store:c.store,now:Date.now()})});
+ for(const v of [1,2,3,4]){const result=await(await invoke(c,hb+'&ritual_v='+v+'&ritual_active=1',{headers:{authorization}})).json();assert.equal(result.data.firmware_update_required,true);assert.ok(!result.data.commands.some(c=>['download_ritual','disable_ritual','download_film'].includes(c.cmd)));}
+ const query='&ritual_v=5&cloud_stored_sha='+hash(b)+'&ritual_render=1&ritual_day=1&ritual_action=44&ritual_answer=-1';
+ await invoke(c,hb+query,{headers:{authorization}});
+ const report=JSON.parse(decryptAccountData(env,c.map.get('reports/'+deviceId)));assert.equal(report.renderReport.action,44);
+ await invoke(c,hb+query.replace('ritual_action=44','ritual_action=45'),{headers:{authorization}});
+ assert.equal(JSON.parse(decryptAccountData(env,c.map.get('reports/'+deviceId))).renderReport,null);
+});

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const html=await readFile(new URL('../public/firmware-upgrade.html',import.meta.url),'utf8');
 const source=html.split('<script type="module">')[1].split('</script>')[0].replace(/^\s*import [^\n]+\n/,'');
-const target={version:'3.2.5-ritual.6',file:'frame_film_ark-3.2.5-ritual.6.bin',bytes:1929200,sha256:'a'.repeat(64),elfSha256:'b'.repeat(64)};
+const target={version:'3.2.5-ritual.8',file:'frame_film_ark-3.2.5-ritual.8.bin',bytes:1929760,sha256:'a'.repeat(64),elfSha256:'b'.repeat(64)};
 const old={version:'3.2.5-ritual.3',sha:'f6aff2f33116c98fbdcc5a12b00bca057776f6a33b32821995f4e65497b57f92'};
 async function setup(initial=old,connectionError){
  const elements=new Map();const document={querySelector(key){if(!elements.has(key))elements.set(key,{disabled:false,textContent:'',className:'',value:''});return elements.get(key);}};
@@ -28,7 +28,7 @@ test('unreachable device never receives an OTA command',async()=>{const x=await 
 
 test('a sleeping device can reconnect and wait for explicit upgrade',async()=>{const x=await setup(old,['Bluetooth Device is no longer in range.','Bluetooth Device is no longer in range.',null]);await x.elements.get('#connect').onclick();await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),1);assert.match(x.elements.get('#state').textContent,/升级成功并已核验/);});
 
-test('verified ritual.5 can upgrade directly to ritual.6',async()=>{const x=await setup({version:'3.2.5-ritual.5',sha:'59972da4d66db28b4d2d60929026e0304e1599e9408e65db8678b1a23aa2b69b'});await x.elements.get('#connect').onclick();await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),1);});
+test('verified ritual.5 can upgrade directly to ritual.8',async()=>{const x=await setup({version:'3.2.5-ritual.5',sha:'59972da4d66db28b4d2d60929026e0304e1599e9408e65db8678b1a23aa2b69b'});await x.elements.get('#connect').onclick();await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),1);});
 
 test('Wi-Fi form writes credentials over BLE, clears password and does not auto-upgrade',async()=>{
  const x=await setup();assert.equal(x.elements.get('#configure').disabled,true);await x.elements.get('#connect').onclick();
@@ -49,3 +49,5 @@ test('known legacy firmware rejecting HTTPS OTA always uses BLE and never calls 
   assert.equal(x.wifiStarts(),0,initial.version+' must not enter the incompatible Wi-Fi OTA path');assert.equal(x.starts(),1);assert.match(x.elements.get('#state').textContent,/升级成功并已核验/);
  }
 });
+
+test('verified ritual.6 upgrades to ritual.8 through BLE without Wi-Fi OTA',async()=>{const x=await setup({version:'3.2.5-ritual.6',sha:'e22776bd34de9bb23da9a8f8c942ede949cbdefa1e9eeac507bd80d0eec8fb1c'});await x.elements.get('#connect').onclick();await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),1);assert.equal(x.wifiStarts(),0);assert.match(x.elements.get('#state').textContent,/3.2.5-ritual.8/);});
