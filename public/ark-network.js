@@ -150,6 +150,11 @@ export class ArkNetwork {
     if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙连接已断开，请重新连接画屏。');
     await this.request(0x3a,[],1500);
     const result=await request('/api/account/ritual/device',{pairingNonce:challenge.nonce});
+    if(result.diagnostic?.stage){
+     this.trace('identity:cloud:'+result.diagnostic.stage);
+     const failure={device_unregistered:'画屏已到达云端，但设备尚未预置注册。',device_revoked:'画屏已到达云端，但设备已停用。',auth_missing:'画屏已到达云端，但缺少设备认证密钥。',auth_mismatch:'画屏已到达云端，但设备认证密钥不匹配。',invalid_device_id:'画屏已到达云端，但回报的设备编号无效。'}[result.diagnostic.stage];
+     if(failure)throw new Error(failure+'当前账号尚未绑定，未开始内容下载。');
+    }
     if(result.status==='identified'&&/^[a-f0-9]{12}$/.test(result.deviceId||''))return result.deviceId;
     await this.delay(2000);
    }

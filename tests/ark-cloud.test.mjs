@@ -118,3 +118,21 @@ test('v5 nine-slot package gates v1–v4 and accepts Zi variant44 report only fo
  await invoke(c,hb+query.replace('ritual_action=44','ritual_action=45'),{headers:{authorization}});
  assert.equal(JSON.parse(decryptAccountData(env,c.map.get('reports/'+deviceId))).renderReport,null);
 });
+
+test('pairing diagnostics expose rejection stage only to the challenge owner, never credentials or unverified IDs',async()=>{
+ const {beginDevicePairing,pairedDeviceIdentity}=await import('../lib/ark-cloud.mjs'),c=context();await setup(c);
+ const account='1'.repeat(32),challenge=await beginDevicePairing(env,account,{store:c.store,now});
+ assert.equal((await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now})).diagnostic.stage,'not_received');
+ const url=challenge.heartbeatURL+'?device_id='+deviceId;
+ for(const [headers,stage] of [[{},'auth_missing'],[{authorization:'Bearer '+'b'.repeat(32)},'auth_mismatch']]){
+  assert.equal((await handleArkCloud(new Request(url,{headers}),env,{store:c.store,now})).status,403);
+  const result=await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now});
+  assert.deepEqual(result,{status:'waiting',diagnostic:{stage,receivedAt:new Date(now).toISOString()}});
+  assert.equal(JSON.stringify(result).includes(deviceId),false);assert.equal(JSON.stringify(result).includes(token),false);
+ }
+ const unknown=challenge.heartbeatURL+'?device_id=112233445566';
+ assert.equal((await handleArkCloud(new Request(unknown),env,{store:c.store,now})).status,403);
+ assert.equal((await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now})).diagnostic.stage,'device_unregistered');
+ await assert.rejects(pairedDeviceIdentity(env,'2'.repeat(32),challenge.nonce,{store:c.store,now}));
+ assert.equal(c.map.has('pairing-proof/'+challenge.nonce),false);
+});
