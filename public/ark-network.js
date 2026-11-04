@@ -109,6 +109,20 @@ export class ArkNetwork {
   const status=await this.request(0x3a,[],1500);
   if(status[0]!==1)await this.resumeWifiSession();
  }
+ async ensureCloudAPI(){
+  const expected='https://playmath.cn';
+  const decode=bytes=>new TextDecoder().decode(bytes).replace(/\0.*$/s,'');
+  const current=decode(await this.request(0x37,[],2000));
+  if(current){
+   let url;try{url=new URL(current);}catch{throw new Error('画屏云端 API 地址无效，请先核对设备配置。');}
+   if(url.origin!==expected||url.username||url.password)throw new Error('画屏使用其他云端 API，请先核对设备配置。');
+   this.trace('cloud-api:verified');return;
+  }
+  this.trace('cloud-api:missing');
+  await this.write(0x36,new TextEncoder().encode(expected));
+  if(decode(await this.request(0x37,[],2000))!==expected)throw new Error('画屏云端 API 地址尚未保存，暂未开始身份核验。');
+  this.trace('cloud-api:initialized');
+ }
  async readHeartbeatURL(){
   const epoch=this.epoch;const read=new Promise((resolve,reject)=>{this.identityRead={resolve,reject};});read.catch(()=>{});
   const timer=setTimeout(()=>{this.identityRead?.reject(new Error('画屏未回复身份通道，请保持唤醒后重试。'));this.identityRead=null;},3000);
@@ -123,6 +137,7 @@ export class ArkNetwork {
   });
  }
  async resolveIdentitySession(request){
+  await this.ensureCloudAPI();
   const epoch=this.epoch,original=await this.readHeartbeatURL(),normal='https://playmath.cn/api/v1/device/heartbeat';
   const priorChallenge=original.startsWith(normal+'?link=')&&/^[a-f0-9]{32}&device_id=$/.test(original.slice((normal+'?link=').length));if(original&&original!==normal&&!priorChallenge)throw new Error('画屏使用了其他云端地址，请先核对设备配置。');
   const challenge=await request('/api/account/ritual/device',{beginPairing:true});

@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {ArkNetwork,packet,wifiCredentials,arkDeviceId} from '../public/ark-network.js';
-function peripheral({status=true,fail=false,wrongSSID=false,capacity=1945600,badBarrier=false,onWrite=()=>{}}={}){
+function peripheral({status=true,fail=false,wrongSSID=false,capacity=1945600,badBarrier=false,onWrite=()=>{},apiURL='https://playmath.cn',dropAPI=false}={}){
  const writes=[],listeners=new Map(),deviceListeners=new Map();let online=false,ssid=[],connectCalls=0,disconnectCalls=0;
  const characteristic={addEventListener:(key,fn)=>listeners.set(key,fn),removeEventListener:key=>listeners.delete(key),async startNotifications(){},async writeValue(bytes){
   writes.push([...bytes]);onWrite(bytes);if(fail&&bytes[1]===0x34)throw new Error('write failed');
+  if(bytes[1]===0x36&&!dropAPI)apiURL=new TextDecoder().decode(bytes.slice(3,-1));
+  if(bytes[1]===0x37){const reply=packet(0x37,new TextEncoder().encode(apiURL));listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
   if(bytes[1]===0x32)ssid=[...bytes.slice(3,-1)];
   if(bytes[1]===0x33){const reply=packet(0x33,wrongSSID?new TextEncoder().encode('old-network'):ssid);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
   if(bytes[1]===0x39)online=false;if(bytes[1]===0x38)online=status;
@@ -120,7 +122,7 @@ test('BLE attach reconnects saved Wi-Fi only when the screen is offline',async()
 });
 
 test('custom BLE names resolve a cloud-authenticated device identity and restore heartbeat settings',async()=>{
- const client=new ArkNetwork({delay:async()=>{}}),normal='https://playmath.cn/api/v1/device/heartbeat',nonce='d'.repeat(32),writes=[];client.characteristic={};client.device={name:'FRAMEFILMARK-Elink'};client.request=async()=>new Uint8Array([1]);
+ const client=new ArkNetwork({delay:async()=>{}}),normal='https://playmath.cn/api/v1/device/heartbeat',nonce='d'.repeat(32),writes=[];client.characteristic={};client.device={name:'FRAMEFILMARK-Elink'};client.request=async ch=>ch===0x37?new TextEncoder().encode('https://playmath.cn'):new Uint8Array([1]);
  client.write=async(ch,body=[])=>{writes.push({ch,body});if(ch===0x3f)client.receive(packet(ch,new TextEncoder().encode(normal)));};
  const id=await client.resolveIdentity(async(path,body)=>body.beginPairing?{nonce,heartbeatURL:normal+'?link='+nonce+'&device_id='}:{status:'identified',deviceId:'112233445566'});assert.equal(id,'112233445566');assert.equal(new TextDecoder().decode(writes.at(-1).body),normal);assert.equal(client.identifying,false);
 });
@@ -171,4 +173,24 @@ test('offline identity reconnects at most once then polls without restarting Wi-
  let polls=0;await client.resolveIdentity(async(path,body)=>body.beginPairing?{nonce,heartbeatURL:normal+'?link='+nonce+'&device_id='}:++polls<3?{status:'waiting'}:{status:'identified',deviceId:'112233445566'});
  assert.equal(p.writes.filter(bytes=>bytes[1]===0x38).length,1);
  assert.equal(client.lastStatus,true);client.disconnect();
+});
+
+test('an empty cloud API is initialized and read back before starting authenticated pairing',async()=>{
+ const p=peripheral({apiURL:''}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();p.writes.length=0;
+ await client.ensureCloudAPI();
+ assert.deepEqual(p.writes.map(b=>b[1]),[0x37,0x36,0x37]);
+ assert.equal(new TextDecoder().decode(Uint8Array.from(p.writes[1].slice(3,-1))),'https://playmath.cn');
+ assert.ok(client.diagnostics.some(e=>e.stage==='cloud-api:initialized'));client.disconnect();
+});
+test('failed cloud API readback stops before pairing and never modifies Wi-Fi credentials',async()=>{
+ const p=peripheral({apiURL:'',dropAPI:true}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();p.writes.length=0;
+ let calls=0;await assert.rejects(client.resolveIdentity(async()=>{calls++;}),/API 地址尚未保存/);
+ assert.equal(calls,0);assert.deepEqual(p.writes.map(b=>b[1]),[0x37,0x36,0x37]);assert.equal(client.identifying,false);client.disconnect();
+});
+test('an existing cloud origin is preserved and a foreign origin cannot be silently replaced',async()=>{
+ for(const origin of ['https://playmath.cn/api/ark/assets/today','https://other.example/api']){
+  const p=peripheral({apiURL:origin}),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();p.writes.length=0;
+  if(origin.startsWith('https://playmath.cn/'))await client.ensureCloudAPI();else await assert.rejects(client.ensureCloudAPI(),/其他云端 API/);
+  assert.deepEqual(p.writes.map(b=>b[1]),[0x37]);client.disconnect();
+ }
 });
