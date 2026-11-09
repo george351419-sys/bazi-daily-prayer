@@ -42,7 +42,7 @@ const STATUS_COPY = {
   },
   "S11": {
     "title": "画屏内容已就绪 · 正在安排下发",
-    "detail": "无需重新生成或配网，请等待“内容已保存”后，再在画屏选择“画面”并按确认键查看新内容。"
+    "detail": "无需重新生成或配网，请等待“传输完成”后，再在画屏选择“画面”并按确认键查看新内容。"
   },
   "S12": {
     "title": "正在准备画屏内容",
@@ -73,24 +73,24 @@ const STATUS_COPY = {
     "detail": "设备通过蓝牙回报的下载进度，请保持画屏联网。"
   },
   "S19": {
-    "title": "设备已回报下载完成 · 等待内容核验",
-    "detail": "正在确认当前内容包的保存与刷新结果；"
+    "title": "画屏已回报下载完成 · 正在核对内容",
+    "detail": "画屏已完成本次内容下载，云端正在核对保存结果。稍候即可看到「传输完成」，无需重新生成或重复连接。"
   },
   "S20": {
-    "title": "内容已保存 · 现在可以进入画面",
-    "detail": "请通过左侧按键点“IMG”，按确认进入。"
+    "title": "传输完成 · 新画已存入画屏",
+    "detail": "本次内容已完整送达画屏，网页这边已经结束，无需再操作。到画屏按「IMG」→ 确认键即可看到新画。"
   },
   "S21": {
-    "title": "当前内容已回报刷新",
-    "detail": "如你停在 Home，可选择“画面”并按画屏确认键进入。"
+    "title": "同步完成 · 画屏已回报刷新",
+    "detail": "画屏已回报本次内容的显示结果。如停在 Home，可选「画面」并按确认键查看。"
   },
   "S22": {
-    "title": "内容已保存 · 现在可以进入画面",
-    "detail": "可以按画屏确认键进入“画面”。"
+    "title": "传输完成 · 新画已存入画屏",
+    "detail": "本次内容已完整送达画屏，网页这边已经结束，无需再操作。按画屏确认键进入「画面」即可看到新画。"
   },
   "S23": {
-    "title": "传输完成 · 画屏已回报刷新",
-    "detail": "可以按画屏确认键进入“画面”。"
+    "title": "同步完成 · 画屏已回报刷新",
+    "detail": "本次内容已送达并回报刷新，网页这边已经结束。按画屏确认键进入「画面」即可查看。"
   },
   "S24": {
     "title": "传输暂未成功 · 等待重试",
@@ -105,8 +105,12 @@ function copyState(id,phase,step=0,percent=null){
  const text=STATUS_COPY[id],title=text.title.replace(' · {percent}%',percent===null?'':' · '+percent+'%');
  return {phase,title,detail:text.detail,step,percent};
 }
+function completed(id,phase,step,report){
+ return {...copyState(id,phase,step),completedAt:report?.lastSeen||null};
+}
 function transferStatus(result = {}, artworkId = null) {
- if(result.syncConfigured===undefined)return copyState('S01','checking');
+ result = result ?? {};
+if(result.syncConfigured===undefined)return copyState('S01','checking');
  if(!result.syncConfigured&&!result.plan&&!result.preparation)return copyState('S02','unbound');
  if(artworkId&&result.plan?.contentMode==='photo')return copyState('S03','photo');
  if(artworkId&&!result.plan?.artworkIds?.includes(artworkId))return copyState('S04','preparing');
@@ -122,13 +126,13 @@ function transferStatus(result = {}, artworkId = null) {
  const report=result.deviceReport;
  if(report?.firmwareUpdateRequired)return copyState('S13','firmware',1);
  if(!report)return copyState('S14','waiting',1);
- const knownTarget=!!result.build?.sha256,matchesTarget=!knownTarget||report.targetSha===result.build.sha256,samePackage=knownTarget&&matchesTarget;
+ const knownTarget=!!result?.build?.sha256,matchesTarget=!knownTarget||report.targetSha===result?.build?.sha256,samePackage=knownTarget&&matchesTarget;
  const fresh=!report.stale&&!(Date.parse(report.lastSeen)<Date.parse(result.build?.publishedAt));
- if(samePackage&&report.renderedCurrent&&report.renderReport)return copyState('S21','rendered',4);
- if(samePackage&&report.stored)return copyState('S20','stored',3);
+ if(samePackage&&report.renderedCurrent&&report.renderReport)return completed('S21','rendered',4,report);
+ if(samePackage&&report.stored)return completed('S20','stored',4,report);
  if(!fresh)return copyState('S15','waiting',1);
- if(matchesTarget&&report.stored&&!report.showingPrevious&&report.renderReport)return copyState('S23','rendered',4);
- if(matchesTarget&&report.stored)return copyState('S22','stored',3);
+ if(matchesTarget&&report.stored&&!report.showingPrevious&&report.renderReport)return completed('S23','rendered',4,report);
+ if(matchesTarget&&report.stored)return completed('S22','stored',4,report);
  if(!matchesTarget)return copyState('S16','confirming',1);
  if(report.downloadState===2)return copyState('S19','confirming',2);
  if(report.downloadState===3)return copyState('S24','retrying',1);
@@ -145,11 +149,11 @@ function transferAction(state){
 }
 
 // Live Wi-Fi confirmation is connectivity evidence, not a content-storage receipt.
-function withConnection(state,result,connection,now=Date.now()){
+function withConnection(state,result={},connection,now=Date.now()){
  state=state.connectionBase||state;
  // 手机已确认设备收到本次内容（BLE 观测到下载完成，或用户亲眼看到新画后手动标记）：
  // 这是比陈旧云端回执更强的地面真相，不受 6 秒蓝牙新鲜度窗口限制，也不被“尚未收到回报”覆盖。
- if(connection?.delivered&&connection.delivered.targetSha===result.build?.sha256&&connection.delivered.deviceId===result.device?.id)return {...copyState('S20','stored',3),connectionBase:state};
+ if(connection?.delivered&&connection.delivered.targetSha===result?.build?.sha256&&connection.delivered.deviceId===result.device?.id)return {...copyState('S20','stored',4),connectionBase:state};
  if(connection?.paired&&!connection.wifiConnected&&state.phase==='connect')return {...state,connectionBase:state,phase:'wifi',title:'蓝牙已连接 · 请确认画屏 Wi-Fi',detail:'已保存的网络会自动尝试连接；尚未收到联网确认时，可在下方检查网络。',action:'wifi'};
  if(connection&&connection.paired===false&&state.phase==='connect')return {...state,connectionBase:state,title:'画屏内容已准备好 · 请连接画屏蓝牙',detail:'当前手机未连接画屏蓝牙。请在「链接神物」页唤醒并连接画屏蓝牙，连上后会自动认主并下发内容；画屏自身联网不代表已认主。',action:'connect'};
  if(connection?.paired&&!result?.syncConfigured&&state.phase==='connect')return {...state,connectionBase:state,phase:'binding',title:connection.deviceId?'画屏已连接 · 正在关联当前账户':'画屏已连接 · 正在核验设备身份',detail:connection.deviceId?'账户关联由程序自动完成，完成后会领取已准备的内容。':'设备联网后会自动核验身份并关联账户，无需填写设备编号。',action:null};
@@ -157,7 +161,7 @@ function withConnection(state,result,connection,now=Date.now()){
  if(state.step<1||state.preparation||['stored','rendered','firmware','publishing'].includes(state.phase))return {...state,action:transferAction(state)};
  if(['waiting','syncing'].includes(state.phase)){
   if(!connection.wifiConnected)return {...state,connectionBase:state,phase:'wifi',title:'蓝牙已连接 · 请连接画屏 Wi-Fi',detail:'请在「链接神物」填写 Wi-Fi 信息；已保存的网络会优先自动连接。',action:'wifi'};
-  const requested=connection.requestedSha===result.build?.sha256&&connection.syncRequestedAt;
+  const requested=connection.requestedSha===result?.build?.sha256&&connection.syncRequestedAt;
   const overdue=requested&&now-requested>=20000;
   return {...state,connectionBase:state,phase:'syncing',title:overdue?'画屏已联网 · 尚未收到本次内容回报':'画屏已联网 · 正在检查新内容',detail:overdue?'请点击重新检查同步；无需重新连接蓝牙或填写 Wi-Fi。':'正在自动检查并同步本次内容，请稍候。',action:overdue?'check':null};
  }

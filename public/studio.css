@@ -89,6 +89,12 @@ body>footer{max-width:none;margin:0;padding:20px 44px;border-top:1px solid var(-
 .transfer-status li.complete{color:#174c3e;background:#d5e5cf}
 .transfer-status li[aria-current]{outline:1px solid #9db18f}
 .transfer-status progress{width:100%;height:8px;accent-color:#174c3e;margin-top:14px}
+/* 完成态要一眼可辨：加深底色、加完成徽标与回执时间，别让用户误以为还差一步 */
+.transfer-status[data-complete="true"]{background:#e4f1e3;border-color:#9ec49b}
+.transfer-complete-badge{display:inline-block;margin-right:8px;padding:2px 8px;border-radius:999px;background:#174c3e;color:#fff;font-size:11px;font-weight:600;vertical-align:2px}
+.transfer-status .transfer-complete-note{margin:0 0 12px;color:#2d6247;font-size:12px;line-height:1.8}
+.transfer-complete-banner{margin:18px 0 0;padding:13px 16px;border:1px solid #9ec49b;border-left:4px solid #2d7a4f;border-radius:10px;background:#e9f5e8;color:#1e5238;font-size:13px;line-height:1.8}
+.transfer-complete-banner[hidden]{display:none}
 #ritual-answers{margin-top:26px;padding:22px 0;border-top:1px solid var(--studio-line)}
 #ritual-answers>h5{font:23px "Songti SC",serif;margin:0 0 18px}
 #ritual-answers>input{width:100%;box-sizing:border-box}

@@ -77,7 +77,7 @@ test('手机确认送达覆盖陈旧回执，但内容或设备不符不得冒�
  const base={paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,requestedSha:'current',syncRequestedAt:now-21000};
  const delivered={deliveredAt:now,targetSha:'current',deviceId:'screen',evidence:'user-confirmed'};
  const done=withConnection(state,result,{...base,delivered},now);
- assert.equal(done.phase,'stored');assert.equal(done.step,3);assert.equal(transferAction(done),null);
+ assert.equal(done.phase,'stored');assert.equal(done.step,4);assert.equal(transferAction(done),null);
  assert.equal(withConnection(state,result,{...base,delivered:{...delivered,targetSha:'old'}},now).phase,'syncing');
  assert.equal(withConnection(state,result,{...base,delivered:{...delivered,deviceId:'other'}},now).phase,'syncing');
  // 蓝牙已断开或连接信息过期，也不得抹掉用户亲眼确认过的送达结果。
@@ -89,4 +89,55 @@ test('BLE 观测到设备回报下载完成时不继续显示百分比进度',as
  const state=transferStatus(result),live={deviceId:'screen',state:2,receivedAt:Date.now()};
  assert.match(withLiveDownload(state,result,live).title,/下载完成/);
  assert.equal(withLiveDownload(state,result,live).percent,null);
+});
+
+test('传输完成必须明确告知用户：文案说完成、四步全亮、带设备回执时间',()=>{
+ const done=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true}},'new');
+ assert.equal(done.phase,'stored');
+ assert.match(done.title,/传输完成/);
+ assert.match(done.detail,/无需再操作/);
+ assert.equal(done.step,4,'完成态四步应全部点亮');
+ assert.equal(done.completedAt,ready.deviceReport.lastSeen);
+ const refreshed=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true,renderedCurrent:true,renderReport:{day:0}}},'new');
+ assert.equal(refreshed.step,4);
+ assert.match(refreshed.title,/完成/);
+ // 未完成态不能被误标为完成
+ const waiting=transferStatus(ready,'new');
+ assert.equal(waiting.phase,'confirming');
+ assert.equal(waiting.completedAt,undefined);
+ assert.ok(waiting.step<4);
+});
+test('三份状态文案副本保持一致，且完成态不说「现在可以进入」这种待办口吻',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const copy=JSON.parse(readFileSync(new URL('../content/transfer-copy.json',import.meta.url),'utf8'));
+ for(const rel of ['../public/transfer-status.js','../miniprogram/utils/transfer-status.js']){
+  const source=readFileSync(new URL(rel,import.meta.url),'utf8');
+  for(const id of ['S19','S20','S21','S22','S23']){
+   const title=copy[id].title,detail=copy[id].detail;
+   assert.ok(source.includes(title),rel+' 缺少 '+id+' 标题');
+   assert.ok(source.includes(detail),rel+' 缺少 '+id+' 说明');
+  }
+ }
+ for(const id of ['S20','S22'])assert.match(copy[id].title,/传输完成/);
+});
+test('完成态渲染带完成徽标、回执时间，且只点亮真实完成的三步',async()=>{
+ const {renderTransfer}=await import('../public/transfer-status.js');
+ const nodes=[];
+ const create=tag=>{const n={tag,children:[],attrs:{},classList:{add(){},toggle(c,on){n.complete=!!on;}},dataset:{},textContent:'',hidden:true,
+  append(...c){n.children.push(...c);},prepend(...c){n.children.unshift(...c);},replaceChildren(){n.children=[];},
+  setAttribute(k,v){n.attrs[k]=v;}};nodes.push(n);return n;};
+ globalThis.document={createElement:create};
+ const host=create('div');
+ try{
+  const state=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true}},'new');
+  renderTransfer(host,state);
+  assert.equal(host.dataset.complete,'true');
+  assert.equal(host.hidden,false);
+  assert.equal(nodes.some(n=>n.className==='transfer-complete-badge'&&n.textContent.includes('已完成')),true);
+  assert.equal(nodes.some(n=>n.className==='transfer-complete-note'&&n.textContent.includes('设备回报时间')),true);
+  const labels=nodes.filter(n=>n.tag==='li');
+  assert.equal(labels.length,3,'完成态只展示已真实发生的三步');
+  assert.equal(labels.every(n=>n.complete),true);
+  assert.equal(labels.some(n=>n.attrs['aria-current']),false,'完成态不应再标记进行中');
+ }finally{delete globalThis.document;}
 });

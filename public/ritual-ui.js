@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261109-delivery-v1';
+import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261109-transfer-complete-v1';
 import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
@@ -193,7 +193,9 @@ export function setupRitual({request,fetchImage,getUser}){
   transferPending=!['rendered','unbound','photo','firmware'].includes(state.phase);
   if(shell)renderTransfer(shell.transfer,state);
   const besideImage=document.querySelector('#artwork-transfer');
-  if(besideImage&&(latestGenerated||!besideImage.hidden))renderTransfer(besideImage,state);
+  // 完成态是用户最该看到的状态：即使这次会话没生成过图（例如重开网页），也要显示。
+  const finished=['stored','rendered'].includes(state.phase);
+  if(besideImage&&(finished||latestGenerated||!besideImage.hidden))renderTransfer(besideImage,state);
   if(state.phase==='retrying'&&state.step===0){for(const target of [shell?.transfer,besideImage].filter(Boolean)){const retry=node('button','重试同步');retry.type='button';retry.className='secondary';retry.onclick=()=>void prepare();target.append(retry);}}
  }
  async function refresh(){

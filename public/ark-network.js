@@ -1,6 +1,6 @@
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer,withConnection} from './transfer-status.js?v=20261109-delivery-v1';
+import {renderTransfer,withConnection} from './transfer-status.js?v=20261109-transfer-complete-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const HEARTBEAT_NORMAL='https://playmath.cn/api/v1/device/heartbeat';
@@ -454,6 +454,17 @@ export function setupNetwork(){
   // 换了内容包或换了画屏，之前的送达确认即失效，避免旧标记冒充新内容已完成。
   if(delivered&&((latestStatus?.build?.sha256&&delivered.targetSha!==latestStatus.build.sha256)||(latestStatus?.device?.id&&delivered.deviceId!==latestStatus.device.id))){clearDelivered();if(connection)connection={...connection,delivered:null};confirmBtn.textContent=CONFIRM_LABEL;}
   renderTransfer(transfer,withConnection(event.detail.state,latestStatus,{...connection,delivered}));
+  // 顶部常驻回执：完成提示不能只藏在「链接神物」区块里，用户停在任意版块都要看得到。
+  const banner=document.getElementById('transfer-complete-banner');
+  if(banner){
+   const r=latestStatus?.deviceReport,sha=latestStatus?.build?.sha256;
+   const done=['stored','rendered'].includes(event.detail.state?.phase)&&!!sha&&r?.targetSha===sha&&!r?.stale&&!latestStatus?.pendingUpdate;
+   banner.hidden=!done;
+   if(done){
+    const stamp=Date.parse(event.detail.state?.completedAt||r?.lastSeen||'');
+    banner.textContent='✓ 本次新画已传输完成并存入画屏'+(Number.isFinite(stamp)?' · 设备回报时间 '+new Date(stamp).toLocaleString('zh-CN'):'')+'。网页无需再操作，到画屏按「IMG」→ 确认键查看即可。';
+   }
+  }
   void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});
  });
  if(!window.isSecureContext||!navigator.bluetooth){

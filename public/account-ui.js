@@ -1,6 +1,6 @@
-import {setupRitual} from './ritual-ui.js?v=20261109-delivery-v1';
+import {setupRitual} from './ritual-ui.js?v=20261109-transfer-complete-v1';
 import {setupDevices} from './device-ui.js?v=20261101-approved-copy-v1';
-import {setupCustomPhoto} from './custom-photo.js?v=20261109-delivery-v1';
+import {setupCustomPhoto} from './custom-photo.js?v=20261109-transfer-complete-v1';
 export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUserChange,onOpenArtwork,isBusy}){
  const $=s=>document.querySelector(s),auth=$('#auth-dialog'),panel=$('#account-dialog');let enabled=false,user=null,profile=null,mode='login',afterLogin=null,cursor=null,urls=[],pairedDevice=null,bindingDevice=false,lastAutoBindingAttempt=null;
  const text=(s,v)=>{$(s).textContent=v||'';},visible=(s,v)=>{$(s).hidden=!v;};
