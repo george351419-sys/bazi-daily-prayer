@@ -62,6 +62,8 @@ export class ArkNetwork {
    characteristic.addEventListener('characteristicvaluechanged',this.listener);this.trace('notify:start');await characteristic.startNotifications();this.trace('notify:ready');
    if(epoch!==this.epoch)return;
    this.trace('saved-ssid:read');this.savedSSID=await this.readSavedSSID().catch(()=>null);
+   // 自动归位只针对本次浏览器记下的脏状态；更早版本认主失败留下的残留地址
+   // 无标记可依，改由页面上「修复设备心跳地址」按钮按需检查，避免每次连接都多一次读取等待。
    if(this.heartbeatDirty())await this.restoreHeartbeatURL(epoch);
    this.state('蓝牙已连接：'+device.name+'。正在检查画屏已保存的 Wi-Fi。');
   }catch(error){this.trace('connect:failed:'+String(error?.name||'Error'));if(epoch===this.epoch){this.disconnect();throw error;}}
@@ -141,12 +143,13 @@ export class ArkNetwork {
  async restoreHeartbeatURL(epoch=this.epoch){
   try{
    const current=await this.readHeartbeatURL();
-   if(current===HEARTBEAT_NORMAL){this.clearHeartbeatDirty();this.trace('heartbeat-url:clean');return;}
+   if(current===HEARTBEAT_NORMAL){this.clearHeartbeatDirty();this.trace('heartbeat-url:clean');return {result:'clean',url:current};}
+   if(!current){this.trace('heartbeat-url:empty');return {result:'empty',url:current};}
    // 只归位本站地址与本站配对 challenge；指向其它云端的设备不擅自改写。
-   if(current&&!current.startsWith(HEARTBEAT_NORMAL+'?link=')){this.trace('heartbeat-url:foreign');return;}
+   if(current&&!current.startsWith(HEARTBEAT_NORMAL+'?link=')){this.trace('heartbeat-url:foreign');return {result:'foreign',url:current};}
    await this.write(0x3e,new TextEncoder().encode(HEARTBEAT_NORMAL),epoch);
-   this.clearHeartbeatDirty();this.trace('heartbeat-url:restored');
-  }catch(error){this.trace('heartbeat-url:restore-failed:'+String(error?.name||'Error'));}
+   this.clearHeartbeatDirty();this.trace('heartbeat-url:restored');return {result:'restored',url:current};
+  }catch(error){this.trace('heartbeat-url:restore-failed:'+String(error?.name||'Error'));return {result:'failed',url:null};}
  }
  async resolveIdentity(request){
   return this.networkOperation(async()=>{
@@ -318,10 +321,10 @@ export function setupNetwork(){
   const note=document.createElement('small');note.textContent='绑定后会检查今日与次日两幅祈福画；缺少次日画作时会自动补齐。网页只有收到设备上屏回报后才会展示设备实际画面。';
   binding.append(bindingState,bind,note);state.after(binding);
  }
- const diagnostics=document.createElement('button');diagnostics.type='button';diagnostics.className='text-button';diagnostics.textContent='复制连接诊断';state.after(diagnostics);diagnostics.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify(client.diagnostics||[],null,2));diagnostics.textContent='连接诊断已复制';}catch{diagnostics.textContent='无法复制，请允许剪贴板权限后重试';}});
+ const diagnostics=document.createElement('button');diagnostics.type='button';diagnostics.className='text-button ark-diag-button';diagnostics.textContent='复制连接诊断';state.after(diagnostics);diagnostics.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify(client.diagnostics||[],null,2));diagnostics.textContent='连接诊断已复制';}catch{diagnostics.textContent='无法复制，请允许剪贴板权限后重试';}});
  let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false,announcedDevice=null;
- let reconnectTimer=null,reconnectAttempts=0,reconnectBusy=false,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null,forceSync=false,delivered=null;
- const statusDiag=document.createElement('button');statusDiag.type='button';statusDiag.className='text-button';statusDiag.textContent='复制状态诊断';state.after(statusDiag);statusDiag.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({status:latestStatus,transfer:latestTransferState,connection},null,2));statusDiag.textContent='状态诊断已复制';}catch{statusDiag.textContent='无法复制，请允许剪贴板权限后重试';}});
+ let reconnectTimer=null,reconnectAttempts=0,reconnectBusy=false,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null,forceSync=false,delivered=null,heartbeatProbe=null;
+ const statusDiag=document.createElement('button');statusDiag.type='button';statusDiag.className='text-button ark-diag-button';statusDiag.textContent='复制状态诊断';state.after(statusDiag);statusDiag.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({status:latestStatus,transfer:latestTransferState,connection,heartbeat:heartbeatProbe},null,2));statusDiag.textContent='状态诊断已复制';}catch{statusDiag.textContent='无法复制，请允许剪贴板权限后重试';}});
  // 设备下载完成后常因 WiFi 抖动/休眠没能把“已存储”回执发回云端，导致网页状态滞后。
  // 送达确认只接受两种真实证据：手机 BLE 观测到设备回报下载完成，或用户亲眼看到新画后手动标记。
  // 按 deviceId + 内容哈希隔离，换设备或生成新内容自动失效；绝不把“设备在线时长”当作送达。
@@ -333,15 +336,23 @@ export function setupNetwork(){
  }
  function clearDelivered(){delivered=null;try{localStorage.removeItem(DELIVERY_KEY);}catch{}}
  try{const saved=JSON.parse(localStorage.getItem(DELIVERY_KEY)||'null');if(saved&&/^[a-f0-9]{12}$/.test(saved.deviceId||'')&&/^[a-f0-9]{64}$/.test(saved.targetSha||''))delivered=saved;}catch{}
- const confirmBtn=document.createElement('button');confirmBtn.type='button';confirmBtn.className='text-button';
- confirmBtn.textContent=delivered?'画屏已显示新画 · 已标记完成':'画屏已显示新画 · 标记完成';
- confirmBtn.title='若画屏已显示新画、但网页状态因设备回执延迟未更新，点此按当前设备与内容确认完成';
+ const CONFIRM_LABEL='画屏已显示新画 · 标记完成',CONFIRMED_LABEL='已标记完成 · 点击撤销';
+ const confirmBtn=document.createElement('button');confirmBtn.type='button';confirmBtn.className='text-button ark-diag-button';
+ confirmBtn.textContent=delivered?CONFIRMED_LABEL:CONFIRM_LABEL;
+ confirmBtn.title='亲眼看到画屏已显示新画时点此确认；这是手动标记，不是设备回执。再点一次可撤销，恢复真实状态';
  state.after(confirmBtn);
  confirmBtn.addEventListener('click',()=>{
+  // 允许撤销：旧标记会长期把页面伪装成“已完成”，遮住设备真实未下载的证据。
+  if(delivered){
+   clearDelivered();if(connection)connection={...connection,delivered:null};
+   confirmBtn.textContent=CONFIRM_LABEL;
+   if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection));
+   return;
+  }
   const sha=latestStatus?.build?.sha256,deviceId=latestStatus?.device?.id||client.deviceId;
   if(!sha||!/^[a-f0-9]{64}$/.test(sha)||!/^[a-f0-9]{12}$/.test(deviceId||'')){confirmBtn.textContent='请先连接画屏并等待内容就绪';return;}
   markDelivered(sha,deviceId,'user-confirmed');
-  confirmBtn.textContent='画屏已显示新画 · 已标记完成';
+  confirmBtn.textContent=CONFIRMED_LABEL;
  });
  function announceConnection(){connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt:Date.now(),syncRequestedAt,requestedSha,delivered};document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection));}
  const networkGrid=root.querySelector('.network-grid');
@@ -397,6 +408,23 @@ export function setupNetwork(){
   const labels=['等待开始','连接 Wi‑Fi','下载固件','恢复原 Wi‑Fi','已完成','下载失败','已取消','可应用','正在应用'];
   firmwareStatus.textContent='固件升级：'+(labels[next.state]||'状态未知')+(next.state===2?' '+next.progress+'%':'');
  }});
+ // 设备云端无心跳时，最直接的证据是「设备到底往哪个地址打心跳」。连上蓝牙后读 0x3f，
+ // 把地址显示出来并写进「复制状态诊断」，避免靠猜。若确认是本站配对地址残留则顺手归位，
+ // 指向其它云端时不擅自改写。旧版本认主失败没留自动归位标记，因此需要按需入口。
+ const repairBtn=document.createElement('button');repairBtn.type='button';repairBtn.className='text-button ark-diag-button';
+ repairBtn.textContent='读取设备心跳地址';repairBtn.title='连接蓝牙后点此读取画屏实际使用的云端心跳地址；地址会显示在下方并写入「复制状态诊断」。仅本站配对地址残留会被归位。';
+ state.after(repairBtn);
+ const heartbeatInfo=document.createElement('small');heartbeatInfo.className='ark-diag-url';repairBtn.after(heartbeatInfo);
+ repairBtn.addEventListener('click',async()=>{
+  if(!client.characteristic){repairBtn.textContent='请先连接画屏，再读取心跳地址';return;}
+  if(client.identifying||client.networkBusy){repairBtn.textContent='正在处理其它操作，请稍候再试';return;}
+  repairBtn.disabled=true;repairBtn.textContent='正在读取心跳地址…';
+  try{const probe=await client.restoreHeartbeatURL();
+   heartbeatProbe={url:probe.url||null,result:probe.result,normal:HEARTBEAT_NORMAL,checkedAt:new Date().toISOString()};
+   heartbeatInfo.textContent=probe.url?'设备心跳地址：'+probe.url:'未读到心跳地址（画屏可能未唤醒或未回复）';
+   repairBtn.textContent=({restored:'配对地址已归位 · 请点「复制状态诊断」取证',clean:'心跳地址正常 · 请点「复制状态诊断」取证',foreign:'设备指向其它云端，未改动 · 请点「复制状态诊断」取证',empty:'画屏未回复心跳地址',failed:'读取失败，请唤醒画屏后重试'})[probe.result]||'检查完成';
+  }finally{repairBtn.disabled=false;}
+ });
  root.append(firmwareBox);
  async function pollDownload(){
   if(!client.characteristic||downloadBusy||busy||client.networkBusy||client.identifying)return;downloadBusy=true;
@@ -406,7 +434,7 @@ export function setupNetwork(){
    // 手机通过蓝牙明确观测到设备回报“下载完成”(state===2) 且目标包对得上：自动确认送达。
    // 不用“设备在线多久”推断送达——在线不等于内容已上屏，避免过度承诺。
    if(dl&&dl.state===2&&latestStatus?.build?.status==='published'&&latestStatus.build.sha256&&latestStatus.build.sha256===requestedSha&&client.deviceId&&!delivered){
-    markDelivered(latestStatus.build.sha256,client.deviceId,'ble-download-complete');
+    markDelivered(latestStatus.build.sha256,client.deviceId,'ble-download-complete');confirmBtn.textContent=CONFIRMED_LABEL;
    }
   }
   catch(error){if(client.characteristic)state.textContent='正在确认画屏连接状态，请稍候。';document.dispatchEvent(new CustomEvent('prayer:ark-download',{detail:{deviceId:client.deviceId,unavailable:true,error:error.message}}));}
@@ -424,7 +452,7 @@ export function setupNetwork(){
  document.addEventListener('prayer:transfer-status',event=>{
   latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();
   // 换了内容包或换了画屏，之前的送达确认即失效，避免旧标记冒充新内容已完成。
-  if(delivered&&((latestStatus?.build?.sha256&&delivered.targetSha!==latestStatus.build.sha256)||(latestStatus?.device?.id&&delivered.deviceId!==latestStatus.device.id))){clearDelivered();if(connection)connection={...connection,delivered:null};confirmBtn.textContent='画屏已显示新画 · 标记完成';}
+  if(delivered&&((latestStatus?.build?.sha256&&delivered.targetSha!==latestStatus.build.sha256)||(latestStatus?.device?.id&&delivered.deviceId!==latestStatus.device.id))){clearDelivered();if(connection)connection={...connection,delivered:null};confirmBtn.textContent=CONFIRM_LABEL;}
   renderTransfer(transfer,withConnection(event.detail.state,latestStatus,{...connection,delivered}));
   void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});
  });

@@ -139,3 +139,30 @@ test('pairing diagnostics expose rejection stage only to the challenge owner, ne
  assert.equal(c.map.has('pairing-proof/'+challenge.nonce),true);
  await assert.rejects(pairedDeviceIdentity(env,'2'.repeat(32),challenge.nonce,{store:c.store,now}));
 });
+
+test('心跳拒绝留下脱敏诊断并随账户状态返回，正常心跳不额外写存储',async()=>{
+ const {linkedRitualReportForDevice}=await import('../lib/ark-cloud.mjs'),c=context();await setup(c);
+ // 云端探测（dry-run）不得留下任何痕迹
+ assert.equal((await invoke(c,hb,{headers:{authorization,'X-Ark-Dry-Run':'1'}})).status,200);
+ assert.equal(c.map.has('heartbeat-diagnostic/'+deviceId),false);
+ // 缺凭据 / 凭据不匹配 → 403 且各自留痕，据此可区分「来过但被拒」与「从未到达」
+ for(const headers of [{},{authorization:'Bearer '+'b'.repeat(32)}])assert.equal((await invoke(c,hb,{headers})).status,403);
+ const diag=JSON.parse(decryptAccountData(env,c.map.get('heartbeat-diagnostic/'+deviceId)));
+ assert.equal(diag.total,2);
+ assert.equal(diag.stages.auth_missing.count,1);
+ assert.equal(diag.stages.auth_mismatch.count,1);
+ assert.equal(diag.last.status,403);
+ assert.equal(diag.last.pairing,false);
+ const stored=JSON.stringify(diag);
+ for(const leak of [token,'Bearer','token='])assert.ok(!stored.includes(leak),'诊断不得记录 '+leak);
+ // 正常心跳只写 reports/，不追加诊断，避免每 10 秒两次额外 KV 操作
+ assert.equal((await invoke(c,hb,{headers:{authorization}})).status,200);
+ assert.equal(JSON.parse(decryptAccountData(env,c.map.get('heartbeat-diagnostic/'+deviceId))).total,2);
+ // 账户状态通道把诊断带出来，「复制状态诊断」即可取证
+ const cfg=JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId)));
+ cfg.ritualSha='c'.repeat(64);
+ c.map.set('devices/'+deviceId,encryptAccountData(env,Buffer.from(JSON.stringify(cfg))));
+ const report=await linkedRitualReportForDevice({...env,RITUAL_CLOUD_STORE:c.store},{id:'a'.repeat(32)},deviceId);
+ assert.equal(report.heartbeatDiagnostic.total,2);
+ assert.equal(report.heartbeatDiagnostic.last.stage,'auth_mismatch');
+});
