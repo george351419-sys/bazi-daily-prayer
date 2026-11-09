@@ -8,6 +8,8 @@ export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUs
  document.querySelector('#custom-login')?.addEventListener('click',()=>open('login',()=>{location.hash='custom';}));
  document.querySelector('#ritual-login')?.addEventListener('click',()=>open('login',()=>{location.hash='ritual-home';}));
  document.addEventListener('prayer:ark-device',event=>{pairedDevice=(event.detail?.deviceId||event.detail?.resolveIdentity)?event.detail:null;if(pairedDevice&&user)void bindPairedDevice(false);});
+const BOUND_COPY='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';
+function showBound(state,button){if(state){state.textContent=BOUND_COPY;state.dataset.bindingResult='ok';}if(button){button.disabled=true;button.textContent='已绑定';}}
 async function bindPairedDevice(manual=true){
  const device=pairedDevice;if(!device)return;
  const state=$('#network-device-state'),button=$('#bind-ark-device');
@@ -15,20 +17,42 @@ async function bindPairedDevice(manual=true){
  if(bindingDevice)return;
  const attemptKey=device.connectionId===undefined?null:user.id+':'+device.connectionId;
  if(!manual&&attemptKey&&attemptKey===lastAutoBindingAttempt)return;
+ // 重开网页会清空内存去重标记并重新派发 prayer:ark-device。若每次都无条件认主，就会把设备
+ // 云端心跳地址临时改成配对 challenge、占住整条 BLE 操作队列，页面长时间卡在「正在认主…」。
+ // 自动路径先问云端：账号已绑定画屏就跳过认主；手动「重试认主」仍强制重配对（换画屏时用）。
+ if(!manual){
+  let probeTimer=null;
+  try{
+   const current=await Promise.race([
+    request('/api/account/ritual'),
+    new Promise((_,reject)=>{probeTimer=setTimeout(()=>reject(new Error('状态查询超时')),10000);})
+   ]);
+   if(current?.syncConfigured===true){showBound(state,button);if(attemptKey)lastAutoBindingAttempt=attemptKey;document.dispatchEvent(new CustomEvent('prayer:ark-sync'));return;}
+  }catch{/* 状态查询失败不阻断认主，继续走原流程 */}
+  finally{clearTimeout(probeTimer);}
+ }
  bindingDevice=true;if(button){button.disabled=true;button.textContent='正在认主…';}
  state.textContent='已识别画屏，正在自动绑定到当前账户…';
- try{const id=(device.deviceId&&device.deviceId!=='pending')?device.deviceId:await device.resolveIdentity(request);device.deviceId=id;await ritual.bindDevice(id);
+ // 认主整体加兜底超时：resolveIdentity 内部 60s 轮询只在能跑到循环判断时才生效，
+ // 一旦卡在某个 await（BLE 队列、挂起的请求）就会无限显示「正在认主…」。
+ let timer=null;
+ const work=(async()=>{
+  const id=(device.deviceId&&device.deviceId!=='pending')?device.deviceId:await device.resolveIdentity(request);
+  device.deviceId=id;await ritual.bindDevice(id);return id;
+ })();
+ const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('认主超时：画屏未在限定时间内回报，请保持画屏唤醒后点「重试认主」。')),75000);});
+ try{
+  await Promise.race([work,deadline]);
   if(attemptKey)lastAutoBindingAttempt=attemptKey;  // 仅成功才记录去重，避免重复绑定
   document.dispatchEvent(new CustomEvent('prayer:ark-sync'));
-  if(state){state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';state.dataset.bindingResult='ok';}
-  if(button){button.disabled=true;button.textContent='已绑定';}
+  showBound(state,button);
  }
  catch(e){
   // 失败不记去重：允许后续自动重试（announceKey 变化或蓝牙重连）；并给出明显提示与重试入口
   if(state){state.textContent='⚠️ 认主未完成：'+(e&&e.message||e)+' 点击下方「重试认主」可再次尝试。';state.dataset.bindingResult='failed';}
   if(button){button.disabled=false;button.textContent='重试认主';}
  }
- finally{bindingDevice=false;}
+ finally{clearTimeout(timer);bindingDevice=false;}
 }
  document.addEventListener('prayer:ark-bind',bindPairedDevice);
  document.addEventListener('prayer:ark-connection',event=>{if(!event.detail?.paired)lastAutoBindingAttempt=null;});
