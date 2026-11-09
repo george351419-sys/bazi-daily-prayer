@@ -3,6 +3,8 @@
 import {renderTransfer,withConnection} from './transfer-status.js?v=20261109-delivery-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
+const HEARTBEAT_NORMAL='https://playmath.cn/api/v1/device/heartbeat';
+const HEARTBEAT_DIRTY_KEY='ark:heartbeat-url-dirty';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 export function packet(channel,payload=[]){
  const bytes=new Uint8Array(payload.length+4);bytes.set([0x55,channel,payload.length]);bytes.set(payload,3);
@@ -60,6 +62,7 @@ export class ArkNetwork {
    characteristic.addEventListener('characteristicvaluechanged',this.listener);this.trace('notify:start');await characteristic.startNotifications();this.trace('notify:ready');
    if(epoch!==this.epoch)return;
    this.trace('saved-ssid:read');this.savedSSID=await this.readSavedSSID().catch(()=>null);
+   if(this.heartbeatDirty())await this.restoreHeartbeatURL(epoch);
    this.state('蓝牙已连接：'+device.name+'。正在检查画屏已保存的 Wi-Fi。');
   }catch(error){this.trace('connect:failed:'+String(error?.name||'Error'));if(epoch===this.epoch){this.disconnect();throw error;}}
  }
@@ -128,6 +131,23 @@ export class ArkNetwork {
   const timer=setTimeout(()=>{this.identityRead?.reject(new Error('画屏未回复身份通道，请保持唤醒后重试。'));this.identityRead=null;},3000);
   try{await this.write(0x3f,[],epoch);return await read;}finally{clearTimeout(timer);this.identityRead=null;}
  }
+ // 认主会把设备云端心跳地址临时改成 ?link=<nonce> 配对地址。若认主中途蓝牙断开，
+ // resolveIdentitySession 的 finally 因要求 characteristic 仍在而无法写回，设备会一直
+ // 打配对地址：BLE 显示 Wi-Fi 在线，云端却收不到心跳，新内容永远下发不了。
+ // 用持久化标记记住这种脏状态，下次连接成功时幂等归位。
+ heartbeatDirty(){try{return globalThis.localStorage?.getItem(HEARTBEAT_DIRTY_KEY)==='1';}catch{return false;}}
+ markHeartbeatDirty(){try{globalThis.localStorage?.setItem(HEARTBEAT_DIRTY_KEY,'1');}catch{}this.trace('heartbeat-url:dirty');}
+ clearHeartbeatDirty(){try{globalThis.localStorage?.removeItem(HEARTBEAT_DIRTY_KEY);}catch{}}
+ async restoreHeartbeatURL(epoch=this.epoch){
+  try{
+   const current=await this.readHeartbeatURL();
+   if(current===HEARTBEAT_NORMAL){this.clearHeartbeatDirty();this.trace('heartbeat-url:clean');return;}
+   // 只归位本站地址与本站配对 challenge；指向其它云端的设备不擅自改写。
+   if(current&&!current.startsWith(HEARTBEAT_NORMAL+'?link=')){this.trace('heartbeat-url:foreign');return;}
+   await this.write(0x3e,new TextEncoder().encode(HEARTBEAT_NORMAL),epoch);
+   this.clearHeartbeatDirty();this.trace('heartbeat-url:restored');
+  }catch(error){this.trace('heartbeat-url:restore-failed:'+String(error?.name||'Error'));}
+ }
  async resolveIdentity(request){
   return this.networkOperation(async()=>{
    this.identifying=true;this.trace('identity:begin');
@@ -138,7 +158,7 @@ export class ArkNetwork {
  }
  async resolveIdentitySession(request){
   await this.ensureCloudAPI();
-  const epoch=this.epoch,original=await this.readHeartbeatURL(),normal='https://playmath.cn/api/v1/device/heartbeat';
+  const epoch=this.epoch,original=await this.readHeartbeatURL(),normal=HEARTBEAT_NORMAL;
   const priorChallenge=original.startsWith(normal+'?link=')&&/^[a-f0-9]{32}&device_id=$/.test(original.slice((normal+'?link=').length));if(original&&original!==normal&&!priorChallenge)throw new Error('画屏使用了其他云端地址，请先核对设备配置。');
   const challenge=await request('/api/account/ritual/device',{beginPairing:true});
   if(!/^[a-f0-9]{32}$/.test(challenge.nonce||'')||challenge.heartbeatURL!==normal+'?link='+challenge.nonce+'&device_id=')throw new Error('设备识别服务回复无效。');
@@ -159,7 +179,14 @@ export class ArkNetwork {
     await this.delay(2000);
    }
    throw new Error('尚未收到画屏认证回报，请保持画屏唤醒并点击重试关联。');
-  }finally{if(changed&&epoch===this.epoch&&this.characteristic)await this.write(0x3e,new TextEncoder().encode(normal),epoch);}
+  }finally{
+   if(changed){
+    let restored=false;
+    if(epoch===this.epoch&&this.characteristic){try{await this.write(0x3e,new TextEncoder().encode(normal),epoch);restored=true;}catch{}}
+    // 蓝牙已断开或写回失败：留标记，等下次连接成功后 restoreHeartbeatURL 归位。
+    if(restored)this.clearHeartbeatDirty();else this.markHeartbeatDirty();
+   }
+  }
  }
  async readSavedSSID(){
   if(this.ssidRead)throw new Error('正在读取网络信息，请稍后重试。');

@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {ArkNetwork,packet,wifiCredentials,arkDeviceId} from '../public/ark-network.js';
-function peripheral({status=true,fail=false,wrongSSID=false,capacity=1945600,badBarrier=false,onWrite=()=>{},apiURL='https://playmath.cn',dropAPI=false}={}){
- const writes=[],listeners=new Map(),deviceListeners=new Map();let online=false,ssid=[],connectCalls=0,disconnectCalls=0;
+function peripheral({status=true,fail=false,wrongSSID=false,capacity=1945600,badBarrier=false,onWrite=()=>{},apiURL='https://playmath.cn',dropAPI=false,heartbeatURL}={}){
+ const writes=[],listeners=new Map(),deviceListeners=new Map();let online=false,ssid=[],connectCalls=0,disconnectCalls=0,hbURL=heartbeatURL;
  const characteristic={addEventListener:(key,fn)=>listeners.set(key,fn),removeEventListener:key=>listeners.delete(key),async startNotifications(){},async writeValue(bytes){
   writes.push([...bytes]);onWrite(bytes);if(fail&&bytes[1]===0x34)throw new Error('write failed');
+  if(bytes[1]===0x3e)hbURL=new TextDecoder().decode(bytes.slice(3,-1));
+  if(bytes[1]===0x3f&&hbURL!==undefined){const reply=packet(0x3f,new TextEncoder().encode(hbURL));listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
   if(bytes[1]===0x36&&!dropAPI)apiURL=new TextDecoder().decode(bytes.slice(3,-1));
   if(bytes[1]===0x37){const reply=packet(0x37,new TextEncoder().encode(apiURL));listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
   if(bytes[1]===0x32)ssid=[...bytes.slice(3,-1)];
@@ -20,7 +22,7 @@ function peripheral({status=true,fail=false,wrongSSID=false,capacity=1945600,bad
  if(bytes[1]===0x57||bytes[1]===0x58){const reply=packet(bytes[1],[0]);listeners.get('characteristicvaluechanged')?.({target:{value:new DataView(reply.buffer)}});}
  }};
  const device={name:'FRAMEFILMARK-TEST',addEventListener:(key,fn)=>deviceListeners.set(key,fn),removeEventListener:key=>deviceListeners.delete(key),gatt:{connected:false,async connect(){connectCalls++;this.connected=true;return this;},async getPrimaryService(){return {async getCharacteristic(){return characteristic;}};},disconnect(){disconnectCalls++;this.connected=false;deviceListeners.get('gattserverdisconnected')?.();}}};
- return {writes,device,get connectCalls(){return connectCalls;},get disconnectCalls(){return disconnectCalls;},bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILM');return device;}}};
+ return {writes,device,get connectCalls(){return connectCalls;},get disconnectCalls(){return disconnectCalls;},get heartbeatURL(){return hbURL;},bluetooth:{async requestDevice(options){assert.equal(options.filters[0].namePrefix,'FRAMEFILM');return device;}}};
 }
 test('Wi-Fi UTF-8 validation rejects truncation, open passwords and control characters',()=>{
  assert.throws(()=>wifiCredentials('中'.repeat(11),'12345678'));
@@ -193,4 +195,43 @@ test('an existing cloud origin is preserved and a foreign origin cannot be silen
   if(origin.startsWith('https://playmath.cn/'))await client.ensureCloudAPI();else await assert.rejects(client.ensureCloudAPI(),/其他云端 API/);
   assert.deepEqual(p.writes.map(b=>b[1]),[0x37]);client.disconnect();
  }
+});
+const NORMAL_HEARTBEAT='https://playmath.cn/api/v1/device/heartbeat';
+function withStorage(t){
+ const store=new Map(),original=globalThis.localStorage;
+ globalThis.localStorage={getItem:k=>store.has(k)?store.get(k):null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)};
+ t.after(()=>{if(original===undefined)delete globalThis.localStorage;else globalThis.localStorage=original;});
+}
+test('认主失败遗留的配对心跳地址在下次连接时归位',async t=>{
+ withStorage(t);const nonce='a'.repeat(32);
+ const p=peripheral({heartbeatURL:NORMAL_HEARTBEAT+'?link='+nonce+'&device_id='});
+ const client=new ArkNetwork({bluetooth:p.bluetooth,onState:()=>{},delay:async()=>{}});
+ client.markHeartbeatDirty();assert.equal(client.heartbeatDirty(),true);
+ await client.connect();
+ assert.equal(p.heartbeatURL,NORMAL_HEARTBEAT);
+ assert.equal(client.heartbeatDirty(),false);
+ assert.equal(p.writes.filter(b=>b[1]===0x3e).length,1);
+ assert.ok(client.diagnostics.some(e=>e.stage==='heartbeat-url:restored'));
+ client.disconnect();
+});
+test('心跳地址本来就正常时归位检查不产生多余写入',async t=>{
+ withStorage(t);
+ const p=peripheral({heartbeatURL:NORMAL_HEARTBEAT});
+ const client=new ArkNetwork({bluetooth:p.bluetooth,onState:()=>{},delay:async()=>{}});
+ client.markHeartbeatDirty();await client.connect();
+ assert.equal(p.writes.some(b=>b[1]===0x3e),false);
+ assert.equal(client.heartbeatDirty(),false);
+ assert.ok(client.diagnostics.some(e=>e.stage==='heartbeat-url:clean'));
+ client.disconnect();
+});
+test('指向其它云端的画屏不会被擅自改写',async t=>{
+ withStorage(t);const foreign='https://other.example/api/v1/device/heartbeat';
+ const p=peripheral({heartbeatURL:foreign});
+ const client=new ArkNetwork({bluetooth:p.bluetooth,onState:()=>{},delay:async()=>{}});
+ client.markHeartbeatDirty();await client.connect();
+ assert.equal(p.heartbeatURL,foreign);
+ assert.equal(p.writes.some(b=>b[1]===0x3e),false);
+ assert.equal(client.heartbeatDirty(),true);
+ assert.ok(client.diagnostics.some(e=>e.stage==='heartbeat-url:foreign'));
+ client.disconnect();
 });
