@@ -70,3 +70,23 @@ test('live Wi-Fi confirmation replaces stale-cloud connection instructions witho
  const preparing=transferStatus({...result,pendingUpdate:true});assert.equal(transferAction(withConnection(preparing,{...result,pendingUpdate:true},connection,now)),null);
  const stored=transferStatus({...result,deviceReport:{...ready.deviceReport,stored:true,targetSha:'current'}});assert.equal(withConnection(stored,result,connection,now).phase,'stored');
 });
+test('手机确认送达覆盖陈旧回执，但内容或设备不符不得冒充完成',async()=>{
+ const {withConnection,transferAction}=await import('../public/transfer-status.js');
+ const now=Date.now(),result={...ready,device:{id:'screen'},build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'current'}};
+ const state=transferStatus(result);
+ const base={paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,requestedSha:'current',syncRequestedAt:now-21000};
+ const delivered={deliveredAt:now,targetSha:'current',deviceId:'screen',evidence:'user-confirmed'};
+ const done=withConnection(state,result,{...base,delivered},now);
+ assert.equal(done.phase,'stored');assert.equal(done.step,3);assert.equal(transferAction(done),null);
+ assert.equal(withConnection(state,result,{...base,delivered:{...delivered,targetSha:'old'}},now).phase,'syncing');
+ assert.equal(withConnection(state,result,{...base,delivered:{...delivered,deviceId:'other'}},now).phase,'syncing');
+ // 蓝牙已断开或连接信息过期，也不得抹掉用户亲眼确认过的送达结果。
+ assert.equal(withConnection(state,result,{paired:false,receivedAt:now-7000,delivered},now).phase,'stored');
+});
+test('BLE 观测到设备回报下载完成时不继续显示百分比进度',async()=>{
+ const {withLiveDownload}=await import('../public/transfer-status.js');
+ const result={...ready,device:{id:'screen'},deviceReport:{...ready.deviceReport,targetSha:'current'},build:{...ready.build,sha256:'current'}};
+ const state=transferStatus(result),live={deviceId:'screen',state:2,receivedAt:Date.now()};
+ assert.match(withLiveDownload(state,result,live).title,/下载完成/);
+ assert.equal(withLiveDownload(state,result,live).percent,null);
+});

@@ -1,6 +1,6 @@
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer,withConnection} from './transfer-status.js?v=20261101-connected-sync-v2';
+import {renderTransfer,withConnection} from './transfer-status.js?v=20261109-delivery-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -293,9 +293,30 @@ export function setupNetwork(){
  }
  const diagnostics=document.createElement('button');diagnostics.type='button';diagnostics.className='text-button';diagnostics.textContent='复制连接诊断';state.after(diagnostics);diagnostics.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify(client.diagnostics||[],null,2));diagnostics.textContent='连接诊断已复制';}catch{diagnostics.textContent='无法复制，请允许剪贴板权限后重试';}});
  let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false,announcedDevice=null;
- let reconnectTimer=null,reconnectAttempts=0,reconnectBusy=false,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null,forceSync=false;
+ let reconnectTimer=null,reconnectAttempts=0,reconnectBusy=false,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null,forceSync=false,delivered=null;
  const statusDiag=document.createElement('button');statusDiag.type='button';statusDiag.className='text-button';statusDiag.textContent='复制状态诊断';state.after(statusDiag);statusDiag.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({status:latestStatus,transfer:latestTransferState,connection},null,2));statusDiag.textContent='状态诊断已复制';}catch{statusDiag.textContent='无法复制，请允许剪贴板权限后重试';}});
- function announceConnection(){connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt:Date.now(),syncRequestedAt,requestedSha};document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection));}
+ // 设备下载完成后常因 WiFi 抖动/休眠没能把“已存储”回执发回云端，导致网页状态滞后。
+ // 送达确认只接受两种真实证据：手机 BLE 观测到设备回报下载完成，或用户亲眼看到新画后手动标记。
+ // 按 deviceId + 内容哈希隔离，换设备或生成新内容自动失效；绝不把“设备在线时长”当作送达。
+ const DELIVERY_KEY='prayer-ark-delivered-v1';
+ function markDelivered(sha,deviceId,evidence){
+  delivered={deliveredAt:Date.now(),targetSha:sha,deviceId,evidence};
+  try{localStorage.setItem(DELIVERY_KEY,JSON.stringify(delivered));}catch{}
+  announceConnection();
+ }
+ function clearDelivered(){delivered=null;try{localStorage.removeItem(DELIVERY_KEY);}catch{}}
+ try{const saved=JSON.parse(localStorage.getItem(DELIVERY_KEY)||'null');if(saved&&/^[a-f0-9]{12}$/.test(saved.deviceId||'')&&/^[a-f0-9]{64}$/.test(saved.targetSha||''))delivered=saved;}catch{}
+ const confirmBtn=document.createElement('button');confirmBtn.type='button';confirmBtn.className='text-button';
+ confirmBtn.textContent=delivered?'画屏已显示新画 · 已标记完成':'画屏已显示新画 · 标记完成';
+ confirmBtn.title='若画屏已显示新画、但网页状态因设备回执延迟未更新，点此按当前设备与内容确认完成';
+ state.after(confirmBtn);
+ confirmBtn.addEventListener('click',()=>{
+  const sha=latestStatus?.build?.sha256,deviceId=latestStatus?.device?.id||client.deviceId;
+  if(!sha||!/^[a-f0-9]{64}$/.test(sha)||!/^[a-f0-9]{12}$/.test(deviceId||'')){confirmBtn.textContent='请先连接画屏并等待内容就绪';return;}
+  markDelivered(sha,deviceId,'user-confirmed');
+  confirmBtn.textContent='画屏已显示新画 · 已标记完成';
+ });
+ function announceConnection(){connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt:Date.now(),syncRequestedAt,requestedSha,delivered};document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection));}
  const networkGrid=root.querySelector('.network-grid');
  function updateConnectionControls(){if(networkGrid)networkGrid.hidden=false;state.hidden=false;binding.hidden=!connectedDevice;}
  updateConnectionControls();
@@ -352,7 +373,15 @@ export function setupNetwork(){
  root.append(firmwareBox);
  async function pollDownload(){
   if(!client.characteristic||downloadBusy||busy||client.networkBusy||client.identifying)return;downloadBusy=true;
-  try{await client.write(0x3a,[]);await client.queryDownload();}
+  try{
+   await client.write(0x3a,[]);
+   const dl=await client.queryDownload().catch(()=>null);
+   // 手机通过蓝牙明确观测到设备回报“下载完成”(state===2) 且目标包对得上：自动确认送达。
+   // 不用“设备在线多久”推断送达——在线不等于内容已上屏，避免过度承诺。
+   if(dl&&dl.state===2&&latestStatus?.build?.status==='published'&&latestStatus.build.sha256&&latestStatus.build.sha256===requestedSha&&client.deviceId&&!delivered){
+    markDelivered(latestStatus.build.sha256,client.deviceId,'ble-download-complete');
+   }
+  }
   catch(error){if(client.characteristic)state.textContent='正在确认画屏连接状态，请稍候。';document.dispatchEvent(new CustomEvent('prayer:ark-download',{detail:{deviceId:client.deviceId,unavailable:true,error:error.message}}));}
   finally{downloadBusy=false;}
   await syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});
@@ -367,7 +396,9 @@ export function setupNetwork(){
  }
  document.addEventListener('prayer:transfer-status',event=>{
   latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();
-  renderTransfer(transfer,withConnection(event.detail.state,latestStatus,connection));
+  // 换了内容包或换了画屏，之前的送达确认即失效，避免旧标记冒充新内容已完成。
+  if(delivered&&((latestStatus?.build?.sha256&&delivered.targetSha!==latestStatus.build.sha256)||(latestStatus?.device?.id&&delivered.deviceId!==latestStatus.device.id))){clearDelivered();if(connection)connection={...connection,delivered:null};confirmBtn.textContent='画屏已显示新画 · 标记完成';}
+  renderTransfer(transfer,withConnection(event.detail.state,latestStatus,{...connection,delivered}));
   void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});
  });
  if(!window.isSecureContext||!navigator.bluetooth){

@@ -147,6 +147,9 @@ export function transferAction(state){
 // Live Wi-Fi confirmation is connectivity evidence, not a content-storage receipt.
 export function withConnection(state,result,connection,now=Date.now()){
  state=state.connectionBase||state;
+ // 手机已确认设备收到本次内容（BLE 观测到下载完成，或用户亲眼看到新画后手动标记）：
+ // 这是比陈旧云端回执更强的地面真相，不受 6 秒蓝牙新鲜度窗口限制，也不被“尚未收到回报”覆盖。
+ if(connection?.delivered&&connection.delivered.targetSha===result.build?.sha256&&connection.delivered.deviceId===result.device?.id)return {...copyState('S20','stored',3),connectionBase:state};
  if(!connection?.paired||!Number.isFinite(connection.receivedAt)||now-connection.receivedAt>6000||!result?.device?.id||connection.deviceId!==result.device.id)return {...state,action:transferAction(state)};
  if(state.step<1||state.preparation||['stored','rendered','firmware','publishing'].includes(state.phase))return {...state,action:transferAction(state)};
  if(['waiting','syncing'].includes(state.phase)){
@@ -184,6 +187,8 @@ export function renderTransfer(host, state) {
 // BLE download replies carry no package hash: require a current cloud target first.
 export function withLiveDownload(state,result,live,now=Date.now()){
  if(!live||now-live.receivedAt>6000||result?.pendingUpdate||result?.build?.status!=='published'||!result.build.sha256||result.device?.id!==live.deviceId||result.deviceReport?.targetSha!==result.build.sha256||result.deviceReport?.stale||Date.parse(result.deviceReport?.lastSeen)<Date.parse(result.build.publishedAt)||!['downloading','confirming','waiting'].includes(state.phase))return state;
+ // 设备回报“下载完成”时，不再继续显示旧的百分比进度。
+ if(live.state===2)return {...state,...copyState('S19','confirming',2)};
  if(live.state!==1||!Number.isFinite(live.progress))return state;
  const percent=Math.max(0,Math.min(100,live.progress));
  return {...state,...copyState('S18','downloading',2,percent)};
