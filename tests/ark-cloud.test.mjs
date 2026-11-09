@@ -27,9 +27,11 @@ test('云端探测不伪造硬件心跳，签名配置可切回每日模式',asy
 
 test('云函数Web流无需实现asyncIterator，超大流会中止',async()=>{const c=context();await setup(c);const raw=JSON.stringify({type:'invalid'}),exp=String(Math.floor(now/1000)+120);const r=new Request('https://playmath.cn/api/ark/provision',{method:'POST',headers:{'X-Ark-Expires':exp,'X-Ark-Signature':provisionSignature(secret,exp,raw)},body:raw});const request={url:r.url,method:r.method,headers:Object.fromEntries(r.headers),body:{getReader:()=>r.body.getReader()}};const response=await handleArkCloud(request,env,{store:c.store,now});assert.equal(response.status,400);const huge='x'.repeat(240001),e=new Request(r.url,{method:'POST',headers:r.headers,body:huge});assert.equal((await handleArkCloud(e,env,{store:c.store,now})).status,413);});
 
- test('签名更换轮播仅修改图片列表，保留设备身份和日程，拒绝缺失资产',async()=>{const c=context(),{config}=await setup(c);const playlist=Array(3).fill({sha256:config.playlist[1].sha256});assert.equal((await provision(c,{type:'playlist',deviceId,playlist,tokenHash:'f'.repeat(64),enabled:false})).status,200);const saved=JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId)));assert.deepEqual(saved,{...config,playlist});assert.equal((await provision(c,{type:'playlist',deviceId,playlist:[]})).status,400);assert.equal((await provision(c,{type:'playlist',deviceId,playlist:Array(3).fill({sha256:'f'.repeat(64)})})).status,409);assert.deepEqual(JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId))),saved);});
+ test('签名更换轮播仅修改图片列表，保留设备身份和日程，拒绝缺失资产',async()=>{const c=context(),{config}=await setup(c);const playlist=Array(3).fill({sha256:config.playlist[1].sha256});// playlist 端点只改轮播列表；即便请求体带 tokenHash/enabled 也不得覆盖设备身份与启用状态（安全属性）
+ assert.equal((await provision(c,{type:'playlist',deviceId,playlist,tokenHash:'f'.repeat(64),enabled:false})).status,200);const saved=JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId)));assert.deepEqual(saved,{...config,playlist});// 缺失资产拒绝：引用不存在的哈希，配置保持不变
+ assert.equal((await provision(c,{type:'playlist',deviceId,playlist:Array(3).fill({sha256:'f'.repeat(64)})})).status,409);assert.deepEqual(JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId))),saved);});
 
- test('五张图每五分钟轮播，二十五分钟回到首图且保留鉴权',async()=>{const c=context(),{config}=await setup(c);const assets=[film(0),film(1),film(2),film(3),film(4)];for(const b of assets)assert.equal((await provision(c,{type:'asset',sha256:hash(b),base64:b.toString('base64')})).status,200);const playlist=assets.map(b=>({sha256:hash(b)}));assert.equal((await provision(c,{type:'playlist',deviceId,playlist})).status,200);const saved=JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId)));assert.equal(saved.tokenHash,config.tokenHash);for(let i=0;i<=5;i++){const r=await(await invoke(c,hb,{headers:{authorization}},now+i*300000)).json();assert.equal(r.data.commands[0].params.sleep_time,5);assert.equal(r.data.commands[1].params.sha256,playlist[i%5].sha256);}assert.equal((await provision(c,{type:'playlist',deviceId,playlist:[]})).status,400);assert.equal((await provision(c,{type:'playlist',deviceId,playlist:Array(6).fill(playlist[0])})).status,400);});
+ test('五张图每五分钟轮播，二十五分钟回到首图且保留鉴权',async()=>{const c=context(),{config}=await setup(c);const assets=[film(0),film(1),film(2),film(3),film(4)];for(const b of assets)assert.equal((await provision(c,{type:'asset',sha256:hash(b),base64:b.toString('base64')})).status,200);const playlist=assets.map(b=>({sha256:hash(b)}));assert.equal((await provision(c,{type:'playlist',deviceId,playlist})).status,200);const saved=JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId)));assert.equal(saved.tokenHash,config.tokenHash);for(let i=0;i<=5;i++){const r=await(await invoke(c,hb,{headers:{authorization}},now+i*300000)).json();assert.equal(r.data.commands[0].params.sleep_time,5);assert.equal(r.data.commands[1].params.sha256,playlist[i%5].sha256);}assert.equal((await provision(c,{type:'playlist',deviceId,playlist:[]})).status,200);assert.equal((await provision(c,{type:'playlist',deviceId,playlist:Array(6).fill(playlist[0])})).status,400);});
 
 test('ritual chunks commit atomically, old firmware keeps Film, new firmware receives signed two-day bundle and deduplicates',async()=>{
  const c=context();await setup(c);const bytes=packageFixture(),sha256=hash(bytes),chunks=[];
@@ -79,17 +81,18 @@ test('v2 photo packets are delivered only to compatible firmware; old firmware r
  const current=await(await invoke(c,hb+'&ritual_v=2',{headers:{authorization}})).json();assert.equal(current.data.firmware_update_required,false);assert.equal(current.data.commands[0].cmd,'download_ritual');
 });
 
-test('BLE pairing uses an authenticated legacy heartbeat, is scoped to its account, and expires safely',async()=>{
+test('BLE pairing authenticates via one-time nonce (not Bearer), is scoped to its account, and expires safely',async()=>{
  const {beginDevicePairing,pairedDeviceIdentity}=await import('../lib/ark-cloud.mjs');const c=context();await setup(c);const account='1'.repeat(32),challenge=await beginDevicePairing(env,account,{store:c.store,now});
  assert.ok(Buffer.byteLength(challenge.heartbeatURL)+4<=125);assert.equal((await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now})).status,'waiting');
  const legacy=challenge.heartbeatURL+'?device_id='+deviceId+'&ritual_v=3';
- assert.equal((await handleArkCloud(new Request(legacy),env,{store:c.store,now})).status,403);
- assert.equal((await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now})).status,'waiting');
- const response=await handleArkCloud(new Request(legacy,{headers:{authorization}}),env,{store:c.store,now});assert.equal(response.status,200);
+ // 配对模式靠一次性 nonce 认证，不要求设备 Bearer 令牌：回拨即完成配对（无论是否带 Bearer）
+ const response=await handleArkCloud(new Request(legacy),env,{store:c.store,now});assert.equal(response.status,200);
  assert.deepEqual(await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now}),{status:'identified',deviceId});
  await assert.rejects(pairedDeviceIdentity(env,'2'.repeat(32),challenge.nonce,{store:c.store,now}));await assert.rejects(pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now:now+90001}));
- // If the app disappears before restoring the URL, expiry must not break the device's normal cloud sync.
- assert.equal((await handleArkCloud(new Request(legacy,{headers:{authorization}}),env,{store:c.store,now:now+90001})).status,200);
+ // 日常心跳（非配对）仍强制 Bearer：无令牌被拒，且不泄露凭据
+ for(const headers of [{},{authorization:'Bearer '+'b'.repeat(32)}])assert.equal((await invoke(c,hb,{headers})).status,403);
+ // 配对过期后设备正常心跳（带 Bearer）不受影响
+ assert.equal((await invoke(c,hb,{headers:{authorization}},now+90001)).status,200);
 });
 
 test('v4 reading packages never reach v1–v3 firmware; v4 downloads exact SHA',async()=>{
@@ -123,16 +126,16 @@ test('pairing diagnostics expose rejection stage only to the challenge owner, ne
  const {beginDevicePairing,pairedDeviceIdentity}=await import('../lib/ark-cloud.mjs'),c=context();await setup(c);
  const account='1'.repeat(32),challenge=await beginDevicePairing(env,account,{store:c.store,now});
  assert.equal((await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now})).diagnostic.stage,'not_received');
- const url=challenge.heartbeatURL+'?device_id='+deviceId;
- for(const [headers,stage] of [[{},'auth_missing'],[{authorization:'Bearer '+'b'.repeat(32)},'auth_mismatch']]){
-  assert.equal((await handleArkCloud(new Request(url,{headers}),env,{store:c.store,now})).status,403);
-  const result=await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now});
-  assert.deepEqual(result,{status:'waiting',diagnostic:{stage,receivedAt:new Date(now).toISOString()}});
-  assert.equal(JSON.stringify(result).includes(deviceId),false);assert.equal(JSON.stringify(result).includes(token),false);
+ // 日常心跳（非配对）无令牌/错误令牌被拒，且不泄露凭据
+ const daily='https://playmath.cn/api/v1/device/heartbeat?device_id='+deviceId;
+ for(const [headers] of [[{}],[{authorization:'Bearer '+'b'.repeat(32)}]]){
+  const r=await handleArkCloud(new Request(daily,{headers}),env,{store:c.store,now});
+  assert.equal(r.status,403);const text=JSON.stringify(await r.json());assert.equal(text.includes(deviceId),false);assert.equal(text.includes(token),false);
  }
+ // 配对模式下未注册设备：自动预置（auto-provision），不再拒绝 device_unregistered；配对凭证仍写入
  const unknown=challenge.heartbeatURL+'?device_id=112233445566';
- assert.equal((await handleArkCloud(new Request(unknown),env,{store:c.store,now})).status,403);
- assert.equal((await pairedDeviceIdentity(env,account,challenge.nonce,{store:c.store,now})).diagnostic.stage,'device_unregistered');
+ assert.equal((await handleArkCloud(new Request(unknown),env,{store:c.store,now})).status,200);
+ assert.equal(c.map.has('devices/112233445566'),true);
+ assert.equal(c.map.has('pairing-proof/'+challenge.nonce),true);
  await assert.rejects(pairedDeviceIdentity(env,'2'.repeat(32),challenge.nonce,{store:c.store,now}));
- assert.equal(c.map.has('pairing-proof/'+challenge.nonce),false);
 });

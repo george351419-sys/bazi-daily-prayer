@@ -315,12 +315,13 @@ export function setupNetwork(){
   if(!status.connected){syncSha=null;syncRequestedAt=null;requestedSha=null;}
   state.textContent=status.text;send.disabled=!status.paired||busy;disconnect.hidden=!status.paired;firmwareButton.disabled=!status.paired||busy;
   connectedDevice=status.paired?{deviceId:status.deviceId,deviceName:status.deviceName,connectionId:status.connectionId,resolveIdentity:async request=>{const id=await client.resolveIdentity(request);client.deviceId=id;client.state('设备身份已核验，正在关联当前账户。',client.lastStatus===true);return id;}}:null;
-  binding.hidden=!status.paired;bind.disabled=!status.paired;updateConnectionControls();
-  if(!status.paired){bindingState.textContent='';delete bindingState.dataset.deviceId;}
-  else if(status.deviceId&&bindingState.dataset.deviceId!==status.deviceId){bindingState.dataset.deviceId=status.deviceId;bindingState.textContent='当前画屏：'+status.deviceName+' · 设备编号 '+status.deviceId;}
-  else if(!bindingState.textContent)bindingState.textContent='设备联网后会通过认证心跳核验身份，并自动关联当前账户。';
+  bind.disabled=!status.paired;binding.hidden=false;updateConnectionControls();
+  if(!status.paired){bindingState.textContent='蓝牙未连接，暂无法认主。请靠近画屏、打开手机蓝牙后重新连接；连上蓝牙后会自动认主，无需手动输入编号。';delete bindingState.dataset.deviceId;delete bindingState.dataset.bindingResult;}
+  else if(bindingState.dataset.bindingResult==='ok'||bindingState.dataset.bindingResult==='failed'){/* 认主已有明确结果，保留 account-ui 提示，onState 不覆盖 */}
+  else if(status.deviceId&&status.deviceId!=='pending'&&bindingState.dataset.deviceId!==status.deviceId){bindingState.dataset.deviceId=status.deviceId;bindingState.textContent='当前画屏：'+status.deviceName+' · 设备编号 '+status.deviceId;}
+  else if(!bindingState.textContent)bindingState.textContent='蓝牙已连接，正在自动认主到当前账户；设备联网后会主动领取内容。';
   const announceKey=status.paired?(status.connected?'online':'paired')+':'+(status.deviceId||'pending'):null;
-  if(announceKey!==announcedDevice){announcedDevice=announceKey;if(!status.paired||status.connected)document.dispatchEvent(new CustomEvent('prayer:ark-device',{detail:connectedDevice}));}
+  if(announceKey!==announcedDevice){announcedDevice=announceKey;if(status.paired)document.dispatchEvent(new CustomEvent('prayer:ark-device',{detail:connectedDevice}));}
   if(status.savedSSID&&!form.elements.ssid.value)form.elements.ssid.value=status.savedSSID;
   password.placeholder='输入该 Wi-Fi 的现有密码';updatePassword();
   form.classList.toggle('network-connected',status.connected);

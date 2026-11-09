@@ -8,20 +8,30 @@ export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUs
  document.querySelector('#custom-login')?.addEventListener('click',()=>open('login',()=>{location.hash='custom';}));
  document.querySelector('#ritual-login')?.addEventListener('click',()=>open('login',()=>{location.hash='ritual-home';}));
  document.addEventListener('prayer:ark-device',event=>{pairedDevice=(event.detail?.deviceId||event.detail?.resolveIdentity)?event.detail:null;if(pairedDevice&&user)void bindPairedDevice(false);});
- async function bindPairedDevice(manual=true){
-  const device=pairedDevice;if(!device)return;
-  const state=$('#network-device-state'),button=$('#bind-ark-device');
-  if(!user){if(manual)open('login',bindPairedDevice);return;}
-  if(bindingDevice)return;
-  const attemptKey=device.connectionId===undefined?null:user.id+':'+device.connectionId;
-  if(!manual&&attemptKey&&attemptKey===lastAutoBindingAttempt)return;
-  if(attemptKey)lastAutoBindingAttempt=attemptKey;
-  bindingDevice=true;button.disabled=true;state.textContent='已识别画屏，正在自动绑定到当前账户…';
-  try{const id=device.deviceId||await device.resolveIdentity(request);device.deviceId=id;await ritual.bindDevice(id);document.dispatchEvent(new CustomEvent('prayer:ark-sync'));state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';}
-  catch(e){state.textContent='绑定暂未完成：'+e.message;}
-  finally{bindingDevice=false;button.disabled=false;}
+async function bindPairedDevice(manual=true){
+ const device=pairedDevice;if(!device)return;
+ const state=$('#network-device-state'),button=$('#bind-ark-device');
+ if(!user){if(manual)open('login',bindPairedDevice);return;}
+ if(bindingDevice)return;
+ const attemptKey=device.connectionId===undefined?null:user.id+':'+device.connectionId;
+ if(!manual&&attemptKey&&attemptKey===lastAutoBindingAttempt)return;
+ bindingDevice=true;if(button){button.disabled=true;button.textContent='正在认主…';}
+ state.textContent='已识别画屏，正在自动绑定到当前账户…';
+ try{const id=(device.deviceId&&device.deviceId!=='pending')?device.deviceId:await device.resolveIdentity(request);device.deviceId=id;await ritual.bindDevice(id);
+  if(attemptKey)lastAutoBindingAttempt=attemptKey;  // 仅成功才记录去重，避免重复绑定
+  document.dispatchEvent(new CustomEvent('prayer:ark-sync'));
+  if(state){state.textContent='画屏已绑定。两日内容准备好后，设备联网会主动领取；收到上屏回报前不会显示“已更新”。';state.dataset.bindingResult='ok';}
+  if(button){button.disabled=true;button.textContent='已绑定';}
  }
+ catch(e){
+  // 失败不记去重：允许后续自动重试（announceKey 变化或蓝牙重连）；并给出明显提示与重试入口
+  if(state){state.textContent='⚠️ 认主未完成：'+(e&&e.message||e)+' 点击下方「重试认主」可再次尝试。';state.dataset.bindingResult='failed';}
+  if(button){button.disabled=false;button.textContent='重试认主';}
+ }
+ finally{bindingDevice=false;}
+}
  document.addEventListener('prayer:ark-bind',bindPairedDevice);
+ document.addEventListener('prayer:ark-connection',event=>{if(!event.detail?.paired)lastAutoBindingAttempt=null;});
  document.addEventListener('visibilitychange',()=>{if(document.hidden)ritual.pause();else if(user){void ritual.refresh();void customPhoto.refresh();}});
  const crossOrigin=()=>new URL(apiURL('/api/bootstrap')).origin!==location.origin;
  function setMode(next){mode=next;$('#auth-form').reset();visible('#auth-error',false);text('#auth-title',next==='register'?'留一份属于你的造像记录':next==='recover'?'使用恢复码找回账户':'欢迎回到生辰造像馆');visible('#auth-nickname-field',next==='register');visible('#auth-recovery-field',next==='recover');$('#auth-nickname').required=next==='register';$('#auth-recovery').required=next==='recover';$('#auth-password').autocomplete=next==='login'?'current-password':'new-password';text('#auth-password-label',next==='recover'?'新密码':'密码');text('#auth-submit',next==='register'?'注册并建立我的账户':next==='recover'?'重设密码并登录':'登录我的账户');for(const tab of document.querySelectorAll('[data-auth-mode]')){tab.classList.toggle('active',tab.dataset.authMode===next);tab.setAttribute('aria-selected',String(tab.dataset.authMode===next));}}

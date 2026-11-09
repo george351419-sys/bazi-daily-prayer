@@ -30,7 +30,7 @@ Page({
  async connect(e){if(this.data.busy)return;this.connectionNotice=true;this.setData({busy:true,error:'',message:''});try{await this.ble.connect(e.currentTarget.dataset.id);this.setData({connectedDeviceId:this.connection.snapshot.connectedDeviceId});await this.autoBind();void this.pollSync();}catch(e){if(this.active)api.error(this,e);}finally{if(this.active)this.setData({busy:false});}},
  async wifi(){if(!this.data.paired){api.error(this,new Error('请先连接附近画屏蓝牙。'));return;}if(this.data.busy)return;this.setData({busy:true,error:''});try{await this.ble.configure(this.data.ssid,this.data.wifiPassword);await this.autoBind();void this.pollSync();this.setData({setupExpanded:false,message:''});}catch(e){if(this.active)api.error(this,e);}finally{this.setData({wifiPassword:'',editingPassword:false,busy:false});}},
  async autoBind(){
-  const user=getApp().globalData.user;if(!user||!this.data.paired||!this.data.wifiConnected||this.data.binding)return;
+  const user=getApp().globalData.user;if(!user||!this.data.paired||this.data.binding)return;
   const known=this.connection.snapshot.connectedDeviceId;
   if(known&&this.data.status?.device?.id===known&&this.data.status.device.active)return;
   const key=user.id+':'+this.connection.target+':'+this.connection.client.epoch;
