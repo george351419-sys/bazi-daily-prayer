@@ -166,3 +166,29 @@ test('心跳拒绝留下脱敏诊断并随账户状态返回，正常心跳不�
  assert.equal(report.heartbeatDiagnostic.total,2);
  assert.equal(report.heartbeatDiagnostic.last.stage,'auth_mismatch');
 });
+
+test('自动预置的无令牌设备心跳不再被 403 卡死，能领到下载指令；带令牌设备不受影响',async()=>{
+ const {beginDevicePairing}=await import('../lib/ark-cloud.mjs'),c=context();
+ const account='3'.repeat(32),challenge=await beginDevicePairing(env,account,{store:c.store,now});
+ // 配对回拨：固件没走过出厂 provision，不带 Bearer → 自动建设备且 tokenHash=null
+ const legacy=challenge.heartbeatURL+'?device_id='+deviceId+'&ritual_v=3';
+ assert.equal((await handleArkCloud(new Request(legacy),env,{store:c.store,now})).status,200);
+ const saved=JSON.parse(decryptAccountData(env,c.map.get('devices/'+deviceId)));
+ assert.equal(saved.tokenHash,null);
+ // 模拟 ritual_commit 把仪式内容写进设备配置
+ saved.ritualSha='d'.repeat(64);saved.ritualMeta={mode:'daily',answerCount:100,startEpoch:0,protocol:3};
+ c.map.set('devices/'+deviceId,encryptAccountData(env,Buffer.from(JSON.stringify(saved))));
+ // 日常心跳：固件只能发空 Bearer / 不带 Authorization，过去一律 403、lastSeen 冻结
+ for(const headers of [{},{authorization:'Bearer '}]){
+  const response=await invoke(c,hb+'&ritual_v=3',{headers});
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).data.commands[0].cmd,'download_ritual');
+ }
+ // 放行后必须真正写回执，账户状态才会推进
+ assert.ok(c.map.has('reports/'+deviceId));
+ assert.equal(JSON.parse(decryptAccountData(env,c.map.get('reports/'+deviceId))).targetSha,'d'.repeat(64));
+ // 带 tokenHash 的常规设备仍严格执行 Bearer 校验，不得被放宽
+ const other=context();await setup(other);
+ for(const headers of [{},{authorization:'Bearer '+'b'.repeat(32)}])assert.equal((await invoke(other,hb,{headers})).status,403);
+ assert.equal((await invoke(other,hb,{headers:{authorization}})).status,200);
+});
