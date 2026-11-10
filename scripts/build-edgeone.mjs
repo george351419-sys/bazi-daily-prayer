@@ -19,6 +19,7 @@ await writeFile('cloud-functions/api/account/artworks/[id].js',`import handler f
 await writeFile('cloud-functions/api/account/artworks/[id]/image.js',`import handler from '../../../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
 await mkdir('cloud-functions/api/account/ritual/device',{recursive:true});
 for(const file of ['device','prepare'])await writeFile('cloud-functions/api/account/ritual/'+file+'.js',`import handler from '../../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
+await writeFile('cloud-functions/api/account/ritual/diagnostic.js',`import handler from '../../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
 await writeFile('cloud-functions/api/account/ritual/device/unbind.js',`import handler from '../../../../../.edgeone-build/handler.mjs';\nexport default async function onRequest(context){return handler(context); }\n`);
 for(const file of ['internal/ritual-worker/links.js','internal/ritual-worker/accounts/[accountId].js','internal/ritual-worker/accounts/[accountId]/plan.js','internal/ritual-worker/accounts/[accountId]/build.js','internal/ritual-worker/accounts/[accountId]/preparation.js','internal/ritual-worker/accounts/[accountId]/artworks/[artworkId]/image.js']){
  const output='cloud-functions/api/'+file,relative=path.relative(path.dirname(output),'.edgeone-build/handler.mjs').replaceAll('\\','/');
