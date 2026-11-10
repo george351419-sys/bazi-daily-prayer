@@ -71,6 +71,21 @@ test('live Wi-Fi confirmation replaces stale-cloud connection instructions witho
  const preparing=transferStatus({...result,pendingUpdate:true});assert.equal(transferAction(withConnection(preparing,{...result,pendingUpdate:true},connection,now)),null);
  const stored=transferStatus({...result,deviceReport:{...ready.deviceReport,stored:true,targetSha:'current'}});assert.equal(withConnection(stored,result,connection,now).phase,'stored');
 });
+test('持续 BLE 往返让等待态稳定显示为已联网正在检查，而非退回「去链接神物」',async()=>{
+ const {withConnection,transferAction}=await import('../public/transfer-status.js');
+ const now=Date.now();
+ // 云端回执陈旧 → transferStatus 落在 S15「等待最新设备检查」(phase=waiting)
+ const result={...ready,device:{id:'screen'},build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'old'}};
+ const base=transferStatus(result);assert.equal(base.phase,'waiting');
+ // 证据过期（6 秒以上无 BLE 往返）→ 退回 waiting +「去链接神物」，这是被修复的错误画面
+ const stale=withConnection(base,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now-7000},now);
+ assert.equal(stale.phase,'waiting');assert.equal(transferAction(stale),'connect');
+ // 每 2 秒 BLE 轮询续期后证据新鲜 → 稳定显示「画屏已联网 · 正在检查新内容」，不再误导重新配网
+ const fresh=withConnection(base,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now},now);
+ assert.equal(fresh.phase,'syncing');assert.match(fresh.title,/画屏已联网/);assert.equal(transferAction(fresh),null);
+ // 设备确实断开(paired=false)时仍应退回「去链接」，修复不得掩盖真实断链
+ assert.equal(transferAction(withConnection(base,result,{paired:false,receivedAt:now},now)),'connect');
+});
 test('手机确认送达覆盖陈旧回执，但内容或设备不符不得冒充完成',async()=>{
  const {withConnection,transferAction}=await import('../public/transfer-status.js');
  const now=Date.now(),result={...ready,device:{id:'screen'},build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'current'}};

@@ -1,6 +1,6 @@
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer,withConnection} from './transfer-status.js?v=20261110-generating-guard-v1';
+import {renderTransfer,withConnection} from './transfer-status.js?v=20261110-ble-contact-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const HEARTBEAT_NORMAL='https://playmath.cn/api/v1/device/heartbeat';
@@ -22,7 +22,7 @@ export function arkDeviceId(name){
  return match?match[1].toLowerCase():null;
 }
 export class ArkNetwork {
- constructor({bluetooth,onState=()=>{},onDownload=()=>{},onOta=()=>{},delay=sleep,timeout=30000}={}){this.bluetooth=bluetooth;this.onState=onState;this.onDownload=onDownload;this.onOta=onOta;this.delay=delay;this.timeout=timeout;this.pendingResponses=new Map();this.epoch=0;}
+ constructor({bluetooth,onState=()=>{},onDownload=()=>{},onOta=()=>{},delay=sleep,timeout=30000,now=Date.now}={}){this.bluetooth=bluetooth;this.onState=onState;this.onDownload=onDownload;this.onOta=onOta;this.delay=delay;this.timeout=timeout;this.now=now;this.pendingResponses=new Map();this.epoch=0;this.lastContactAt=0;}
  trace(stage){this.diagnostics=this.diagnostics||[];this.diagnostics.push({time:new Date().toISOString(),stage});if(this.diagnostics.length>120)this.diagnostics.shift();}
  state(text,connected=false){this.onState({text,connected,paired:!!this.characteristic,deviceName:this.device?.name||null,deviceId:this.deviceId||null,connectionId:this.epoch,savedSSID:this.savedSSID||''});}
  async open(device){
@@ -35,7 +35,7 @@ export class ArkNetwork {
   const epoch=++this.epoch;
   if(this.characteristic&&this.listener)this.characteristic.removeEventListener('characteristicvaluechanged',this.listener);
   if(this.device&&this.lost)this.device.removeEventListener('gattserverdisconnected',this.lost);
-  this.characteristic=null;this.device=null;this.deviceId=null;this.lastStatus=null;
+  this.characteristic=null;this.device=null;this.deviceId=null;this.lastStatus=null;this.lastContactAt=0;
   this.state('正在扫描画屏…');
   let device;
   try{
@@ -70,6 +70,9 @@ export class ArkNetwork {
  }
  receive(bytes){
   if(bytes.length!==bytes[2]+4||bytes[0]!==0x55||bytes.slice(0,-1).reduce((s,n)=>(s+n)&255,0)!==bytes.at(-1))return;
+  // 收到校验通过的设备回包 = 链路仍存活的地面真相。记录接触时间，供 UI 的在线证据续期，
+  // 否则设备明明每 2 秒在正常回 0x3d 下载状态，卡片却因 6 秒无状态文本变化误判"连接证据过期"。
+  this.lastContactAt=this.now();
   this.trace('notify:'+bytes[1].toString(16).padStart(2,'0')+':'+bytes.length);
   if(this.pendingResponses.has(bytes[1])){const pending=this.pendingResponses.get(bytes[1]);this.pendingResponses.delete(bytes[1]);pending.resolve(bytes.slice(3,-1));}
   if(bytes[1]===0x3f&&this.identityRead&&bytes.length===bytes[2]+4&&bytes[0]===0x55&&bytes.slice(0,-1).reduce((a,b)=>(a+b)&255,0)===bytes.at(-1)){const pending=this.identityRead;this.identityRead=null;pending.resolve(new TextDecoder().decode(bytes.slice(3,-1)).replace(/\0.*$/,''));}
@@ -89,6 +92,8 @@ export class ArkNetwork {
   const prior=this.bleWrite||Promise.resolve();const write=prior.catch(()=>{}).then(()=>{if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙已断开，请重新连接。');return this.characteristic.writeValue(packet(channel,data));});this.bleWrite=write;await write;await this.delay(pace);
   this.trace('write:'+command+':done');
   if(epoch!==this.epoch)throw new Error('蓝牙已断开，请重新连接。');
+  // 写入成功同样证明链路存活（部分设备只在状态变化时上报 0x3a，不会每次查询都 notify）。
+  this.lastContactAt=this.now();
  }
  // Serialize whole network operations, not just individual BLE writes. A
  // credential change must not disconnect Wi-Fi during identity authentication.
@@ -308,7 +313,7 @@ export class ArkNetwork {
   for(const pending of this.pendingResponses.values())pending.reject(new Error('蓝牙已断开'));this.pendingResponses.clear();
   if(this.characteristic&&this.listener)this.characteristic.removeEventListener('characteristicvaluechanged',this.listener);
   if(this.device){this.device.removeEventListener('gattserverdisconnected',this.lost);if(this.device.gatt.connected)this.device.gatt.disconnect();}
-  this.characteristic=null;this.device=null;this.deviceId=null;this.lastStatus=null;this.state(message);
+  this.characteristic=null;this.device=null;this.deviceId=null;this.lastStatus=null;this.lastContactAt=0;this.state(message);
  }
 }
 export function setupNetwork(){
@@ -367,7 +372,17 @@ export function setupNetwork(){
   announceConnection();
   confirmBtn.textContent=CONFIRM_LABEL;
  });
- function announceConnection(){connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt:Date.now(),syncRequestedAt,requestedSha,delivered};document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection,Date.now(),latestStatus?.plan?.artworkIds?.[0]||null));}
+ // 连接证据时间取"最近一次成功 BLE 往返"(lastContactAt)，而不是"上次状态文本变化"。
+ // 设备每 2 秒回的下载状态(0x3d)也计入接触，避免绿条说已连接、卡片却误判证据过期。
+ function announceConnection(){
+  // 证据时间只认"最近一次成功 BLE 往返"(lastContactAt)。断链时 characteristic 为空、
+  // lastContactAt 已在 disconnect() 清零，证据必须归零而非沿用旧值——否则重连后 6 秒内
+  // 若还没有新的成功往返，残留的旧时间会让卡片误显示"已联网正在检查"。
+  const receivedAt=client.characteristic?(client.lastContactAt||0):0;
+  connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt,syncRequestedAt,requestedSha,delivered};
+  document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));
+  if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection,Date.now(),latestStatus?.plan?.artworkIds?.[0]||null));
+ }
  const networkGrid=root.querySelector('.network-grid');
  function updateConnectionControls(){if(networkGrid)networkGrid.hidden=false;state.hidden=false;binding.hidden=!connectedDevice;}
  updateConnectionControls();
@@ -444,6 +459,10 @@ export function setupNetwork(){
   try{
    await client.write(0x3a,[]);
    const dl=await client.queryDownload().catch(()=>null);
+   // 轮询每次成功收发都是链路存活证据：把它同步进 connection 并广播，
+   // 让卡片稳定停留在「画屏已联网 · 正在检查」，而不是 6 秒无状态文本变化就误退回
+   // 「等待检查 / 去链接神物」。真断链时 write 会抛错，证据自然过期、照常退回等待。
+   if(client.lastContactAt>(connection?.receivedAt||0)+500)announceConnection();
    // 手机通过蓝牙明确观测到设备回报“下载完成”(state===2) 且目标包对得上：自动确认送达。
    // 不用“设备在线多久”推断送达——在线不等于内容已上屏，避免过度承诺。
    if(dl&&dl.state===2&&latestStatus?.build?.status==='published'&&latestStatus.build.sha256&&latestStatus.build.sha256===requestedSha&&client.deviceId&&!delivered){

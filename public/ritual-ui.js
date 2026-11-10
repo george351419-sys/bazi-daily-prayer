@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261110-generating-guard-v1';
+import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261110-ble-contact-v1';
 import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){

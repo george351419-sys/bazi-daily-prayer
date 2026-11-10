@@ -235,3 +235,16 @@ test('指向其它云端的画屏不会被擅自改写',async t=>{
  assert.ok(client.diagnostics.some(e=>e.stage==='heartbeat-url:foreign'));
  client.disconnect();
 });
+test('写入成功即刷新在线接触证据，静默设备不回包也能续期，校验失败的包不得冒充在线',async()=>{
+ let t=1000;const clock=()=>t;
+ // 静默设备：writeValue 成功但从不 notify——这正是"绿条已连接、卡片却误判证据过期"的场景。
+ const client=new ArkNetwork({now:clock,delay:async()=>{}});
+ client.epoch=1;client.characteristic={writeValue:async()=>{}};
+ assert.equal(client.lastContactAt,0,'连接前没有在线证据');
+ t=2500;await client.write(0x3a,[]);
+ assert.equal(client.lastContactAt,2500,'写入成功即记录接触，不依赖设备回包');
+ t=9999;const bad=packet(0x3a,[1]);bad[4]^=1;client.receive(bad);
+ assert.equal(client.lastContactAt,2500,'校验失败的包不得刷新证据');
+ t=11000;client.receive(packet(0x3a,[1]));
+ assert.equal(client.lastContactAt,11000,'有效回包同样刷新接触证据');
+});
