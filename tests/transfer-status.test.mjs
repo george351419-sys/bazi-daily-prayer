@@ -119,6 +119,23 @@ test('传输完成必须明确告知用户：文案说完成、四步全亮、�
  assert.equal(waiting.completedAt,undefined);
  assert.ok(waiting.step<4);
 });
+test('重连翻新 bindingId 令 pendingUpdate 翻转时，已发布内容不再回退到 S11 下发态',()=>{
+ // 后端 current 依赖 published.bindingId===binding.bindingId；重新绑定会翻新 bindingId 令
+ // pendingUpdate=!current 翻 true，但此刻 build 早已 published、内容其实就绪。
+ // 旧逻辑把它打回 S11「正在安排下发」，与 S15「等待检查」来回跳。
+ const reconnect={...ready,preparation:{ready:true},pendingUpdate:true,build:{...ready.build,sha256:'cur'},deviceReport:{lastSeen:'2026-10-30T04:59:00Z',stale:false,stored:false,targetSha:'cur'}};
+ const stale=transferStatus(reconnect,'new');
+ assert.equal(stale.phase,'waiting','心跳未更新也停在等待检查，不回退下发态');
+ assert.match(stale.title,/等待最新设备检查/);
+ // 心跳已新鲜但仍无存储/刷新回执：应落到确认/等待，绝不是回到「正在安排下发」。
+ const fresh=transferStatus({...reconnect,deviceReport:{...reconnect.deviceReport,lastSeen:'2026-10-30T05:01:00Z'}},'new');
+ assert.notEqual(fresh.phase,'publishing','心跳新鲜也不该倒退回下发态');
+ assert.ok(['confirming','waiting','downloading'].includes(fresh.phase));
+});
+test('build 真的还没发布时，pendingUpdate 仍显示准备态（稳定化不放宽真实等待）',()=>{
+ assert.equal(transferStatus({...ready,pendingUpdate:true,build:{status:'preparing'}},'new').phase,'preparing');
+ assert.equal(transferStatus({...ready,preparation:{ready:false,stage:'queued'},pendingUpdate:true,build:{status:'preparing'}},'new').phase,'preparing');
+});
 test('三份状态文案副本保持一致，且完成态不说「现在可以进入」这种待办口吻',async()=>{
  const {readFileSync}=await import('node:fs');
  const copy=JSON.parse(readFileSync(new URL('../content/transfer-copy.json',import.meta.url),'utf8'));

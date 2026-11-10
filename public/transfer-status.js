@@ -121,8 +121,13 @@ if(result.syncConfigured===undefined)return copyState('S01','checking');
   return {...copyState({queued:'S06',images:'S07',encoding:'S08',uploading:'S09'}[stage]||'S06','preparing',0,percent),preparation:true,preparationStep:{queued:0,images:0,encoding:1,uploading:2}[stage]||0};
  }
  if(!result.syncConfigured)return prep?.ready?copyState('S10','connect',1):copyState('S02','unbound');
- if(prep?.ready&&(result.pendingUpdate||result.build?.status!=='published'))return copyState('S11','publishing',1);
- if(result.pendingUpdate||result.build?.status!=='published')return copyState('S12','preparing');
+ // prep.ready 已蕴含 current 或 prepared（两者都不含 bindingId）。pendingUpdate 会因重连
+ // 翻新 bindingId 而翻转，但不代表内容退回"安排下发"阶段：只要 build 已 published，
+ // 就交给下方设备回执判定，避免 S11「正在安排下发」↔ S15「等待检查」来回跳。
+ if(prep?.ready&&result.build?.status!=='published')return copyState('S11','publishing',1);
+ // 只有内容尚未为当前计划准备好（prep.ready 为假，重连不会改变它）才留在准备态。
+ // 已 ready 的内容即使 pendingUpdate 因重连翻 true，也应落到下方设备回执判定。
+ if(!prep?.ready&&(result.pendingUpdate||result.build?.status!=='published'))return copyState('S12','preparing');
  const report=result.deviceReport;
  if(report?.firmwareUpdateRequired)return copyState('S13','firmware',1);
  if(!report)return copyState('S14','waiting',1);

@@ -16,7 +16,7 @@ async function setup(c){const assets=[film(2),film(3),film(4)];for(const b of as
 const hb='/api/v1/device/heartbeat?device_id='+deviceId,authorization='Bearer '+token;
 test('签名预置、资产加密及重复设备导入保护',async()=>{const c=context(),{config}=await setup(c);assert.equal((await provision(c,{type:'device',config})).status,409);assert.equal((await invoke(c,'/api/ark/provision',{method:'POST',body:'{}'})).status,403);for(const b of c.map.values())assert.ok(!b.includes(Buffer.from(config.tokenHash)));const invalid=film(2);invalid[32]=255;assert.equal((await provision(c,{type:'asset',sha256:hash(invalid),base64:invalid.toString('base64')})).status,400);});
 test('心跳只接受Bearer凭据，不接受查询参数代替鉴权',async()=>{const c=context();await setup(c);for(const headers of [{},{authorization:'Bearer '+'b'.repeat(32)},{authorization:'Bearer '+'ø'.repeat(32)}])assert.equal((await invoke(c,hb+'&token='+token,{headers})).status,403);assert.equal((await invoke(c,hb.replace(deviceId,'000000000000'),{headers:{authorization}})).status,403);assert.equal((await invoke(c,hb,{headers:{authorization}})).status,200);});
-test('5分钟轮换、同图去重及实际文件下载SHA校验',async()=>{const c=context(),{assets}=await setup(c);const first=await invoke(c,hb,{headers:{authorization}}),data=await first.json();assert.equal(first.headers.get('cache-control'),'no-store');assert.equal(data.data.commands[0].params.sleep_time,5);const p=data.data.commands[1].params,url=new URL(p.url);assert.ok(p.url.length<512);const download=await invoke(c,url.pathname+url.search);assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),assets[0]);const same=await(await invoke(c,hb+'&cloud_stored_sha='+p.sha256,{headers:{authorization}},now+299000)).json();assert.equal(same.data.commands.length,1);const next=await(await invoke(c,hb+'&cloud_stored_sha='+p.sha256,{headers:{authorization}},now+300000)).json();assert.notEqual(next.data.commands[1].params.sha256,p.sha256);const report=JSON.parse(decryptAccountData(env,c.map.get('reports/'+deviceId)));assert.equal(report.displayConfirmed,false);});
+test('5分钟轮换、同图去重及实际文件下载SHA校验',async()=>{const c=context(),{assets}=await setup(c);const first=await invoke(c,hb,{headers:{authorization}}),data=await first.json();assert.equal(first.headers.get('cache-control'),'no-store');assert.equal(data.data.commands[0].params.sleep_time,5);const p=data.data.commands[1].params,url=new URL(p.url);assert.ok(p.url.length<512);const download=await invoke(c,url.pathname+url.search);assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),assets[0]);const sameAt=now+299000;const same=await(await invoke(c,hb+'&cloud_stored_sha='+p.sha256,{headers:{authorization}},sameAt)).json();assert.equal(same.data.commands.length,2);assert.equal(same.data.commands[1].cmd,'sync_time');assert.ok(Math.abs(same.data.commands[1].params.timestamp-Math.floor(sameAt/1000))<2);const next=await(await invoke(c,hb+'&cloud_stored_sha='+p.sha256,{headers:{authorization}},now+300000)).json();assert.notEqual(next.data.commands[1].params.sha256,p.sha256);const report=JSON.parse(decryptAccountData(env,c.map.get('reports/'+deviceId)));assert.equal(report.displayConfirmed,false);});
 test('拒绝过期、篡改、跨设备及撤销后的下载',async()=>{const c=context(),{config}=await setup(c);const r=await(await invoke(c,hb,{headers:{authorization}})).json(),url=new URL(r.data.commands[1].params.url),path=url.pathname+url.search;assert.equal((await invoke(c,path,{},now+901000)).status,403);for(const [k,v]of [['sig','0'.repeat(64)],['sha','f'.repeat(64)],['device_id','000000000000'],['exp','invalid']]){const u=new URL(url);u.searchParams.set(k,v);assert.equal((await invoke(c,u.pathname+u.search)).status,403);}config.enabled=false;c.map.set('devices/'+deviceId,encryptAccountData(env,Buffer.from(JSON.stringify(config))));assert.equal((await invoke(c,path)).status,403);assert.equal((await invoke(c,hb,{headers:{authorization}})).status,403);});
 test('北京时间01:00每日切换与休眠计算',()=>{const c={mode:'daily',dailyAt:'01:00',startDate:'2026-10-27',playlist:[{sha256:'a'},{sha256:'b'},{sha256:'c'}]},before=selection(c,Date.parse('2026-10-28T00:59:59+08:00')),after=selection(c,Date.parse('2026-10-28T01:00:00+08:00'));assert.equal(before.day,'2026-10-27');assert.equal(before.asset.sha256,'a');assert.equal(after.day,'2026-10-28');assert.equal(after.asset.sha256,'b');assert.equal(after.sleepMinutes,1440);assert.equal(selection(c,Date.parse('2026-10-28T00:00:00+08:00')).sleepMinutes,60);});
 test('格式检查、健康检查不泄露密钥',async()=>{assert.throws(()=>validateFilm(Buffer.alloc(32)));const r=await invoke(context(),'/api/ark/health'),text=await r.text();assert.equal(r.status,200);assert.ok(!text.includes(secret));assert.equal(JSON.parse(text).paidModels,false);});
@@ -41,7 +41,7 @@ test('ritual chunks commit atomically, old firmware keeps Film, new firmware rec
  let r=await(await invoke(c,hb,{headers:{authorization}})).json();assert.equal(r.data.commands[1].cmd,'download_film');
  r=await(await invoke(c,hb+'&ritual_v=1',{headers:{authorization}})).json();assert.equal(r.data.commands[0].cmd,'download_ritual');const url=new URL(r.data.commands[0].params.url);
  const downloaded=await invoke(c,url.pathname+url.search);assert.equal(downloaded.status,200);assert.equal(hash(Buffer.from(await downloaded.arrayBuffer())),sha256);
- r=await(await invoke(c,hb+'&ritual_v=1&cloud_stored_sha='+sha256,{headers:{authorization}})).json();assert.deepEqual(r.data.commands.map(c=>c.cmd),['set_config']);
+ r=await(await invoke(c,hb+'&ritual_v=1&cloud_stored_sha='+sha256,{headers:{authorization}})).json();assert.deepEqual(r.data.commands.map(c=>c.cmd),['set_config','sync_time']);
  r=await(await invoke(c,hb+'&ritual_v=1&cloud_stored_sha='+sha256+'&store_seq=9&render_seq=12',{headers:{authorization}})).json();assert.equal(r.data.ack_stored_sha,sha256);assert.equal(r.data.ack_store_seq,9);assert.equal(r.data.ack_render_seq,null);
  r=await(await invoke(c,hb+'&ritual_v=1&cloud_stored_sha='+sha256+'&store_seq=9',{headers:{authorization,'x-ark-dry-run':'1'}})).json();assert.equal(r.data.ack_store_seq,undefined);
 
@@ -108,6 +108,37 @@ test('v4 reading packages never reach v1–v3 firmware; v4 downloads exact SHA',
  const result=await(await invoke(c,hb+'&ritual_v=4',{headers:{authorization}})).json();assert.equal(result.data.firmware_update_required,false);
  const command=result.data.commands.find(c=>c.cmd==='download_ritual');assert.equal(command.params.sha256,hash(b));
  const url=new URL(command.params.url);const downloaded=await invoke(c,url.pathname+url.search);assert.equal(hash(Buffer.from(await downloaded.arrayBuffer())),hash(b));
+});
+
+test('每次心跳都带回 sync_time 校时命令（画面同步即校时），命令携带服务器UTC秒',async()=>{
+ const hbNow=now;
+ // 1) 普通 Film 设备：未缓存与已缓存两种心跳都带 sync_time
+ let c=context();await setup(c);
+ let r=await(await invoke(c,hb,{headers:{authorization}},hbNow)).json();
+ let sync=r.data.commands.find(x=>x.cmd==='sync_time');
+ assert.ok(sync,'film 未缓存心跳缺少 sync_time');
+ assert.equal(r.data.commands[0].cmd,'set_config','set_config 应保持首位以兼容旧断言');
+ assert.ok(Math.abs(sync.params.timestamp-Math.floor(hbNow/1000))<2,'sync_time 时间戳应接近服务器当前秒');
+ assert.equal(sync.params.tz_min,480,'sync_time 应携带北京时间时区 tz_min=480');
+ const stored=await(await invoke(c,hb+'&cloud_stored_sha='+r.data.commands.find(x=>x.cmd==='download_film').params.sha256,{headers:{authorization}},hbNow)).json();
+ assert.ok(stored.data.commands.some(x=>x.cmd==='sync_time'),'film 已缓存心跳也缺少 sync_time');
+ assert.equal(stored.data.commands.find(x=>x.cmd==='sync_time').params.tz_min,480,'film 已缓存心跳 sync_time 也应携带 tz_min=480');
+
+ // 2) 空播放列表（无内容）设备：唯一命令即 sync_time
+ c=context();
+ const emptyConfig={deviceId,tokenHash:hash(token),enabled:true,mode:'daily',dailyAt:'01:00',startDate:'2026-10-27',playlist:[]};
+ assert.equal((await provision(c,{type:'device',config:emptyConfig})).status,200);
+ r=await(await invoke(c,hb,{headers:{authorization}},hbNow)).json();
+ assert.deepEqual(r.data.commands.map(x=>x.cmd),['sync_time']);
+
+ // 3) 仪式设备带 ritual_v：download_ritual 之外也带 sync_time
+ c=context();await setup(c);const bytes=packageFixture(),sha=hash(bytes),chunks=[];
+ for(let i=0;i<bytes.length;i+=65536){const chunk=bytes.subarray(i,i+65536),h=hash(chunk);await provision(c,{type:'ritual_chunk',sha256:h,base64:chunk.toString('base64')});chunks.push(h);}
+ await provision(c,{type:'ritual_commit',deviceId,sha256:sha,chunks});
+ r=await(await invoke(c,hb+'&ritual_v=1',{headers:{authorization}},hbNow)).json();
+ assert.ok(r.data.commands.some(x=>x.cmd==='sync_time'),'ritual_v 心跳缺少 sync_time');
+ assert.equal(r.data.commands.find(x=>x.cmd==='sync_time').params.timestamp,Math.floor(hbNow/1000));
+ assert.equal(r.data.commands.find(x=>x.cmd==='sync_time').params.tz_min,480,'ritual_v sync_time 也应携带 tz_min=480');
 });
 
 import {packageZiFixture} from './fixtures/ritual-zi-package.mjs';

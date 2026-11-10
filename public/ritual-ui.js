@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261110-delivered-scope-v1';
+import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261110-reconnect-stable-v1';
 import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
@@ -32,8 +32,16 @@ export function setupRitual({request,fetchImage,getUser}){
   if(mapping.reading||mapping.overview){const row=node('div');row.className='ritual-reading-actions';const download=node('button','保存画面解读 ↗');download.type='button';download.className='text-button';download.onclick=()=>{const text=readingMarkdown(mapping,date,title);const link=URL.createObjectURL(new Blob([text],{type:'text/markdown;charset=utf-8'})),anchor=document.createElement('a');anchor.href=link;anchor.download='今日造像解读-'+(date||'')+'.md';anchor.click();setTimeout(()=>URL.revokeObjectURL(link),1000);};row.append(download);container.append(row);}
  }
  let transferPending=false,active=false,epoch=0,lifecycle=0,timer=null,url=null,imagePath=null,artworks=null,answers=null,dirty=false,saving=false,uploading=false,preparing=false,draftURL=null,cursor=null,failures=0,shell=null,renderedKey=null,searchTurn=0,searchTimer=null,latestGenerated=null,prepareFailure=null;
+ // 刚生成的画必须跨刷新/重连存活：否则 transferStatus 拿不到 artworkId，
+ // 就会把上一幅画的“内容已就绪”当成当前进度（换生辰/愿望重新生成时尤为明显）。
+ const GENERATED_KEY='prayer-ark-generated-artwork-v1';
+ const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ let generatedArtwork=null;
+ try{const saved=JSON.parse(localStorage.getItem(GENERATED_KEY)||'null');if(saved&&typeof saved.id==='string'&&saved.date===today())generatedArtwork=saved;}catch{}
+ function rememberGenerated(job){generatedArtwork={id:job.id,date:job.date};try{localStorage.setItem(GENERATED_KEY,JSON.stringify(generatedArtwork));}catch{}}
+ function forgetGenerated(){generatedArtwork=null;try{localStorage.removeItem(GENERATED_KEY);}catch{}}
  function pause(){active=false;epoch++;clearTimeout(timer);timer=null;}
- function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;answers=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell?.settings.remove();shell=null;renderedKey=null;latestGenerated=null;prepareFailure=null;lastTransferResult=null;liveDownload=null;document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result:null,state:{phase:'checking',title:'登录后查看画屏同步进度',detail:'蓝牙连接和 Wi-Fi 配置由画屏保留。',step:0,percent:null}}}));host.replaceChildren();host.hidden=true;const transfer=document.querySelector('#artwork-transfer');if(transfer){transfer.replaceChildren();transfer.hidden=true;}}
+ function reset(){pause();lifecycle++;searchTurn++;clearTimeout(searchTimer);if(url)URL.revokeObjectURL(url);if(draftURL)URL.revokeObjectURL(draftURL);draftURL=null;url=null;imagePath=null;artworks=null;answers=null;cursor=null;dirty=false;saving=false;uploading=false;preparing=false;failures=0;shell?.settings.remove();shell=null;renderedKey=null;latestGenerated=null;forgetGenerated();prepareFailure=null;lastTransferResult=null;liveDownload=null;document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result:null,state:{phase:'checking',title:'登录后查看画屏同步进度',detail:'蓝牙连接和 Wi-Fi 配置由画屏保留。',step:0,percent:null}}}));host.replaceChildren();host.hidden=true;const transfer=document.querySelector('#artwork-transfer');if(transfer){transfer.replaceChildren();transfer.hidden=true;}}
  function alive(life){return life===lifecycle&&!!getUser();}
  function schedule(result){if(!active)return;clearTimeout(timer);const next=Date.parse(result?.scheduledPosition?.nextAt||result?.position?.nextAt);timer=setTimeout(refresh,Number.isFinite(next)?Math.max(1000,Math.min(transferPending?2000:30000,next-Date.now()+200)):(transferPending?2000:30000));}
  function ensureShell(){
@@ -186,9 +194,10 @@ export function setupRitual({request,fetchImage,getUser}){
  });
  function updateTransfer(result,override){
   lastTransferResult=result||null;
-  const completedPlan=latestGenerated&&result?.plan?.artworkIds?.includes(latestGenerated.id);
+  const artworkId=latestGenerated?.id||generatedArtwork?.id||null;
+  const completedPlan=artworkId&&result?.plan?.artworkIds?.includes(artworkId);
   if(completedPlan)prepareFailure=null;
-  const state=withConnection(override||(!preparing&&prepareFailure&&!completedPlan?prepareFailure:withLiveDownload(transferStatus(result,latestGenerated?.id),result,liveDownload)),result,connection,Date.now(),latestGenerated?.id);
+  const state=withConnection(override||(!preparing&&prepareFailure&&!completedPlan?prepareFailure:withLiveDownload(transferStatus(result,artworkId),result,liveDownload)),result,connection,Date.now(),artworkId);
   document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state}}));
   transferPending=!['rendered','unbound','photo','firmware'].includes(state.phase);
   if(shell)renderTransfer(shell.transfer,state);
@@ -249,8 +258,11 @@ export function setupRitual({request,fetchImage,getUser}){
  }
  function showGeneratedArtwork(job){
   if(!getUser()||job?.status!=='complete'||!job.image||!job.mapping)return;
-  const changed=latestGenerated&&latestGenerated.id!==job.id;
+  const previousId=latestGenerated?.id||generatedArtwork?.id||null;
+  const changed=!!previousId&&previousId!==job.id;
   latestGenerated=job;renderedKey=null;
+  // 记住"刚生成的是哪一幅"，刷新/重连后仍能判定当前进度归属，不沿用上一幅的状态。
+  rememberGenerated(job);
   // 换了一幅画（不同生辰/愿望重新生成）：上一幅的送达确认立即失效，避免旧“✓ 本次同步已完成”回灌到新画进度。
   if(changed)document.dispatchEvent(new CustomEvent('prayer:generated',{detail:{artworkId:job.id}}));
   updateTransfer();if(active)void refresh();

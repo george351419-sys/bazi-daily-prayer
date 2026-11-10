@@ -121,8 +121,13 @@ if(result.syncConfigured===undefined)return copyState('S01','checking');
   return {...copyState({queued:'S06',images:'S07',encoding:'S08',uploading:'S09'}[stage]||'S06','preparing',0,percent),preparation:true,preparationStep:{queued:0,images:0,encoding:1,uploading:2}[stage]||0};
  }
  if(!result.syncConfigured)return prep?.ready?copyState('S10','connect',1):copyState('S02','unbound');
- if(prep?.ready&&(result.pendingUpdate||result.build?.status!=='published'))return copyState('S11','publishing',1);
- if(result.pendingUpdate||result.build?.status!=='published')return copyState('S12','preparing');
+ // prep.ready 已蕴含 current 或 prepared（两者都不含 bindingId）。pendingUpdate 会因重连
+ // 翻新 bindingId 而翻转，但不代表内容退回"安排下发"阶段：只要 build 已 published，
+ // 就交给下方设备回执判定，避免 S11「正在安排下发」↔ S15「等待检查」来回跳。
+ if(prep?.ready&&result.build?.status!=='published')return copyState('S11','publishing',1);
+ // 只有内容尚未为当前计划准备好（prep.ready 为假，重连不会改变它）才留在准备态。
+ // 已 ready 的内容即使 pendingUpdate 因重连翻 true，也应落到下方设备回执判定。
+ if(!prep?.ready&&(result.pendingUpdate||result.build?.status!=='published'))return copyState('S12','preparing');
  const report=result.deviceReport;
  if(report?.firmwareUpdateRequired)return copyState('S13','firmware',1);
  if(!report)return copyState('S14','waiting',1);
@@ -149,11 +154,12 @@ function transferAction(state){
 }
 
 // Live Wi-Fi confirmation is connectivity evidence, not a content-storage receipt.
-function withConnection(state,result={},connection,now=Date.now()){
+function withConnection(state,result={},connection,now=Date.now(),artworkId=null){
  state=state.connectionBase||state;
  // 手机已确认设备收到本次内容（BLE 观测到下载完成，或用户亲眼看到新画后手动标记）：
  // 这是比陈旧云端回执更强的地面真相，不受 6 秒蓝牙新鲜度窗口限制，也不被“尚未收到回报”覆盖。
- if(connection?.delivered&&connection.delivered.targetSha===result?.build?.sha256&&connection.delivered.deviceId===result.device?.id)return {...copyState('S20','stored',4),connectionBase:state};
+ // artworkId 把送达确认锁定到“当前这幅画”：换了生辰/愿望重新生成后，上一幅的送达确认不得回灌到新画（与网页端对齐）。
+ if(connection?.delivered&&connection.delivered.targetSha===result?.build?.sha256&&connection.delivered.deviceId===result.device?.id&&(!artworkId||connection.delivered.artworkId===artworkId)&&!(result.deviceReport?.targetSha&&result.deviceReport.targetSha!==connection.delivered.targetSha))return {...copyState('S20','stored',4),connectionBase:state};
  if(connection?.paired&&!connection.wifiConnected&&state.phase==='connect')return {...state,connectionBase:state,phase:'wifi',title:'蓝牙已连接 · 请确认画屏 Wi-Fi',detail:'已保存的网络会自动尝试连接；尚未收到联网确认时，可在下方检查网络。',action:'wifi'};
  if(connection&&connection.paired===false&&state.phase==='connect')return {...state,connectionBase:state,title:'画屏内容已准备好 · 请连接画屏蓝牙',detail:'当前手机未连接画屏蓝牙。请在「链接神物」页唤醒并连接画屏蓝牙，连上后会自动认主并下发内容；画屏自身联网不代表已认主。',action:'connect'};
  if(connection?.paired&&!result?.syncConfigured&&state.phase==='connect')return {...state,connectionBase:state,phase:'binding',title:connection.deviceId?'画屏已连接 · 正在关联当前账户':'画屏已连接 · 正在核验设备身份',detail:connection.deviceId?'账户关联由程序自动完成，完成后会领取已准备的内容。':'设备联网后会自动核验身份并关联账户，无需填写设备编号。',action:null};

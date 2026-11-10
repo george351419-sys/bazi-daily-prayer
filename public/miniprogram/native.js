@@ -1893,8 +1893,8 @@
           return { ...copyState({ queued: "S06", images: "S07", encoding: "S08", uploading: "S09" }[stage] || "S06", "preparing", 0, percent), preparation: true, preparationStep: { queued: 0, images: 0, encoding: 1, uploading: 2 }[stage] || 0 };
         }
         if (!result.syncConfigured) return prep?.ready ? copyState("S10", "connect", 1) : copyState("S02", "unbound");
-        if (prep?.ready && (result.pendingUpdate || result.build?.status !== "published")) return copyState("S11", "publishing", 1);
-        if (result.pendingUpdate || result.build?.status !== "published") return copyState("S12", "preparing");
+        if (prep?.ready && result.build?.status !== "published") return copyState("S11", "publishing", 1);
+        if (!prep?.ready && (result.pendingUpdate || result.build?.status !== "published")) return copyState("S12", "preparing");
         const report = result.deviceReport;
         if (report?.firmwareUpdateRequired) return copyState("S13", "firmware", 1);
         if (!report) return copyState("S14", "waiting", 1);
@@ -1923,7 +1923,6 @@
       }
       function withConnection(state, result = {}, connection, now = Date.now(), artworkId = null) {
         state = state.connectionBase || state;
-        // artworkId 把送达确认锁定到“当前这幅画”：换了生辰/愿望重新生成后，上一幅的送达确认不得回灌到新画（与网页端 transfer-status.js 对齐）。
         if (connection?.delivered && connection.delivered.targetSha === result?.build?.sha256 && connection.delivered.deviceId === result.device?.id && (!artworkId || connection.delivered.artworkId === artworkId) && !(result.deviceReport?.targetSha && result.deviceReport.targetSha !== connection.delivered.targetSha)) return { ...copyState("S20", "stored", 4), connectionBase: state };
         if (connection?.paired && !connection.wifiConnected && state.phase === "connect") return { ...state, connectionBase: state, phase: "wifi", title: "\u84DD\u7259\u5DF2\u8FDE\u63A5 \xB7 \u8BF7\u786E\u8BA4\u753B\u5C4F Wi-Fi", detail: "\u5DF2\u4FDD\u5B58\u7684\u7F51\u7EDC\u4F1A\u81EA\u52A8\u5C1D\u8BD5\u8FDE\u63A5\uFF1B\u5C1A\u672A\u6536\u5230\u8054\u7F51\u786E\u8BA4\u65F6\uFF0C\u53EF\u5728\u4E0B\u65B9\u68C0\u67E5\u7F51\u7EDC\u3002", action: "wifi" };
         if (connection && connection.paired === false && state.phase === "connect") return { ...state, connectionBase: state, title: "\u753B\u5C4F\u5185\u5BB9\u5DF2\u51C6\u5907\u597D \xB7 \u8BF7\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259", detail: "\u5F53\u524D\u624B\u673A\u672A\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u3002\u8BF7\u5728\u300C\u94FE\u63A5\u795E\u7269\u300D\u9875\u5524\u9192\u5E76\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\uFF0C\u8FDE\u4E0A\u540E\u4F1A\u81EA\u52A8\u8BA4\u4E3B\u5E76\u4E0B\u53D1\u5185\u5BB9\uFF1B\u753B\u5C4F\u81EA\u8EAB\u8054\u7F51\u4E0D\u4EE3\u8868\u5DF2\u8BA4\u4E3B\u3002", action: "connect" };
