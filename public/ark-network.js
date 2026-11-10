@@ -143,6 +143,7 @@ export class ArkNetwork {
  async restoreHeartbeatURL(epoch=this.epoch){
   try{
    const current=await this.readHeartbeatURL();
+   console.warn('[ark][diag] heartbeat URL read:', current, '| dirty-flag:', this.heartbeatDirty());
    if(current===HEARTBEAT_NORMAL){this.clearHeartbeatDirty();this.trace('heartbeat-url:clean');return {result:'clean',url:current};}
    if(!current){this.trace('heartbeat-url:empty');return {result:'empty',url:current};}
    // 只归位本站地址与本站配对 challenge；指向其它云端的设备不擅自改写。
@@ -454,12 +455,13 @@ export function setupNetwork(){
  document.addEventListener('prayer:transfer-status',event=>{
   latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();
   // 换了内容包或换了画屏，之前的送达确认即失效，避免旧标记冒充新内容已完成。
-  if(delivered&&((latestStatus?.build?.sha256&&delivered.targetSha!==latestStatus.build.sha256)||(latestStatus?.device?.id&&delivered.deviceId!==latestStatus.device.id))){clearDelivered();if(connection)connection={...connection,delivered:null};confirmBtn.textContent=CONFIRM_LABEL;}
+  if(delivered&&((latestStatus?.build?.sha256&&delivered.targetSha!==latestStatus.build.sha256)||(latestStatus?.device?.id&&delivered.deviceId!==latestStatus.device.id))){console.warn('[ark][diag] delivered cleared — build/device changed',{deliveredTargetSha:delivered?.targetSha,newBuildSha:latestStatus?.build?.sha256,deliveredDevice:delivered?.deviceId,newDevice:latestStatus?.device?.id});clearDelivered();if(connection)connection={...connection,delivered:null};confirmBtn.textContent=CONFIRM_LABEL;}
   renderTransfer(transfer,withConnection(event.detail.state,latestStatus,{...connection,delivered}));
   // 顶部常驻回执：完成提示不能只藏在「链接神物」区块里，用户停在任意版块都要看得到。
   const banner=document.getElementById('transfer-complete-banner');
   if(banner){
    const r=latestStatus?.deviceReport,sha=latestStatus?.build?.sha256;
+   if(r?.stale)console.warn('[ark][diag] deviceReport STALE — cloud has not received recent heartbeat; targetSha=',r?.targetSha,'| current build sha=',sha);
    // 与 transferStatus 的完成判定保持一致：同包 stored 即使设备深睡变 stale 也算完成；
    // 只认带 completedAt 的真实设备回执，手动标记产生的伪完成态不显示回执横幅。
    const done=['stored','rendered'].includes(event.detail.state?.phase)&&!!sha&&r?.targetSha===sha&&!!event.detail.state?.completedAt&&!latestStatus?.pendingUpdate;

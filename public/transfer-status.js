@@ -153,7 +153,7 @@ export function withConnection(state,result={},connection,now=Date.now()){
  state=state.connectionBase||state;
  // 手机已确认设备收到本次内容（BLE 观测到下载完成，或用户亲眼看到新画后手动标记）：
  // 这是比陈旧云端回执更强的地面真相，不受 6 秒蓝牙新鲜度窗口限制，也不被“尚未收到回报”覆盖。
- if(connection?.delivered&&connection.delivered.targetSha===result?.build?.sha256&&connection.delivered.deviceId===result.device?.id)return {...copyState('S20','stored',4),connectionBase:state};
+ if(connection?.delivered&&connection.delivered.targetSha===result?.build?.sha256&&connection.delivered.deviceId===result.device?.id&&!(result.deviceReport?.targetSha&&result.deviceReport.targetSha!==connection.delivered.targetSha))return {...copyState('S20','stored',4),connectionBase:state};
  if(!connection?.paired||!Number.isFinite(connection.receivedAt)||now-connection.receivedAt>6000||!result?.device?.id||connection.deviceId!==result.device.id)return {...state,action:transferAction(state)};
  if(state.step<1||state.preparation||['stored','rendered','firmware','publishing'].includes(state.phase))return {...state,action:transferAction(state)};
  if(['waiting','syncing'].includes(state.phase)){
