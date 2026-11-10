@@ -41,6 +41,7 @@ test('当前包刷新回执不依赖另一次保存标记，其他包回执不�
 test('当前包的保存和刷新凭据在休眠后仍有效，但不套用到新包',()=>{
  const asleep={...ready,build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'current',stored:true}};
  assert.equal(transferStatus(asleep,'new').phase,'stored');
+ assert.equal(transferStatus(asleep,'new').completedAt,ready.deviceReport.lastSeen,'深睡变 stale 后完成态仍带真实回执时间');
  assert.match(transferStatus(asleep,'new').detail,/确认/);
  assert.equal(transferStatus({...asleep,deviceReport:{...asleep.deviceReport,renderedCurrent:true,renderReport:{day:0}}},'new').phase,'rendered');
  assert.equal(transferStatus({...asleep,build:{...asleep.build,sha256:'next'}},'new').phase,'waiting');
@@ -78,6 +79,7 @@ test('手机确认送达覆盖陈旧回执，但内容或设备不符不得冒�
  const delivered={deliveredAt:now,targetSha:'current',deviceId:'screen',evidence:'user-confirmed'};
  const done=withConnection(state,result,{...base,delivered},now);
  assert.equal(done.phase,'stored');assert.equal(done.step,4);assert.equal(transferAction(done),null);
+ assert.equal(done.completedAt,undefined,'手动标记是伪完成态，不得伪造设备回报时间');
  assert.equal(withConnection(state,result,{...base,delivered:{...delivered,targetSha:'old'}},now).phase,'syncing');
  assert.equal(withConnection(state,result,{...base,delivered:{...delivered,deviceId:'other'}},now).phase,'syncing');
  // 蓝牙已断开或连接信息过期，也不得抹掉用户亲眼确认过的送达结果。

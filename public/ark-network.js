@@ -344,9 +344,11 @@ export function setupNetwork(){
  confirmBtn.addEventListener('click',()=>{
   // 允许撤销：旧标记会长期把页面伪装成“已完成”，遮住设备真实未下载的证据。
   if(delivered){
-   clearDelivered();if(connection)connection={...connection,delivered:null};
+   clearDelivered();
    confirmBtn.textContent=CONFIRM_LABEL;
-   if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection));
+   // 撤销必须广播：主画面区等模块各自持有 connection，只改本模块局部变量
+   // 会让它们在下次刷新前继续显示手动标记的伪完成态（无设备回报时间）。
+   announceConnection();
    return;
   }
   const sha=latestStatus?.build?.sha256,deviceId=latestStatus?.device?.id||client.deviceId;
@@ -458,7 +460,9 @@ export function setupNetwork(){
   const banner=document.getElementById('transfer-complete-banner');
   if(banner){
    const r=latestStatus?.deviceReport,sha=latestStatus?.build?.sha256;
-   const done=['stored','rendered'].includes(event.detail.state?.phase)&&!!sha&&r?.targetSha===sha&&!r?.stale&&!latestStatus?.pendingUpdate;
+   // 与 transferStatus 的完成判定保持一致：同包 stored 即使设备深睡变 stale 也算完成；
+   // 只认带 completedAt 的真实设备回执，手动标记产生的伪完成态不显示回执横幅。
+   const done=['stored','rendered'].includes(event.detail.state?.phase)&&!!sha&&r?.targetSha===sha&&!!event.detail.state?.completedAt&&!latestStatus?.pendingUpdate;
    banner.hidden=!done;
    if(done){
     const stamp=Date.parse(event.detail.state?.completedAt||r?.lastSeen||'');
