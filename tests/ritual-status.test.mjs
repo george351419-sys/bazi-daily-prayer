@@ -105,6 +105,34 @@ test('a newer image for today replaces the same-date artwork in the existing pla
  assert.equal(ready.status,'ready');assert.deepEqual((await ritualStatus(c,account)).plan.artworkIds,[newToday,tomorrow]);
 });
 
+test('a formally bound device that reports the current package stored is shown as delivered even after bindingId rotates on reconnect',async t=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'ritual-reconnect-stored-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const account={id:'9'.repeat(32)},device='112233445566',map=new Map();
+ const c={ACCOUNT_STORAGE:'file',ACCOUNT_DATA_DIR:dir,SESSION_SECRET:'ritual-reconnect-test-secret-123456',RITUAL_CLOUD_STORE:{async get(key){return map.get(key)||null;}}};
+ const cloud=(key,data)=>map.set(key,encryptAccountData(c,Buffer.from(JSON.stringify(data))));
+ cloud('devices/'+device,{deviceId:device,tokenHash:'a'.repeat(64),mode:'daily',dailyAt:'01:00',startDate:'2026-10-29',playlist:[{sha256:'b'.repeat(64)}],enabled:true,ritualSha:'c'.repeat(64)});
+ const repo=accountRepository(c),ids=[];
+ for(let i=0;i<2;i++){const id=newArtworkId();ids.push(id);await saveArtwork(c,account,{id,userId:account.id,date:'2026-10-'+(25+i),status:'complete',image:{key:'test/'+id},mapping:{title:'祈福画 '+i}});}
+ // 第一次绑定并发布当前包（worker 写出的 publication 不带 bindingId/deviceId，见 ritual-worker-state.test.mjs）
+ const firstBinding=(await bindRitualDevice(c,account,device)).binding;
+ const plan=(await configureRitual(c,account,{mode:'test',artworkIds:ids})).plan,pub=manifest(plan,ids);
+ await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:pub,sha256:'c'.repeat(64)}});
+ const now=Date.now();
+ cloud('reports/'+device,{targetSha:'c'.repeat(64),stored:true,lastSeen:new Date(now).toISOString()});
+ const before=await ritualStatus(c,account,now);
+ assert.equal(before.deviceReport.stored,true,'正式绑定后设备回报已存当前包应判为已存储');
+ // 重连 / 自动认主翻新 bindingId（bindRitualDevice 每次生成全新 bindingId）
+ const secondBinding=(await bindRitualDevice(c,account,device)).binding;
+ assert.notEqual(secondBinding.bindingId,firstBinding.bindingId);
+ const after=await ritualStatus(c,account,now);
+ assert.equal(after.deviceReport.stored,true,'重连翻新 bindingId 后设备已存当前包的事实不应被抹掉（这是 S19↔S15 跳变的根因）');
+ // 换一幅新画后，旧包的 stored 回报不得冒充新画已送达（防串台不能退化）
+ const nextId=newArtworkId();await saveArtwork(c,account,{id:nextId,userId:account.id,date:'2026-10-27',status:'complete',image:{key:'test/'+nextId},mapping:{title:'新祈福画'}});
+ const nextPlan=(await configureRitual(c,account,{mode:'test',artworkIds:[nextId,ids[0]]})).plan;
+ await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:manifest(nextPlan,[nextId,ids[0]]),sha256:'d'.repeat(64)}});
+ const switched=await ritualStatus(c,account,now);
+ assert.equal(switched.deviceReport.stored,false,'当前画换成新包后，旧包 sha 的 stored 回报不得串台到新画');
+});
 test('encoded variant 39 resolves the final option of the second-day final slot',async t=>{
  const {c,repo,account,device,ids,cloud}=await setup(t);
  const plan=(await configureRitual(c,account,{mode:'test',artworkIds:ids.slice(0,2)})).plan;
