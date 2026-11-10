@@ -1921,9 +1921,10 @@
         if (state.phase === "retrying") return "connect";
         return null;
       }
-      function withConnection(state, result = {}, connection, now = Date.now()) {
+      function withConnection(state, result = {}, connection, now = Date.now(), artworkId = null) {
         state = state.connectionBase || state;
-        if (connection?.delivered && connection.delivered.targetSha === result?.build?.sha256 && connection.delivered.deviceId === result.device?.id) return { ...copyState("S20", "stored", 4), connectionBase: state };
+        // artworkId 把送达确认锁定到“当前这幅画”：换了生辰/愿望重新生成后，上一幅的送达确认不得回灌到新画（与网页端 transfer-status.js 对齐）。
+        if (connection?.delivered && connection.delivered.targetSha === result?.build?.sha256 && connection.delivered.deviceId === result.device?.id && (!artworkId || connection.delivered.artworkId === artworkId) && !(result.deviceReport?.targetSha && result.deviceReport.targetSha !== connection.delivered.targetSha)) return { ...copyState("S20", "stored", 4), connectionBase: state };
         if (connection?.paired && !connection.wifiConnected && state.phase === "connect") return { ...state, connectionBase: state, phase: "wifi", title: "\u84DD\u7259\u5DF2\u8FDE\u63A5 \xB7 \u8BF7\u786E\u8BA4\u753B\u5C4F Wi-Fi", detail: "\u5DF2\u4FDD\u5B58\u7684\u7F51\u7EDC\u4F1A\u81EA\u52A8\u5C1D\u8BD5\u8FDE\u63A5\uFF1B\u5C1A\u672A\u6536\u5230\u8054\u7F51\u786E\u8BA4\u65F6\uFF0C\u53EF\u5728\u4E0B\u65B9\u68C0\u67E5\u7F51\u7EDC\u3002", action: "wifi" };
         if (connection && connection.paired === false && state.phase === "connect") return { ...state, connectionBase: state, title: "\u753B\u5C4F\u5185\u5BB9\u5DF2\u51C6\u5907\u597D \xB7 \u8BF7\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259", detail: "\u5F53\u524D\u624B\u673A\u672A\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u3002\u8BF7\u5728\u300C\u94FE\u63A5\u795E\u7269\u300D\u9875\u5524\u9192\u5E76\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\uFF0C\u8FDE\u4E0A\u540E\u4F1A\u81EA\u52A8\u8BA4\u4E3B\u5E76\u4E0B\u53D1\u5185\u5BB9\uFF1B\u753B\u5C4F\u81EA\u8EAB\u8054\u7F51\u4E0D\u4EE3\u8868\u5DF2\u8BA4\u4E3B\u3002", action: "connect" };
         if (connection?.paired && !result?.syncConfigured && state.phase === "connect") return { ...state, connectionBase: state, phase: "binding", title: connection.deviceId ? "\u753B\u5C4F\u5DF2\u8FDE\u63A5 \xB7 \u6B63\u5728\u5173\u8054\u5F53\u524D\u8D26\u6237" : "\u753B\u5C4F\u5DF2\u8FDE\u63A5 \xB7 \u6B63\u5728\u6838\u9A8C\u8BBE\u5907\u8EAB\u4EFD", detail: connection.deviceId ? "\u8D26\u6237\u5173\u8054\u7531\u7A0B\u5E8F\u81EA\u52A8\u5B8C\u6210\uFF0C\u5B8C\u6210\u540E\u4F1A\u9886\u53D6\u5DF2\u51C6\u5907\u7684\u5185\u5BB9\u3002" : "\u8BBE\u5907\u8054\u7F51\u540E\u4F1A\u81EA\u52A8\u6838\u9A8C\u8EAB\u4EFD\u5E76\u5173\u8054\u8D26\u6237\uFF0C\u65E0\u9700\u586B\u5199\u8BBE\u5907\u7F16\u53F7\u3002", action: null };
@@ -2007,7 +2008,7 @@
           return () => this.listeners.delete(listener);
         }
         stateFor(status, artworkId) {
-          return withConnection(withLiveDownload(transferStatus(status, artworkId), status, this.live), status, { ...this.snapshot, deviceId: this.hardwareId, syncRequestedAt: this.syncRequestedAt, requestedSha: this.requestedSha });
+          return withConnection(withLiveDownload(transferStatus(status, artworkId), status, this.live), status, { ...this.snapshot, deviceId: this.hardwareId, syncRequestedAt: this.syncRequestedAt, requestedSha: this.requestedSha }, Date.now(), artworkId);
         }
         acceptStatus(status) {
           this.current = status;
