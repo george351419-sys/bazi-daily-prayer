@@ -99,6 +99,10 @@ const STATUS_COPY = {
   "S25": {
     "title": "画屏已联网 · 正在确认同步结果",
     "detail": "云端内容已就绪，但当前内容包的下载或刷新回执尚不完整；如画屏已显示新画，无需重复推送。"
+  },
+  "S26": {
+    "title": "新画正在生成 · 画屏仍是上一幅",
+    "detail": "新画还在绘制，完成后会自动准备并同步到画屏。此刻画屏显示的仍是上一幅已存入的内容，无需操作，也不用重新连接。"
   }
 };
 function copyState(id,phase,step=0,percent=null){
@@ -108,8 +112,12 @@ function copyState(id,phase,step=0,percent=null){
 function completed(id,phase,step,report){
  return {...copyState(id,phase,step),completedAt:report?.lastSeen||null};
 }
-function transferStatus(result = {}, artworkId = null) {
+function transferStatus(result = {}, artworkId = null, generating = false) {
  result = result ?? {};
+ // 用户正在重新生成新画：此刻后端 plan/build/deviceReport 仍是上一幅画的快照，
+ // 任何 stored/delivered 完成态都属于旧画，必须先于一切判定短路成"新画生成中"，
+ // 否则上一幅的"✓ 本次同步已完成"会串台到正在生成的新画上（带旧回执时间）。
+ if(generating)return copyState('S26','generating');
 if(result.syncConfigured===undefined)return copyState('S01','checking');
  if(!result.syncConfigured&&!result.plan&&!result.preparation)return copyState('S02','unbound');
  if(artworkId&&result.plan?.contentMode==='photo')return copyState('S03','photo');
@@ -156,6 +164,8 @@ function transferAction(state){
 // Live Wi-Fi confirmation is connectivity evidence, not a content-storage receipt.
 function withConnection(state,result={},connection,now=Date.now(),artworkId=null){
  state=state.connectionBase||state;
+ // 正在生成新画：旧画的送达确认与蓝牙连接提示都不得把"新画生成中"改写成完成态或其他态。
+ if(state.phase==='generating')return {...state,action:null};
  // 手机已确认设备收到本次内容（BLE 观测到下载完成，或用户亲眼看到新画后手动标记）：
  // 这是比陈旧云端回执更强的地面真相，不受 6 秒蓝牙新鲜度窗口限制，也不被“尚未收到回报”覆盖。
  // artworkId 把送达确认锁定到“当前这幅画”：换了生辰/愿望重新生成后，上一幅的送达确认不得回灌到新画（与网页端对齐）。

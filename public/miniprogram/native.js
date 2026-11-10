@@ -1871,6 +1871,10 @@
         "S25": {
           "title": "\u753B\u5C4F\u5DF2\u8054\u7F51 \xB7 \u6B63\u5728\u786E\u8BA4\u540C\u6B65\u7ED3\u679C",
           "detail": "\u4E91\u7AEF\u5185\u5BB9\u5DF2\u5C31\u7EEA\uFF0C\u4F46\u5F53\u524D\u5185\u5BB9\u5305\u7684\u4E0B\u8F7D\u6216\u5237\u65B0\u56DE\u6267\u5C1A\u4E0D\u5B8C\u6574\uFF1B\u5982\u753B\u5C4F\u5DF2\u663E\u793A\u65B0\u753B\uFF0C\u65E0\u9700\u91CD\u590D\u63A8\u9001\u3002"
+        },
+        "S26": {
+          "title": "\u65B0\u753B\u6B63\u5728\u751F\u6210 \xB7 \u753B\u5C4F\u4ECD\u662F\u4E0A\u4E00\u5E45",
+          "detail": "\u65B0\u753B\u8FD8\u5728\u7ED8\u5236\uFF0C\u5B8C\u6210\u540E\u4F1A\u81EA\u52A8\u51C6\u5907\u5E76\u540C\u6B65\u5230\u753B\u5C4F\u3002\u6B64\u523B\u753B\u5C4F\u663E\u793A\u7684\u4ECD\u662F\u4E0A\u4E00\u5E45\u5DF2\u5B58\u5165\u7684\u5185\u5BB9\uFF0C\u65E0\u9700\u64CD\u4F5C\uFF0C\u4E5F\u4E0D\u7528\u91CD\u65B0\u8FDE\u63A5\u3002"
         }
       };
       function copyState(id, phase, step = 0, percent = null) {
@@ -1880,8 +1884,9 @@
       function completed(id, phase, step, report) {
         return { ...copyState(id, phase, step), completedAt: report?.lastSeen || null };
       }
-      function transferStatus(result = {}, artworkId = null) {
+      function transferStatus(result = {}, artworkId = null, generating = false) {
         result = result ?? {};
+        if (generating) return copyState("S26", "generating");
         if (result.syncConfigured === void 0) return copyState("S01", "checking");
         if (!result.syncConfigured && !result.plan && !result.preparation) return copyState("S02", "unbound");
         if (artworkId && result.plan?.contentMode === "photo") return copyState("S03", "photo");
@@ -1923,6 +1928,7 @@
       }
       function withConnection(state, result = {}, connection, now = Date.now(), artworkId = null) {
         state = state.connectionBase || state;
+        if (state.phase === "generating") return { ...state, action: null };
         if (connection?.delivered && connection.delivered.targetSha === result?.build?.sha256 && connection.delivered.deviceId === result.device?.id && (!artworkId || connection.delivered.artworkId === artworkId) && !(result.deviceReport?.targetSha && result.deviceReport.targetSha !== connection.delivered.targetSha)) return { ...copyState("S20", "stored", 4), connectionBase: state };
         if (connection?.paired && !connection.wifiConnected && state.phase === "connect") return { ...state, connectionBase: state, phase: "wifi", title: "\u84DD\u7259\u5DF2\u8FDE\u63A5 \xB7 \u8BF7\u786E\u8BA4\u753B\u5C4F Wi-Fi", detail: "\u5DF2\u4FDD\u5B58\u7684\u7F51\u7EDC\u4F1A\u81EA\u52A8\u5C1D\u8BD5\u8FDE\u63A5\uFF1B\u5C1A\u672A\u6536\u5230\u8054\u7F51\u786E\u8BA4\u65F6\uFF0C\u53EF\u5728\u4E0B\u65B9\u68C0\u67E5\u7F51\u7EDC\u3002", action: "wifi" };
         if (connection && connection.paired === false && state.phase === "connect") return { ...state, connectionBase: state, title: "\u753B\u5C4F\u5185\u5BB9\u5DF2\u51C6\u5907\u597D \xB7 \u8BF7\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259", detail: "\u5F53\u524D\u624B\u673A\u672A\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u3002\u8BF7\u5728\u300C\u94FE\u63A5\u795E\u7269\u300D\u9875\u5524\u9192\u5E76\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\uFF0C\u8FDE\u4E0A\u540E\u4F1A\u81EA\u52A8\u8BA4\u4E3B\u5E76\u4E0B\u53D1\u5185\u5BB9\uFF1B\u753B\u5C4F\u81EA\u8EAB\u8054\u7F51\u4E0D\u4EE3\u8868\u5DF2\u8BA4\u4E3B\u3002", action: "connect" };

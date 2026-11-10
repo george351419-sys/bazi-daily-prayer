@@ -136,18 +136,38 @@ test('build 真的还没发布时，pendingUpdate 仍显示准备态（稳定化
  assert.equal(transferStatus({...ready,pendingUpdate:true,build:{status:'preparing'}},'new').phase,'preparing');
  assert.equal(transferStatus({...ready,preparation:{ready:false,stage:'queued'},pendingUpdate:true,build:{status:'preparing'}},'new').phase,'preparing');
 });
+test('正在生成新画时压住上一幅画的完成态，绝不串台显示旧画的传输完成',async()=>{
+ const {withConnection}=await import('../public/transfer-status.js');
+ const now=Date.now();
+ // 后端此刻仍是上一幅画的快照：plan 含旧画、旧包已 stored、甚至手机有旧画送达确认。
+ const oldDrawing={...ready,device:{id:'screen'},plan:{artworkIds:['old'],contentMode:'prayer'},build:{...ready.build,sha256:'old-sha'},deviceReport:{...ready.deviceReport,targetSha:'old-sha',stored:true,renderReport:{day:0},stale:true}};
+ const delivered={deliveredAt:now,targetSha:'old-sha',deviceId:'screen',evidence:'user-confirmed',artworkId:'old'};
+ const connection={paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered};
+ // 不带 generating：旧画的完成态确实会显示（这是"上一幅"的真实状态）。
+ assert.equal(withConnection(transferStatus(oldDrawing,'old'),oldDrawing,connection,now,'old').phase,'stored');
+ // 带 generating：生成新画的整个窗口内一律"新画生成中"，旧的 stored / delivered 全被压住。
+ const generating=withConnection(transferStatus(oldDrawing,'old',true),oldDrawing,connection,now,'old');
+ assert.equal(generating.phase,'generating');
+ assert.match(generating.title,/新画正在生成/);
+ assert.doesNotMatch(generating.title,/传输完成/);
+ assert.equal(generating.completedAt,undefined,'生成中不得带旧画的回执时间');
+ assert.ok(generating.step<4,'生成中不得点亮完成步骤');
+ // 生成结束后（第三参回落 false）恢复真实判定：此刻若后端已切到新画计划，才按新画走。
+ assert.equal(withConnection(transferStatus(oldDrawing,'old',false),oldDrawing,connection,now,'old').phase,'stored');
+});
 test('三份状态文案副本保持一致，且完成态不说「现在可以进入」这种待办口吻',async()=>{
  const {readFileSync}=await import('node:fs');
  const copy=JSON.parse(readFileSync(new URL('../content/transfer-copy.json',import.meta.url),'utf8'));
  for(const rel of ['../public/transfer-status.js','../miniprogram/utils/transfer-status.js']){
   const source=readFileSync(new URL(rel,import.meta.url),'utf8');
-  for(const id of ['S19','S20','S21','S22','S23']){
+  for(const id of ['S19','S20','S21','S22','S23','S26']){
    const title=copy[id].title,detail=copy[id].detail;
    assert.ok(source.includes(title),rel+' 缺少 '+id+' 标题');
    assert.ok(source.includes(detail),rel+' 缺少 '+id+' 说明');
   }
  }
  for(const id of ['S20','S22'])assert.match(copy[id].title,/传输完成/);
+ assert.doesNotMatch(copy.S26.title,/传输完成|同步已完成/,'生成中文案不得出现完成态措辞');
 });
 test('完成态渲染带完成徽标、回执时间，且只点亮真实完成的三步',async()=>{
  const {renderTransfer}=await import('../public/transfer-status.js');
