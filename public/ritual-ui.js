@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261109-transfer-complete-v1';
+import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261110-delivered-scope-v1';
 import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
@@ -188,7 +188,7 @@ export function setupRitual({request,fetchImage,getUser}){
   lastTransferResult=result||null;
   const completedPlan=latestGenerated&&result?.plan?.artworkIds?.includes(latestGenerated.id);
   if(completedPlan)prepareFailure=null;
-  const state=withConnection(override||(!preparing&&prepareFailure&&!completedPlan?prepareFailure:withLiveDownload(transferStatus(result,latestGenerated?.id),result,liveDownload)),result,connection);
+  const state=withConnection(override||(!preparing&&prepareFailure&&!completedPlan?prepareFailure:withLiveDownload(transferStatus(result,latestGenerated?.id),result,liveDownload)),result,connection,Date.now(),latestGenerated?.id);
   document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state}}));
   transferPending=!['rendered','unbound','photo','firmware'].includes(state.phase);
   if(shell)renderTransfer(shell.transfer,state);
@@ -249,7 +249,11 @@ export function setupRitual({request,fetchImage,getUser}){
  }
  function showGeneratedArtwork(job){
   if(!getUser()||job?.status!=='complete'||!job.image||!job.mapping)return;
-  latestGenerated=job;renderedKey=null;updateTransfer();if(active)void refresh();
+  const changed=latestGenerated&&latestGenerated.id!==job.id;
+  latestGenerated=job;renderedKey=null;
+  // 换了一幅画（不同生辰/愿望重新生成）：上一幅的送达确认立即失效，避免旧“✓ 本次同步已完成”回灌到新画进度。
+  if(changed)document.dispatchEvent(new CustomEvent('prayer:generated',{detail:{artworkId:job.id}}));
+  updateTransfer();if(active)void refresh();
  }
  return {refresh,reset,pause,prepare,bindDevice,showGeneratedArtwork};
 }

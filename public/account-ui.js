@@ -1,4 +1,4 @@
-import {setupRitual} from './ritual-ui.js?v=20261109-transfer-complete-v1';
+import {setupRitual} from './ritual-ui.js?v=20261110-delivered-scope-v1';
 import {setupDevices} from './device-ui.js?v=20261101-approved-copy-v1';
 import {setupCustomPhoto} from './custom-photo.js?v=20261109-transfer-complete-v1';
 export function setupAccounts({request,apiURL,fetchImage,getInput,onProfile,onUserChange,onOpenArtwork,isBusy}){

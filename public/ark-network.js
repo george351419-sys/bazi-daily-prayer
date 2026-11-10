@@ -1,6 +1,6 @@
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer,withConnection} from './transfer-status.js?v=20261109-transfer-complete-v1';
+import {renderTransfer,withConnection} from './transfer-status.js?v=20261110-delivered-scope-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const HEARTBEAT_NORMAL='https://playmath.cn/api/v1/device/heartbeat';
@@ -330,8 +330,8 @@ export function setupNetwork(){
  // 送达确认只接受两种真实证据：手机 BLE 观测到设备回报下载完成，或用户亲眼看到新画后手动标记。
  // 按 deviceId + 内容哈希隔离，换设备或生成新内容自动失效；绝不把“设备在线时长”当作送达。
  const DELIVERY_KEY='prayer-ark-delivered-v1';
- function markDelivered(sha,deviceId,evidence){
-  delivered={deliveredAt:Date.now(),targetSha:sha,deviceId,evidence};
+ function markDelivered(sha,deviceId,evidence,artworkId=null){
+  delivered={deliveredAt:Date.now(),targetSha:sha,deviceId,evidence,artworkId:artworkId||null};
   try{localStorage.setItem(DELIVERY_KEY,JSON.stringify(delivered));}catch{}
   announceConnection();
  }
@@ -354,8 +354,18 @@ export function setupNetwork(){
   }
   const sha=latestStatus?.build?.sha256,deviceId=latestStatus?.device?.id||client.deviceId;
   if(!sha||!/^[a-f0-9]{64}$/.test(sha)||!/^[a-f0-9]{12}$/.test(deviceId||'')){confirmBtn.textContent='请先连接画屏并等待内容就绪';return;}
-  markDelivered(sha,deviceId,'user-confirmed');
+  markDelivered(sha,deviceId,'user-confirmed',latestStatus?.plan?.artworkIds?.[0]||null);
   confirmBtn.textContent=CONFIRMED_LABEL;
+ });
+ // 重新生成新画（换了生辰/愿望）即视为内容已变：上一幅的送达确认立即失效，
+ // 否则旧“✓ 本次同步已完成”会回灌到新画的进度里。delivered 仅按 deviceId+内容哈希隔离，
+ // 而 build.sha256 在重新生成后不会立刻变化，所以必须显式清掉并广播。
+ document.addEventListener('prayer:generated',()=>{
+  if(!delivered)return;
+  clearDelivered();
+  if(connection)connection={...connection,delivered:null};
+  announceConnection();
+  confirmBtn.textContent=CONFIRM_LABEL;
  });
  function announceConnection(){connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt:Date.now(),syncRequestedAt,requestedSha,delivered};document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection));}
  const networkGrid=root.querySelector('.network-grid');
@@ -437,7 +447,7 @@ export function setupNetwork(){
    // 手机通过蓝牙明确观测到设备回报“下载完成”(state===2) 且目标包对得上：自动确认送达。
    // 不用“设备在线多久”推断送达——在线不等于内容已上屏，避免过度承诺。
    if(dl&&dl.state===2&&latestStatus?.build?.status==='published'&&latestStatus.build.sha256&&latestStatus.build.sha256===requestedSha&&client.deviceId&&!delivered){
-    markDelivered(latestStatus.build.sha256,client.deviceId,'ble-download-complete');confirmBtn.textContent=CONFIRMED_LABEL;
+    markDelivered(latestStatus.build.sha256,client.deviceId,'ble-download-complete',latestStatus?.plan?.artworkIds?.[0]||null);confirmBtn.textContent=CONFIRMED_LABEL;
    }
   }
   catch(error){if(client.characteristic)state.textContent='正在确认画屏连接状态，请稍候。';document.dispatchEvent(new CustomEvent('prayer:ark-download',{detail:{deviceId:client.deviceId,unavailable:true,error:error.message}}));}
@@ -456,7 +466,7 @@ export function setupNetwork(){
   latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();
   // 换了内容包或换了画屏，之前的送达确认即失效，避免旧标记冒充新内容已完成。
   if(delivered&&((latestStatus?.build?.sha256&&delivered.targetSha!==latestStatus.build.sha256)||(latestStatus?.device?.id&&delivered.deviceId!==latestStatus.device.id))){console.warn('[ark][diag] delivered cleared — build/device changed',{deliveredTargetSha:delivered?.targetSha,newBuildSha:latestStatus?.build?.sha256,deliveredDevice:delivered?.deviceId,newDevice:latestStatus?.device?.id});clearDelivered();if(connection)connection={...connection,delivered:null};confirmBtn.textContent=CONFIRM_LABEL;}
-  renderTransfer(transfer,withConnection(event.detail.state,latestStatus,{...connection,delivered}));
+  renderTransfer(transfer,withConnection(event.detail.state,latestStatus,{...connection,delivered},Date.now(),latestStatus?.plan?.artworkIds?.[0]||null));
   // 顶部常驻回执：完成提示不能只藏在「链接神物」区块里，用户停在任意版块都要看得到。
   const banner=document.getElementById('transfer-complete-banner');
   if(banner){

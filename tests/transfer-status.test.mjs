@@ -85,6 +85,17 @@ test('手机确认送达覆盖陈旧回执，但内容或设备不符不得冒�
  // 蓝牙已断开或连接信息过期，也不得抹掉用户亲眼确认过的送达结果。
  assert.equal(withConnection(state,result,{paired:false,receivedAt:now-7000,delivered},now).phase,'stored');
 });
+test('送达确认锁定到具体画作：换生辰/愿望重新生成后旧完成态不得回灌',async()=>{
+ const {withConnection}=await import('../public/transfer-status.js');
+ const now=Date.now(),result={...ready,device:{id:'screen'},build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'current'}};
+ const state=transferStatus(result),delivered={deliveredAt:now,targetSha:'current',deviceId:'screen',evidence:'user-confirmed',artworkId:'old'};
+ // 没有新画上下文时仍按原逻辑保留送达确认
+ assert.equal(withConnection(state,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered},now).phase,'stored');
+ // 新生成的画（artworkId=new）与送达确认归属的画（old）不同 → 旧“✓ 本次同步已完成”失效
+ assert.equal(withConnection(state,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered},now,'new').phase,'syncing');
+ // 送达确认归属同一幅画时仍生效
+ assert.equal(withConnection(state,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered:{...delivered,artworkId:'new'}},now,'new').phase,'stored');
+});
 test('BLE 观测到设备回报下载完成时不继续显示百分比进度',async()=>{
  const {withLiveDownload}=await import('../public/transfer-status.js');
  const result={...ready,device:{id:'screen'},deviceReport:{...ready.deviceReport,targetSha:'current'},build:{...ready.build,sha256:'current'}};
@@ -92,7 +103,6 @@ test('BLE 观测到设备回报下载完成时不继续显示百分比进度',as
  assert.match(withLiveDownload(state,result,live).title,/下载完成/);
  assert.equal(withLiveDownload(state,result,live).percent,null);
 });
-
 test('传输完成必须明确告知用户：文案说完成、四步全亮、带设备回执时间',()=>{
  const done=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true}},'new');
  assert.equal(done.phase,'stored');
