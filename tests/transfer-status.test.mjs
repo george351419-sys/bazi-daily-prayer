@@ -42,7 +42,7 @@ test('当前包的保存和刷新凭据在休眠后仍有效，但不套用到�
  const asleep={...ready,build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'current',stored:true}};
  assert.equal(transferStatus(asleep,'new').phase,'stored');
  assert.equal(transferStatus(asleep,'new').completedAt,ready.deviceReport.lastSeen,'深睡变 stale 后完成态仍带真实回执时间');
- assert.match(transferStatus(asleep,'new').detail,/确认/);
+ assert.match(transferStatus(asleep,'new').detail,/尚未回报/);
  assert.equal(transferStatus({...asleep,deviceReport:{...asleep.deviceReport,renderedCurrent:true,renderReport:{day:0}}},'new').phase,'rendered');
  assert.equal(transferStatus({...asleep,build:{...asleep.build,sha256:'next'}},'new').phase,'waiting');
 });
@@ -93,23 +93,23 @@ test('手机确认送达覆盖陈旧回执，但内容或设备不符不得冒�
  const base={paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,requestedSha:'current',syncRequestedAt:now-21000};
  const delivered={deliveredAt:now,targetSha:'current',deviceId:'screen',evidence:'user-confirmed'};
  const done=withConnection(state,result,{...base,delivered},now);
- assert.equal(done.phase,'stored');assert.equal(done.step,4);assert.equal(transferAction(done),null);
+ assert.equal(done.phase,'user-confirmed');assert.equal(done.step,4);assert.equal(done.manualConfirmed,true);assert.equal(transferAction(done),null);
  assert.equal(done.completedAt,undefined,'手动标记是伪完成态，不得伪造设备回报时间');
  assert.equal(withConnection(state,result,{...base,delivered:{...delivered,targetSha:'old'}},now).phase,'syncing');
  assert.equal(withConnection(state,result,{...base,delivered:{...delivered,deviceId:'other'}},now).phase,'syncing');
  // 蓝牙已断开或连接信息过期，也不得抹掉用户亲眼确认过的送达结果。
- assert.equal(withConnection(state,result,{paired:false,receivedAt:now-7000,delivered},now).phase,'stored');
+ assert.equal(withConnection(state,result,{paired:false,receivedAt:now-7000,delivered},now).phase,'user-confirmed');
 });
 test('送达确认锁定到具体画作：换生辰/愿望重新生成后旧完成态不得回灌',async()=>{
  const {withConnection}=await import('../public/transfer-status.js');
  const now=Date.now(),result={...ready,device:{id:'screen'},build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'current'}};
  const state=transferStatus(result),delivered={deliveredAt:now,targetSha:'current',deviceId:'screen',evidence:'user-confirmed',artworkId:'old'};
  // 没有新画上下文时仍按原逻辑保留送达确认
- assert.equal(withConnection(state,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered},now).phase,'stored');
+ assert.equal(withConnection(state,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered},now).phase,'user-confirmed');
  // 新生成的画（artworkId=new）与送达确认归属的画（old）不同 → 旧“✓ 本次同步已完成”失效
  assert.equal(withConnection(state,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered},now,'new').phase,'syncing');
  // 送达确认归属同一幅画时仍生效
- assert.equal(withConnection(state,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered:{...delivered,artworkId:'new'}},now,'new').phase,'stored');
+ assert.equal(withConnection(state,result,{paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered:{...delivered,artworkId:'new'}},now,'new').phase,'user-confirmed');
 });
 test('BLE 观测到设备回报下载完成时不继续显示百分比进度',async()=>{
  const {withLiveDownload}=await import('../public/transfer-status.js');
@@ -118,12 +118,12 @@ test('BLE 观测到设备回报下载完成时不继续显示百分比进度',as
  assert.match(withLiveDownload(state,result,live).title,/下载完成/);
  assert.equal(withLiveDownload(state,result,live).percent,null);
 });
-test('传输完成必须明确告知用户：文案说完成、四步全亮、带设备回执时间',()=>{
+test('内容包保存与当前画面刷新分开确认；手动确认不冒充设备回执',()=>{
  const done=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true}},'new');
  assert.equal(done.phase,'stored');
- assert.match(done.title,/传输完成/);
- assert.match(done.detail,/无需再操作/);
- assert.equal(done.step,4,'完成态四步应全部点亮');
+ assert.match(done.title,/内容包已存入/);
+ assert.match(done.detail,/尚未回报当前画面已刷新/);
+ assert.equal(done.step,3,'仅保存内容包只点亮前三步');
  assert.equal(done.completedAt,ready.deviceReport.lastSeen);
  const refreshed=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true,renderedCurrent:true,renderReport:{day:0}}},'new');
  assert.equal(refreshed.step,4);
@@ -159,7 +159,7 @@ test('正在生成新画时压住上一幅画的完成态，绝不串台显示�
  const delivered={deliveredAt:now,targetSha:'old-sha',deviceId:'screen',evidence:'user-confirmed',artworkId:'old'};
  const connection={paired:true,deviceId:'screen',wifiConnected:true,receivedAt:now,delivered};
  // 不带 generating：旧画的完成态确实会显示（这是"上一幅"的真实状态）。
- assert.equal(withConnection(transferStatus(oldDrawing,'old'),oldDrawing,connection,now,'old').phase,'stored');
+ assert.equal(withConnection(transferStatus(oldDrawing,'old'),oldDrawing,connection,now,'old').phase,'user-confirmed');
  // 带 generating：生成新画的整个窗口内一律"新画生成中"，旧的 stored / delivered 全被压住。
  const generating=withConnection(transferStatus(oldDrawing,'old',true),oldDrawing,connection,now,'old');
  assert.equal(generating.phase,'generating');
@@ -168,7 +168,7 @@ test('正在生成新画时压住上一幅画的完成态，绝不串台显示�
  assert.equal(generating.completedAt,undefined,'生成中不得带旧画的回执时间');
  assert.ok(generating.step<4,'生成中不得点亮完成步骤');
  // 生成结束后（第三参回落 false）恢复真实判定：此刻若后端已切到新画计划，才按新画走。
- assert.equal(withConnection(transferStatus(oldDrawing,'old',false),oldDrawing,connection,now,'old').phase,'stored');
+ assert.equal(withConnection(transferStatus(oldDrawing,'old',false),oldDrawing,connection,now,'old').phase,'user-confirmed');
 });
 test('三份状态文案副本保持一致，且完成态不说「现在可以进入」这种待办口吻',async()=>{
  const {readFileSync}=await import('node:fs');
@@ -181,10 +181,10 @@ test('三份状态文案副本保持一致，且完成态不说「现在可以�
    assert.ok(source.includes(detail),rel+' 缺少 '+id+' 说明');
   }
  }
- for(const id of ['S20','S22'])assert.match(copy[id].title,/传输完成/);
+ for(const id of ['S20','S22'])assert.match(copy[id].title,/内容包已存入/);
  assert.doesNotMatch(copy.S26.title,/传输完成|同步已完成/,'生成中文案不得出现完成态措辞');
 });
-test('完成态渲染带完成徽标、回执时间，且只点亮真实完成的三步',async()=>{
+test('内容包保存态不渲染完成横幅，当前画面回执才渲染完成态',async()=>{
  const {renderTransfer}=await import('../public/transfer-status.js');
  const nodes=[];
  const create=tag=>{const n={tag,children:[],attrs:{},classList:{add(){},toggle(c,on){n.complete=!!on;}},dataset:{},textContent:'',hidden:true,
@@ -195,13 +195,19 @@ test('完成态渲染带完成徽标、回执时间，且只点亮真实完成�
  try{
   const state=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true}},'new');
   renderTransfer(host,state);
-  assert.equal(host.dataset.complete,'true');
+  assert.equal(host.dataset.complete,undefined,'只确认内容包保存时不能显示同步完成横幅');
   assert.equal(host.hidden,false);
-  assert.equal(nodes.some(n=>n.className==='transfer-complete-badge'&&n.textContent.includes('已完成')),true);
-  assert.equal(nodes.some(n=>n.className==='transfer-complete-note'&&n.textContent.includes('设备回报时间')),true);
+  assert.equal(nodes.some(n=>n.className==='transfer-complete-badge'),false);
+  assert.equal(nodes.some(n=>n.className==='transfer-complete-note'),false);
   const labels=nodes.filter(n=>n.tag==='li');
-  assert.equal(labels.length,3,'完成态只展示已真实发生的三步');
+  assert.equal(labels.length,3,'保存态只展示已真实发生的三步');
   assert.equal(labels.every(n=>n.complete),true);
   assert.equal(labels.some(n=>n.attrs['aria-current']),false,'完成态不应再标记进行中');
+  host.replaceChildren();nodes.length=0;
+  const rendered=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true,renderedCurrent:true,renderReport:{day:0}}},'new');
+  renderTransfer(host,rendered);
+  assert.equal(host.dataset.complete,'true');
+  assert.equal(nodes.some(n=>n.className==='transfer-complete-badge'&&n.textContent.includes('已回报显示当前内容')),true);
+  assert.equal(nodes.some(n=>n.className==='transfer-complete-note'&&n.textContent.includes('设备回报时间')),true);
  }finally{delete globalThis.document;}
 });

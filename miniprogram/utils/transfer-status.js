@@ -80,16 +80,16 @@ const STATUS_COPY = {
     "detail": "画屏已完成本次内容下载，云端正在核对保存结果。稍候即可看到「传输完成」，无需重新生成或重复连接。"
   },
   "S20": {
-    "title": "传输完成 · 新画已存入画屏",
-    "detail": "本次内容已完整送达画屏，网页这边已经结束，无需再操作。到画屏按「IMG」→ 确认键即可看到新画。"
+    "title": "内容包已存入 · 等待画面回执",
+    "detail": "画屏已回报当前内容包已保存，但尚未回报当前画面已刷新。此回执不能证明屏上已经显示最新画；请保持画屏联网，等待画面回执更新。"
   },
   "S21": {
     "title": "同步完成 · 画屏已回报刷新",
     "detail": "画屏已回报本次内容的显示结果。如停在 Home，可选「画面」并按确认键查看。"
   },
   "S22": {
-    "title": "传输完成 · 新画已存入画屏",
-    "detail": "本次内容已完整送达画屏，网页这边已经结束，无需再操作。按画屏确认键进入「画面」即可看到新画。"
+    "title": "内容包已存入 · 等待画面回执",
+    "detail": "画屏已回报当前内容包已保存，但尚未回报当前画面已刷新。此回执不能证明屏上已经显示最新画；请保持画屏联网，等待画面回执更新。"
   },
   "S23": {
     "title": "同步完成 · 画屏已回报刷新",
@@ -145,10 +145,10 @@ if(result.syncConfigured===undefined)return copyState('S01','checking');
  const knownTarget=!!result?.build?.sha256,matchesTarget=!knownTarget||report.targetSha===result?.build?.sha256,samePackage=knownTarget&&matchesTarget;
  const fresh=!report.stale&&!(Date.parse(report.lastSeen)<Date.parse(result.build?.publishedAt));
  if(samePackage&&report.renderedCurrent&&report.renderReport)return completed('S21','rendered',4,report);
- if(samePackage&&report.stored)return completed('S20','stored',4,report);
+ if(samePackage&&report.stored)return completed('S20','stored',3,report);
  if(!fresh)return copyState('S15','waiting',1);
  if(matchesTarget&&report.stored&&!report.showingPrevious&&report.renderReport)return completed('S23','rendered',4,report);
- if(matchesTarget&&report.stored)return completed('S22','stored',4,report);
+ if(matchesTarget&&report.stored)return completed('S22','stored',3,report);
  if(!matchesTarget)return copyState('S16','confirming',1);
  if(report.downloadState===2)return copyState('S19','confirming',2);
  if(report.downloadState===3)return copyState('S24','retrying',1);
@@ -172,7 +172,10 @@ function withConnection(state,result={},connection,now=Date.now(),artworkId=null
  // 手机已确认设备收到本次内容（BLE 观测到下载完成，或用户亲眼看到新画后手动标记）：
  // 这是比陈旧云端回执更强的地面真相，不受 6 秒蓝牙新鲜度窗口限制，也不被“尚未收到回报”覆盖。
  // artworkId 把送达确认锁定到“当前这幅画”：换了生辰/愿望重新生成后，上一幅的送达确认不得回灌到新画（与网页端对齐）。
- if(connection?.delivered&&connection.delivered.targetSha===result?.build?.sha256&&connection.delivered.deviceId===result.device?.id&&(!artworkId||connection.delivered.artworkId===artworkId)&&!(result.deviceReport?.targetSha&&result.deviceReport.targetSha!==connection.delivered.targetSha))return {...copyState('S20','stored',4),connectionBase:state};
+ if(connection?.delivered&&connection.delivered.targetSha===result?.build?.sha256&&connection.delivered.deviceId===result.device?.id&&(!artworkId||connection.delivered.artworkId===artworkId)&&!(result.deviceReport?.targetSha&&result.deviceReport.targetSha!==connection.delivered.targetSha)){
+  if(connection.delivered.evidence==='user-confirmed')return {...copyState('S20','user-confirmed',4),title:'你已确认画屏显示新画',detail:'这是你的手动确认；设备尚未回报当前画面已刷新。',manualConfirmed:true,connectionBase:state};
+  return {...copyState('S20','stored',3),connectionBase:state};
+ }
  if(connection?.paired&&!connection.wifiConnected&&state.phase==='connect')return {...state,connectionBase:state,phase:'wifi',title:'蓝牙已连接 · 请确认画屏 Wi-Fi',detail:'已保存的网络会自动尝试连接；尚未收到联网确认时，可在下方检查网络。',action:'wifi'};
  if(connection&&connection.paired===false&&state.phase==='connect')return {...state,connectionBase:state,title:'画屏内容已准备好 · 请连接画屏蓝牙',detail:'当前手机未连接画屏蓝牙。请在「链接神物」页唤醒并连接画屏蓝牙，连上后会自动认主并下发内容；画屏自身联网不代表已认主。',action:'connect'};
  if(connection?.paired&&!result?.syncConfigured&&state.phase==='connect')return {...state,connectionBase:state,phase:'binding',title:connection.deviceId?'画屏已连接 · 正在关联当前账户':'画屏已连接 · 正在核验设备身份',detail:connection.deviceId?'账户关联由程序自动完成，完成后会领取已准备的内容。':'设备联网后会自动核验身份并关联账户，无需填写设备编号。',action:null};

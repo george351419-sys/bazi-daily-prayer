@@ -94,7 +94,7 @@ export async function handleRequest(req,res,config){
    if(route==='account/logout'&&req.method==='POST'){await logout(config,await currentAccount(config,req));res.setHeader('Set-Cookie',accountCookie(config,'',true));return send(res,200,{ok:true});}
    const account=await requireAccount(config,req);
    if(route==='account/ritual/diagnostic'&&req.method==='POST'){
-    const allowed=['preparation','build','deviceReport','connection','heartbeat'];
+    const allowed=['preparation','build','plan','plannedDays','displayPlan','deviceReport','connection','heartbeat'];
     const data=Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]]));
     if(!Object.keys(data).length||JSON.stringify(data).length>12000)throw new AccountError(400,'诊断内容为空或过长。');
     const id=randomBytes(18).toString('hex'),now=Date.now();

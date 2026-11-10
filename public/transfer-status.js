@@ -77,16 +77,16 @@ const STATUS_COPY = {
     "detail": "画屏已完成本次内容下载，云端正在核对保存结果。稍候即可看到「传输完成」，无需重新生成或重复连接。"
   },
   "S20": {
-    "title": "传输完成 · 新画已存入画屏",
-    "detail": "本次内容已完整送达画屏，网页这边已经结束，无需再操作。到画屏按「IMG」→ 确认键即可看到新画。"
+    "title": "内容包已存入 · 等待画面回执",
+    "detail": "画屏已回报当前内容包已保存，但尚未回报当前画面已刷新。此回执不能证明屏上已经显示最新画；请保持画屏联网，等待画面回执更新。"
   },
   "S21": {
     "title": "同步完成 · 画屏已回报刷新",
     "detail": "画屏已回报本次内容的显示结果。如停在 Home，可选「画面」并按确认键查看。"
   },
   "S22": {
-    "title": "传输完成 · 新画已存入画屏",
-    "detail": "本次内容已完整送达画屏，网页这边已经结束，无需再操作。按画屏确认键进入「画面」即可看到新画。"
+    "title": "内容包已存入 · 等待画面回执",
+    "detail": "画屏已回报当前内容包已保存，但尚未回报当前画面已刷新。此回执不能证明屏上已经显示最新画；请保持画屏联网，等待画面回执更新。"
   },
   "S23": {
     "title": "同步完成 · 画屏已回报刷新",
@@ -142,10 +142,10 @@ if(result.syncConfigured===undefined)return copyState('S01','checking');
  const knownTarget=!!result?.build?.sha256,matchesTarget=!knownTarget||report.targetSha===result?.build?.sha256,samePackage=knownTarget&&matchesTarget;
  const fresh=!report.stale&&!(Date.parse(report.lastSeen)<Date.parse(result.build?.publishedAt));
  if(samePackage&&report.renderedCurrent&&report.renderReport)return completed('S21','rendered',4,report);
- if(samePackage&&report.stored)return completed('S20','stored',4,report);
+ if(samePackage&&report.stored)return completed('S20','stored',3,report);
  if(!fresh)return copyState('S15','waiting',1);
  if(matchesTarget&&report.stored&&!report.showingPrevious&&report.renderReport)return completed('S23','rendered',4,report);
- if(matchesTarget&&report.stored)return completed('S22','stored',4,report);
+ if(matchesTarget&&report.stored)return completed('S22','stored',3,report);
  if(!matchesTarget)return copyState('S16','confirming',1);
  if(report.downloadState===2)return copyState('S19','confirming',2);
  if(report.downloadState===3)return copyState('S24','retrying',1);
@@ -169,7 +169,10 @@ export function withConnection(state,result={},connection,now=Date.now(),artwork
  // 手机已确认设备收到本次内容（BLE 观测到下载完成，或用户亲眼看到新画后手动标记）：
  // 这是比陈旧云端回执更强的地面真相，不受 6 秒蓝牙新鲜度窗口限制，也不被“尚未收到回报”覆盖。
  // artworkId 把送达确认锁定到“当前这幅画”：换了生辰/愿望重新生成后，上一幅的送达确认不得回灌到新画。
- if(connection?.delivered&&connection.delivered.targetSha===result?.build?.sha256&&connection.delivered.deviceId===result.device?.id&&(!artworkId||connection.delivered.artworkId===artworkId)&&!(result.deviceReport?.targetSha&&result.deviceReport.targetSha!==connection.delivered.targetSha))return {...copyState('S20','stored',4),connectionBase:state};
+ if(connection?.delivered&&connection.delivered.targetSha===result?.build?.sha256&&connection.delivered.deviceId===result.device?.id&&(!artworkId||connection.delivered.artworkId===artworkId)&&!(result.deviceReport?.targetSha&&result.deviceReport.targetSha!==connection.delivered.targetSha)){
+  if(connection.delivered.evidence==='user-confirmed')return {...copyState('S20','user-confirmed',4),title:'你已确认画屏显示新画',detail:'这是你的手动确认；设备尚未回报当前画面已刷新。',manualConfirmed:true,connectionBase:state};
+  return {...copyState('S20','stored',3),connectionBase:state};
+ }
  if(!connection?.paired||!Number.isFinite(connection.receivedAt)||now-connection.receivedAt>6000||!result?.device?.id||connection.deviceId!==result.device.id)return {...state,action:transferAction(state)};
  if(state.step<1||state.preparation||['stored','rendered','firmware','publishing'].includes(state.phase))return {...state,action:transferAction(state)};
  if(['waiting','syncing'].includes(state.phase)){
@@ -185,17 +188,17 @@ export function renderTransfer(host, state) {
  host.hidden = false;
  host.classList.add('transfer-status');
  host.dataset.phase = state.phase;
- const completed=['stored','rendered'].includes(state.phase);
+ const completed=['rendered','user-confirmed'].includes(state.phase);
  if(completed)host.dataset.complete='true';else delete host.dataset.complete;
  host.replaceChildren();
  const heading = document.createElement('strong');heading.textContent = state.title;
- if(completed){const badge=document.createElement('span');badge.className='transfer-complete-badge';badge.textContent='✓ 本次同步已完成';heading.prepend(badge);}
+ if(completed){const badge=document.createElement('span');badge.className='transfer-complete-badge';badge.textContent=state.phase==='rendered'?'✓ 画屏已回报显示当前内容':'✓ 你已确认画屏显示新画';heading.prepend(badge);}
  host.append(heading);
  if(state.detail){const detail=document.createElement('p');detail.textContent=state.detail;host.append(detail);}
  if(completed){
-  const stamp=Date.parse(state.completedAt||'');
   const note=document.createElement('p');note.className='transfer-complete-note';
-  note.textContent=Number.isFinite(stamp)?'本次内容已送达画屏 · 设备回报时间 '+new Date(stamp).toLocaleString('zh-CN')+'。网页无需再操作，也无需重新生成或重新连接。':'本次内容已送达画屏 · 网页无需再操作，也无需重新生成或重新连接。';
+  const stamp=Date.parse(state.completedAt||'');
+  note.textContent=state.phase==='user-confirmed'?'这是你的手动确认；设备尚未回报当前画面已刷新。':Number.isFinite(stamp)?'画屏已回报当前画面 · 设备回报时间 '+new Date(stamp).toLocaleString('zh-CN')+'。':'画屏已回报当前画面已刷新。';
   host.append(note);
  }
  const action=transferAction(state);
@@ -203,7 +206,7 @@ export function renderTransfer(host, state) {
  else if(action==='check'){const check=document.createElement('button');check.type='button';check.className='secondary';check.textContent='重新检查同步';check.onclick=()=>document.dispatchEvent(new CustomEvent('prayer:ark-sync'));host.append(check);}
  const steps = document.createElement('ol');steps.setAttribute('aria-label', '画面同步阶段');
  // 完成态只展示已真实发生的三步：画屏上屏回报是另一回事，不能把第 4 步也画成已完成。
- const labels = state.preparation?['两日画作','转换画屏格式','保存内容包','准备完成']:completed?['内容就绪','设备下载','传输完成']:['内容就绪','设备下载','传输完成','画屏刷新'];
+ const labels = state.preparation?['两日画作','转换画屏格式','保存内容包','准备完成']:completed?['内容就绪','设备下载','内容包已保存','当前画面已确认']:state.phase==='stored'?['内容就绪','设备下载','内容包已保存']:['内容就绪','设备下载','传输完成','画屏刷新'];
  for (const [index, label] of labels.entries()) {
   const item = document.createElement('li');item.textContent = label;
   const position=state.preparation?state.preparationStep:state.step;
