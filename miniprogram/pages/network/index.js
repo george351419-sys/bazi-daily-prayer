@@ -2,8 +2,30 @@ const {transferStatus,receiptTime}=require('../../utils/transfer-status');
 const api=require('../../utils/api');const {preparePhoto,authorize}=require('../../utils/photos');const {observeConnection,stopObserving}=require('../../utils/screen-connection');
 const {syncPrayerPair,syncGeneratedPrayer}=require('../../utils/ritual-sync');
 Page({
- data:{releaseVersion:'1.1.12',editingPassword:false,binding:false,bindingError:'',setupExpanded:false,user:null,error:'',message:'',busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false},
+ data:{releaseVersion:'1.1.12',editingPassword:false,binding:false,bindingError:'',setupExpanded:false,user:null,error:'',message:'',busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false,heartbeatUrl:'',heartbeatText:'',delivered:null},
  diagnostics(){const {bleDiagnostics}=require('../../utils/ble');wx.setClipboardData({data:bleDiagnostics(),success:()=>wx.showToast({title:'连接诊断已复制',icon:'none'})});},
+ statusDiagnostics(){const snapshot=this.connection.snapshot,payload=JSON.stringify({status:this.data.status,syncState:this.data.syncState,connection:{paired:snapshot.paired,deviceId:snapshot.connectedDeviceId,wifiConnected:snapshot.wifiConnected,receivedAt:snapshot.receivedAt,delivered:this.connection.delivered},heartbeat:this.heartbeatProbe},null,2);wx.setClipboardData({data:payload,success:()=>wx.showToast({title:'状态诊断已复制',icon:'none'})});},
+ async heartbeatAddress(){
+  if(!this.data.paired){this.setData({error:'请先连接画屏蓝牙，再读取心跳地址。'});return;}
+  if(this.data.binding){this.setData({error:'正在认主，请稍候再读取心跳地址。'});return;}
+  this.setData({busy:true,error:''});
+  try{
+   // 设备云端无心跳时，最直接的证据是「设备到底往哪个地址打心跳」。
+   // 连上蓝牙后读 0x3f：若确认是本站配对地址残留则顺手归位，指向其它云端时不擅自改写。
+   const probe=await this.ble.client.restoreHeartbeatURL();
+   this.heartbeatProbe={url:probe.url||null,result:probe.result,normal:'https://playmath.cn/api/v1/device/heartbeat',checkedAt:new Date().toISOString()};
+   this.setData({heartbeatUrl:probe.url||'',heartbeatText:({restored:'配对地址已归位 · 请复制状态诊断取证',clean:'心跳地址正常 · 请复制状态诊断取证',foreign:'设备指向其它云端，未改动 · 请复制状态诊断取证',empty:'画屏未回复心跳地址',failed:'读取失败，请唤醒画屏后重试'})[probe.result]||'检查完成'});
+  }catch(e){api.error(this,e);}
+  finally{this.setData({busy:false});}
+ },
+ async toggleDelivered(){
+  // 手动标记是用户亲眼看到新画后的确认，不是设备回执；再点一次撤销，恢复真实状态。
+  if(this.connection.delivered){this.connection.clearDelivered();this.setData({message:'已撤销手动标记，回到设备真实回执状态。'});return;}
+  const status=this.data.status,sha=status?.build?.sha256,deviceId=this.connection.snapshot.connectedDeviceId||status?.device?.id;
+  if(!sha||!/^[a-f0-9]{64}$/.test(sha)||!/^[a-f0-9]{12}$/.test(deviceId||'')){this.setData({error:'请先连接画屏并等待内容就绪，再标记完成。'});return;}
+  this.connection.markDelivered(sha,deviceId,'user-confirmed',status?.plan?.artworkIds?.[0]||null);
+  this.setData({message:'已标记画屏显示新画。再点一次「已标记完成」可撤销。'});
+ },
  onLoad(){},
  changePassword(){this.setData({editingPassword:true,wifiPassword:''});},
  toggleSetup(){this.setData({setupExpanded:!this.data.setupExpanded});},
@@ -32,16 +54,25 @@ Page({
  async autoBind(){
   const user=getApp().globalData.user;if(!user||!this.data.paired||this.data.binding)return;
   const known=this.connection.snapshot.connectedDeviceId;
-  if(known&&this.data.status?.device?.id===known&&this.data.status.device.active)return;
+  // 账号已绑定这块画屏：不再重复认主。认主会把设备心跳地址临时改成配对 challenge、
+  // 占住整条 BLE 队列，重开小程序又走一遍会让页面长时间卡在「正在认主…」。
+  const bound=this.data.status;
+  if(known&&bound?.syncConfigured===true&&bound?.device?.id===known&&bound.device.active)return;
   const key=user.id+':'+this.connection.target+':'+this.connection.client.epoch;
   if(this.bindAttempt===key)return;this.bindAttempt=key;
   const epoch=this.connection.client.epoch;this.connectionNotice=true;this.setData({binding:true,bindingError:'',error:'',message:''});
-  try{
+  let timer=null;
+  const work=(async()=>{
    const id=known||await this.connection.resolveIdentity(api.request);
    if(getApp().globalData.user?.id!==user.id||epoch!==this.connection.client.epoch||!this.connection.snapshot.paired)return;
    await api.request('/api/account/ritual/device',{deviceId:id});this.setData({message:'',error:''});
-  }catch(e){if(epoch===this.connection.client.epoch&&this.connection.snapshot.paired){this.setData({bindingError:e.message});api.error(this,e);}}
-  finally{this.setData({binding:false});}
+  })();
+  // 认主整体加兜底超时：resolveIdentity 内部 60s 轮询只在能跑到循环判断时才生效，
+  // 一旦卡在某个 await（BLE 队列、挂起的请求）就会无限显示「正在认主…」。
+  const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('认主超时：画屏未在限定时间内回报，请保持画屏唤醒后点「认主并关联账户」重试。')),75000);});
+  try{await Promise.race([work,deadline]);}
+  catch(e){if(epoch===this.connection.client.epoch&&this.connection.snapshot.paired){this.setData({bindingError:e.message});api.error(this,e);}}
+  finally{clearTimeout(timer);this.setData({binding:false});}
  },
  async bind(){this.bindAttempt=null;await this.autoBind();await this.pollSync();},
  async unbind(){if(this.data.busy)return;this.setData({busy:true,error:''});try{await api.request('/api/account/ritual/device/unbind',{});await this.load();this.setData({message:'已解除账户绑定。'});}catch(e){api.error(this,e);}finally{this.setData({busy:false});}},

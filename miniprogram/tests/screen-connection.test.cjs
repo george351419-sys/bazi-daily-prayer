@@ -2,14 +2,14 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 function session(){
  const timers=new Map(),intervals=new Map();let sequence=0;
  class BLE{
-  constructor(state,found,download){this.state=state;this.found=found;this.download=download;this.commands=[];this.epoch=0;}
-  async connect(id){this.id=id;this.state('蓝牙已连接',true);}
-  async ensureWifi(){this.commands.push('check-saved-wifi');this.status=true;this.state('Wi-Fi 已连接',true);}
+  constructor(state,found,download){this.state=state;this.found=found;this.download=download;this.commands=[];this.epoch=0;this.lastContactAt=0;}
+  async connect(id){this.id=id;this.lastContactAt=Date.now();this.state('蓝牙已连接',true);}
+  async ensureWifi(){this.commands.push('check-saved-wifi');this.status=true;this.lastContactAt=Date.now();this.state('Wi-Fi 已连接',true);}
   async syncNow(){this.commands.push('check-sync');}
-  async write(channel){this.commands.push(channel);}
+  async write(channel){this.commands.push(channel);this.lastContactAt=Date.now();}
   async queryDownload(){this.download({state:1,progress:57});}
   async configure(){this.commands.push('configure');}
-  async disconnect(){this.id=null;this.state('蓝牙未连接',false);}
+  async disconnect(){this.id=null;this.lastContactAt=0;this.state('蓝牙未连接',false);}
  }
  const context={module:{exports:{}},require:name=>name==='./ble'?{ArkBLE:BLE}:require('../utils/transfer-status'),Date,Set,Error,console,setTimeout:(fn,ms)=>{const id=++sequence;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++sequence;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id)};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../utils/screen-connection.js'),'utf8'),context);

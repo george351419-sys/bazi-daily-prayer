@@ -1337,15 +1337,39 @@
     "miniprogram/utils/ble.js"(exports, module) {
       var SERVICE = "00002000-0000-1000-8000-00805f9b34fb";
       var CHAR = "00002001-0000-1000-8000-00805f9b34fb";
+      var HEARTBEAT_NORMAL = "https://playmath.cn/api/v1/device/heartbeat";
+      var HEARTBEAT_DIRTY_KEY = "screen-heartbeat-url-dirty";
       var pause = (ms) => new Promise((r) => setTimeout(r, ms));
+      var memory2 = /* @__PURE__ */ new Map();
+      var storage = {
+        get(key) {
+          try {
+            const value = wx.getStorageSync(key);
+            return value === void 0 || value === null ? "" : value;
+          } catch {
+            return memory2.get(key) || "";
+          }
+        },
+        set(key, value) {
+          try {
+            wx.setStorageSync(key, value);
+          } catch {
+            memory2.set(key, value);
+          }
+        },
+        remove(key) {
+          try {
+            wx.removeStorageSync(key);
+          } catch {
+            memory2.delete(key);
+          }
+        }
+      };
       var events = [];
       function trace(stage, detail = "") {
         events.push({ time: (/* @__PURE__ */ new Date()).toISOString(), stage, detail });
         if (events.length > 80) events.shift();
-        try {
-          wx.setStorageSync("screen-ble-diagnostics", events);
-        } catch {
-        }
+        storage.set("screen-ble-diagnostics", events);
       }
       function call(api, args) {
         trace(api + ":start");
@@ -1396,6 +1420,7 @@
           this.epoch = 0;
           this.maxWrite = 20;
           this.devices = /* @__PURE__ */ new Map();
+          this.lastContactAt = 0;
           this.onValue = (e) => {
             if (this.service && this.char && e.deviceId === this.id && e.serviceId.toLowerCase() === this.service.toLowerCase() && e.characteristicId.toLowerCase() === this.char.toLowerCase()) this.receive(new Uint8Array(e.value));
           };
@@ -1409,6 +1434,7 @@
               this.epoch++;
               this.id = null;
               this.status = null;
+              this.lastContactAt = 0;
               if (this.identityRead) {
                 this.identityRead.reject(new Error("\u84DD\u7259\u5DF2\u65AD\u5F00"));
                 this.identityRead = null;
@@ -1474,6 +1500,7 @@
           this.status = null;
           this.service = null;
           this.char = null;
+          this.lastContactAt = 0;
           const epoch = ++this.epoch;
           const check = () => {
             if (epoch !== this.epoch) throw new Error("\u8FDE\u63A5\u5DF2\u53D6\u6D88\u6216\u65AD\u5F00\uFF0C\u8BF7\u5524\u9192\u753B\u5C4F\u540E\u91CD\u8BD5\u3002");
@@ -1534,6 +1561,7 @@
             await this.write(58, [], epoch);
             check();
             this.state("\u84DD\u7259\u5DF2\u8FDE\u63A5\uFF0C\u6B63\u5728\u68C0\u67E5\u753B\u5C4F\u5DF2\u4FDD\u5B58\u7684 Wi-Fi\u3002", true);
+            if (this.heartbeatDirty()) await this.restoreHeartbeatURL(epoch);
           } catch (e) {
             this.id = null;
             this.status = null;
@@ -1553,13 +1581,19 @@
           const b = packet(ch, data);
           if (epoch !== this.epoch || !this.id) throw new Error("\u84DD\u7259\u5DF2\u65AD\u5F00\uFF0C\u8BF7\u91CD\u65B0\u8FDE\u63A5\u3002");
           if (b.length > this.maxWrite) throw new Error("\u5F53\u524D\u84DD\u7259\u8FDE\u63A5\u53EF\u5199\u957F\u5EA6\u4E0D\u8DB3\uFF0C\u8BF7\u91CD\u65B0\u8FDE\u63A5\u4EE5\u534F\u5546 MTU\uFF1B\u672C\u56FA\u4EF6\u4E0D\u652F\u6301\u62C6\u5206\u914D\u7F51\u6307\u4EE4\u3002");
+          const command = ch.toString(16).padStart(2, "0");
+          trace("write:" + command + ":start");
           await call("writeBLECharacteristicValue", { deviceId: this.id, serviceId: this.service, characteristicId: this.char, value: b.buffer, writeType: "write" });
           await pause(200);
           if (epoch !== this.epoch) throw new Error("\u84DD\u7259\u5DF2\u65AD\u5F00");
+          trace("write:" + command + ":done");
+          this.lastContactAt = Date.now();
         }
         receive(b) {
           if (!this.id) return;
           if (b.length < 4 || b[0] !== 85 || b.length !== b[2] + 4 || b.slice(0, -1).reduce((s, x) => s + x & 255, 0) !== b[b.length - 1]) return;
+          this.lastContactAt = Date.now();
+          trace("notify:" + b[1].toString(16).padStart(2, "0") + ":" + b.length);
           if (b[1] === 63 && this.identityRead) {
             const reader = this.identityRead;
             this.identityRead = null;
@@ -1608,8 +1642,49 @@
             this.identityRead = null;
           }
         }
+        // 认主会把设备云端心跳地址临时改成 ?link=<nonce> 配对地址。若认主中途蓝牙断开，
+        // resolveIdentity 的 finally 因要求连接仍在而无法写回，设备会一直打配对地址：
+        // BLE 显示 Wi-Fi 在线，云端却收不到心跳，新内容永远下发不了。用持久化标记记住
+        // 这种脏状态，下次连接成功时幂等归位（与网页端 ark-network.js 同款机制）。
+        heartbeatDirty() {
+          return storage.get(HEARTBEAT_DIRTY_KEY) === "1";
+        }
+        markHeartbeatDirty() {
+          storage.set(HEARTBEAT_DIRTY_KEY, "1");
+          trace("heartbeat-url:dirty");
+        }
+        clearHeartbeatDirty() {
+          storage.remove(HEARTBEAT_DIRTY_KEY);
+        }
+        async restoreHeartbeatURL(epoch = this.epoch) {
+          try {
+            const current2 = await this.readHeartbeatURL();
+            trace("heartbeat-url:read");
+            if (current2 === HEARTBEAT_NORMAL) {
+              this.clearHeartbeatDirty();
+              trace("heartbeat-url:clean");
+              return { result: "clean", url: current2 };
+            }
+            if (!current2) {
+              trace("heartbeat-url:empty");
+              return { result: "empty", url: current2 };
+            }
+            if (current2 && !current2.startsWith(HEARTBEAT_NORMAL + "?link=")) {
+              trace("heartbeat-url:foreign");
+              return { result: "foreign", url: current2 };
+            }
+            await this.write(62, utf8(HEARTBEAT_NORMAL), epoch);
+            this.clearHeartbeatDirty();
+            trace("heartbeat-url:restored");
+            return { result: "restored", url: current2 };
+          } catch (error) {
+            trace("heartbeat-url:restore-failed:" + String(error && error.message || "Error"));
+            return { result: "failed", url: null };
+          }
+        }
         async resolveIdentity(request) {
-          const epoch = this.epoch, original = await this.readHeartbeatURL(), normal = "https://playmath.cn/api/v1/device/heartbeat";
+          trace("identity:begin");
+          const epoch = this.epoch, original = await this.readHeartbeatURL(), normal = HEARTBEAT_NORMAL;
           const priorChallenge = original.startsWith(normal + "?link=") && /^[a-f0-9]{32}&device_id=$/.test(original.slice((normal + "?link=").length));
           if (original && original !== normal && !priorChallenge) throw new Error("\u753B\u5C4F\u4F7F\u7528\u4E86\u5176\u4ED6\u4E91\u7AEF\u5730\u5740\uFF0C\u8BF7\u5148\u6838\u5BF9\u8BBE\u5907\u914D\u7F6E\u3002");
           const challenge = await request("/api/account/ritual/device", { beginPairing: true });
@@ -1627,8 +1702,22 @@
               await pause(2e3);
             }
             throw new Error("\u5C1A\u672A\u6536\u5230\u753B\u5C4F\u8BA4\u8BC1\u56DE\u62A5\uFF0C\u8BF7\u4FDD\u6301\u753B\u5C4F\u5524\u9192\u5E76\u70B9\u51FB\u91CD\u8BD5\u5173\u8054\u3002");
+          } catch (error) {
+            trace("identity:failed");
+            throw error;
           } finally {
-            if (changed && epoch === this.epoch && this.id) await this.write(62, utf8(normal), epoch);
+            if (changed) {
+              let restored = false;
+              if (epoch === this.epoch && this.id) {
+                try {
+                  await this.write(62, utf8(normal), epoch);
+                  restored = true;
+                } catch {
+                }
+              }
+              if (restored) this.clearHeartbeatDirty();
+              else this.markHeartbeatDirty();
+            }
           }
         }
         async readSavedSSID() {
@@ -1764,7 +1853,7 @@
           this.state("\u84DD\u7259\u672A\u8FDE\u63A5\u3002", false);
         }
       };
-      module.exports = { bleDiagnostics: () => JSON.stringify(events, null, 2), ArkBLE, packet, utf8, decode, credentials };
+      module.exports = { bleDiagnostics: () => JSON.stringify(events, null, 2), ArkBLE, packet, utf8, decode, credentials, storage };
     }
   });
 
@@ -1822,7 +1911,7 @@
         },
         "S13": {
           "title": "\u8BF7\u5148\u66F4\u65B0\u753B\u5C4F\u56FA\u4EF6",
-          "detail": "\u5F53\u524D\u56FA\u4EF6\u4E0D\u80FD\u63A5\u6536\u8FD9\u4EFD\u5185\u5BB9\uFF0C\u8BF7\u5230\u300C\u94FE\u63A5\u795E\u7269\u300D\u66F4\u65B0\u56FA\u4EF6\u3002"
+          "detail": "\u5F53\u524D\u56FA\u4EF6\u4E0D\u80FD\u63A5\u6536\u8FD9\u4EFD\u5185\u5BB9\uFF0C\u8BF7\u5148\u5728\u7F51\u9875\u7AEF\u300C\u94FE\u63A5\u795E\u7269\u300D\u66F4\u65B0\u753B\u5C4F\u56FA\u4EF6\uFF0C\u518D\u56DE\u5230\u5C0F\u7A0B\u5E8F\u540C\u6B65\u3002"
         },
         "S14": {
           "title": "\u5185\u5BB9\u5DF2\u5C31\u7EEA \xB7 \u7B49\u5F85\u8BBE\u5907\u8054\u7F51\u68C0\u67E5",
@@ -1963,10 +2052,43 @@
     "miniprogram/utils/screen-connection.js"(exports, module) {
       var { ArkBLE } = require_ble();
       var { transferStatus, withLiveDownload, withConnection } = require_transfer_status();
+      var DELIVERY_KEY = "prayer-mini-delivered-v1";
+      var memory2 = /* @__PURE__ */ new Map();
+      var store = {
+        get(key) {
+          try {
+            const value = wx.getStorageSync(key);
+            return value === void 0 || value === null ? "" : value;
+          } catch {
+            return memory2.get(key) || "";
+          }
+        },
+        set(key, value) {
+          try {
+            wx.setStorageSync(key, value);
+          } catch {
+            memory2.set(key, value);
+          }
+        },
+        remove(key) {
+          try {
+            wx.removeStorageSync(key);
+          } catch {
+            memory2.delete(key);
+          }
+        }
+      };
+      function generationFlag() {
+        try {
+          return !!getApp().globalData.generating;
+        } catch {
+          return false;
+        }
+      }
       var ScreenConnection = class {
         constructor() {
           this.listeners = /* @__PURE__ */ new Set();
-          this.snapshot = { bleText: "\u5148\u5524\u9192\u753B\u5C4F\uFF0C\u518D\u641C\u7D22\u84DD\u7259\u8BBE\u5907\u3002", paired: false, bleDevices: [], connectedDeviceId: "" };
+          this.snapshot = { bleText: "\u5148\u5524\u9192\u753B\u5C4F\uFF0C\u518D\u641C\u7D22\u84DD\u7259\u8BBE\u5907\u3002", paired: false, bleDevices: [], connectedDeviceId: "", receivedAt: 0, delivered: null };
           this.foreground = true;
           this.allowed = false;
           this.attempts = 0;
@@ -1976,6 +2098,7 @@
           this.syncSha = null;
           this.syncRequestedAt = null;
           this.requestedSha = null;
+          this.delivered = this.loadDelivered();
           this.client = new ArkBLE((bleText, paired) => {
             paired = !!paired && !!this.client?.id;
             const lost = this.snapshot.paired && !paired;
@@ -1984,7 +2107,8 @@
               this.syncRequestedAt = null;
               this.requestedSha = null;
             }
-            this.snapshot = { ...this.snapshot, bleText, paired, wifiConnected: paired && this.client?.status === true, receivedAt: Date.now(), connectedDeviceId: paired ? this.hardwareId || "" : "" };
+            const receivedAt = paired ? this.client.lastContactAt || 0 : 0;
+            this.snapshot = { ...this.snapshot, bleText, paired, wifiConnected: paired && this.client?.status === true, receivedAt, connectedDeviceId: paired ? this.hardwareId || "" : "" };
             if (!paired) {
               this.snapshot.savedSSID = null;
             }
@@ -2002,6 +2126,7 @@
           }, (value) => {
             this.live = { ...value, deviceId: this.hardwareId, receivedAt: Date.now() };
             this.emit();
+            this.confirmDelivered(value);
           });
         }
         emit() {
@@ -2012,11 +2137,47 @@
           listener(this.snapshot);
           return () => this.listeners.delete(listener);
         }
-        stateFor(status, artworkId) {
-          return withConnection(withLiveDownload(transferStatus(status, artworkId), status, this.live), status, { ...this.snapshot, deviceId: this.hardwareId, syncRequestedAt: this.syncRequestedAt, requestedSha: this.requestedSha }, Date.now(), artworkId);
+        // 送达确认只接受两种真实证据：BLE 观测到设备回报下载完成，或用户亲眼看到新画后手动标记。
+        // 按 deviceId + 内容哈希隔离；换设备或换内容自动失效；绝不把"设备在线时长"当作送达。
+        loadDelivered() {
+          try {
+            const saved = JSON.parse(store.get(DELIVERY_KEY) || "null");
+            if (saved && /^[a-f0-9]{12}$/.test(saved.deviceId || "") && /^[a-f0-9]{64}$/.test(saved.targetSha || "")) return saved;
+          } catch {
+          }
+          return null;
+        }
+        markDelivered(sha, deviceId, evidence, artworkId = null) {
+          this.delivered = { deliveredAt: Date.now(), targetSha: sha, deviceId, evidence, artworkId: artworkId || null };
+          store.set(DELIVERY_KEY, JSON.stringify(this.delivered));
+          this.snapshot = { ...this.snapshot, delivered: this.delivered };
+          this.emit();
+        }
+        clearDelivered() {
+          if (!this.delivered) return;
+          this.delivered = null;
+          store.remove(DELIVERY_KEY);
+          this.snapshot = { ...this.snapshot, delivered: null };
+          this.emit();
+        }
+        confirmDelivered(live) {
+          if (!live || live.state !== 2 || this.delivered) return;
+          const status = this.current, sha = status && status.build && status.build.sha256, deviceId = this.hardwareId;
+          if (!sha || !deviceId || status.build.status !== "published") return;
+          if (!this.requestedSha || sha !== this.requestedSha) return;
+          if (status.device && status.device.id && status.device.id !== deviceId) return;
+          this.markDelivered(sha, deviceId, "ble-download-complete", status.plan?.artworkIds?.[0] || null);
+        }
+        stateFor(status, artworkId, isGenerating) {
+          const current2 = artworkId || status?.plan?.artworkIds?.[0] || null;
+          const flag = isGenerating ?? generationFlag();
+          const base = flag ? transferStatus(status, current2, true) : withLiveDownload(transferStatus(status, current2), status, this.live);
+          return withConnection(base, status, { ...this.snapshot, deviceId: this.hardwareId, syncRequestedAt: this.syncRequestedAt, requestedSha: this.requestedSha, delivered: this.delivered }, Date.now(), current2);
         }
         acceptStatus(status) {
           this.current = status;
+          const planned = status?.plan?.artworkIds?.[0] || null;
+          if (this.delivered && (status?.build?.sha256 && this.delivered.targetSha !== status.build.sha256 || status?.device?.id && this.delivered.deviceId !== status.device.id || planned && this.delivered.artworkId && this.delivered.artworkId !== planned)) this.clearDelivered();
           void this.syncPublished().catch((error) => this.notice("\u81EA\u52A8\u68C0\u67E5\u540C\u6B65\u6682\u672A\u6210\u529F\uFF1A" + error.message));
         }
         notice(bleText) {
@@ -2137,6 +2298,8 @@
               await this.client.write(58, [], this.client.epoch);
               await this.client.queryDownload();
             });
+            this.snapshot = { ...this.snapshot, receivedAt: this.client.lastContactAt || Date.now() };
+            this.emit();
           } catch (error) {
             this.live = null;
             this.notice("\u4E0B\u8F7D\u8FDB\u5EA6\u6682\u672A\u8BFB\u5230\uFF1A" + error.message);
@@ -2169,6 +2332,7 @@
           this.syncSha = null;
           this.syncRequestedAt = null;
           this.requestedSha = null;
+          this.snapshot = { ...this.snapshot, receivedAt: 0, paired: false, wifiConnected: false, connectedDeviceId: "" };
           clearTimeout(this.retryTimer);
           this.retryTimer = null;
           clearTimeout(this.backgroundTimer);
@@ -2357,6 +2521,7 @@
   var require_mine = __commonJS({
     "miniprogram/pages/mine/index.js"() {
       var { observeConnection, stopObserving } = require_screen_connection();
+      var { receiptTime } = require_transfer_status();
       var api = require_api();
       var { syncGeneratedPrayer } = require_ritual_sync();
       var WISH_GROUPS = [{ "name": "\u751F\u6D3B\u4E30\u8DB3", "items": [{ "id": "W01", "label": "\u751F\u6D3B\u5BCC\u8DB3" }, { "id": "W02", "label": "\u8D22\u6E90\u5E7F\u8FDB" }, { "id": "W03", "label": "\u751F\u610F\u5174\u65FA" }, { "id": "W04", "label": "\u503A\u52A1\u7ED3\u6E05" }, { "id": "W05", "label": "\u6295\u8D44\u987A\u5229" }, { "id": "W06", "label": "\u8863\u98DF\u65E0\u5FE7" }] }, { "name": "\u4E8B\u4E1A\u5411\u524D", "items": [{ "id": "W07", "label": "\u4E0A\u5CB8\u8003\u7F16" }, { "id": "W08", "label": "\u9762\u8BD5\u987A\u5229" }, { "id": "W09", "label": "\u5347\u804C\u52A0\u85AA" }, { "id": "W10", "label": "\u521B\u4E1A\u987A\u5229" }, { "id": "W11", "label": "\u540C\u4E8B\u76F8\u5904\u878D\u6D3D" }, { "id": "W12", "label": "\u6B65\u6B65\u5411\u524D" }] }, { "name": "\u5B66\u4E1A\u7CBE\u8FDB", "items": [{ "id": "W13", "label": "\u91D1\u699C\u9898\u540D" }, { "id": "W14", "label": "\u8003\u8BD5\u987A\u5229" }, { "id": "W15", "label": "\u8003\u7814\u8003\u8BC1\u987A\u5229" }, { "id": "W16", "label": "\u5B66\u4E1A\u8FDB\u6B65" }, { "id": "W17", "label": "\u8BBA\u6587\u987A\u5229" }] }, { "name": "\u5065\u5EB7\u5E73\u5B89", "items": [{ "id": "W18", "label": "\u8EAB\u4F53\u5EB7\u5065" }, { "id": "W19", "label": "\u65E9\u65E5\u5EB7\u590D" }, { "id": "W20", "label": "\u5BB6\u4EBA\u5B89\u5EB7" }, { "id": "W21", "label": "\u8001\u4EBA\u957F\u5BFF" }, { "id": "W22", "label": "\u751F\u6D3B\u5E73\u5B89" }, { "id": "W23", "label": "\u51FA\u5165\u5E73\u5B89" }] }, { "name": "\u60C5\u611F\u5BB6\u5EAD", "items": [{ "id": "W24", "label": "\u9047\u89C1\u826F\u7F18" }, { "id": "W25", "label": "\u8131\u5355" }, { "id": "W26", "label": "\u5A5A\u59FB\u548C\u7766" }, { "id": "W27", "label": "\u73CD\u60DC\u771F\u8BDA\u5173\u7CFB" }, { "id": "W28", "label": "\u8FCE\u63A5\u65B0\u751F\u547D" }, { "id": "W29", "label": "\u5BB6\u5EAD\u548C\u987A" }] }, { "name": "\u4EBA\u9645\u76F8\u4F34", "items": [{ "id": "W30", "label": "\u9047\u89C1\u540C\u884C\u4F19\u4F34" }, { "id": "W31", "label": "\u51CF\u5C11\u53E3\u820C\u77DB\u76FE" }, { "id": "W32", "label": "\u4FEE\u590D\u4EB2\u53CB\u6216\u4EB2\u5B50\u5173\u7CFB" }] }, { "name": "\u5FC3\u5883\u8FCE\u65B0", "items": [{ "id": "W33", "label": "\u8FCE\u63A5\u65B0\u751F\u6D3B" }, { "id": "W34", "label": "\u91CD\u62FE\u597D\u5FC3\u60C5" }, { "id": "W35", "label": "\u5185\u5FC3\u5B89\u5B81" }, { "id": "W36", "label": "\u653E\u4E0B\u6267\u5FF5" }] }];
@@ -2406,7 +2571,7 @@
             if (!this.active || turn !== this.syncTurn || getApp().globalData.user?.id !== userId) return;
             this.connection.acceptStatus(status);
             if (status.preparation?.ready && (!this.generatedArtworkId || status.plan?.artworkIds?.includes(this.generatedArtworkId))) this.prepareFailure = null;
-            this.setData({ status, prepareFailed: !!this.prepareFailure, syncState: this.prepareFailure ? { phase: "retrying", title: "\u753B\u5C4F\u5185\u5BB9\u51C6\u5907\u6682\u672A\u5B8C\u6210", detail: this.prepareFailure, step: 0, percent: null } : this.preparingPair ? { phase: "preparing", title: "\u6B63\u5728\u8865\u9F50\u4E24\u65E5\u753B\u4F5C", detail: "\u7948\u798F\u56FE\u5DF2\u5B8C\u6210\uFF0C\u6B63\u5728\u51C6\u5907\u753B\u5C4F\u5185\u5BB9\uFF1B\u6682\u4E0D\u9700\u8981\u8FDE\u63A5\u8BBE\u5907\u3002", step: 0, percent: null } : this.connection.stateFor(status, this.generatedArtworkId) });
+            this.setData({ status, syncLastSeen: receiptTime(status.deviceReport?.lastSeen), prepareFailed: !!this.prepareFailure, syncState: this.prepareFailure ? { phase: "retrying", title: "\u753B\u5C4F\u5185\u5BB9\u51C6\u5907\u6682\u672A\u5B8C\u6210", detail: this.prepareFailure, step: 0, percent: null } : this.preparingPair ? { phase: "preparing", title: "\u6B63\u5728\u8865\u9F50\u4E24\u65E5\u753B\u4F5C", detail: "\u7948\u798F\u56FE\u5DF2\u5B8C\u6210\uFF0C\u6B63\u5728\u51C6\u5907\u753B\u5C4F\u5185\u5BB9\uFF1B\u6682\u4E0D\u9700\u8981\u8FDE\u63A5\u8BBE\u5907\u3002", step: 0, percent: null } : this.connection.stateFor(status) });
           } catch (e) {
             if (this.active && turn === this.syncTurn) this.setData({ syncState: { phase: "unavailable", title: "\u540C\u6B65\u72B6\u6001\u6682\u4E0D\u53EF\u7528", detail: e.message, step: 0, percent: null } });
           }
@@ -2701,10 +2866,48 @@
       var { observeConnection, stopObserving } = require_screen_connection();
       var { syncPrayerPair, syncGeneratedPrayer } = require_ritual_sync();
       Page({
-        data: { releaseVersion: "1.1.12", editingPassword: false, binding: false, bindingError: "", setupExpanded: false, user: null, error: "", message: "", busy: false, contentMode: "prayer", showActions: true, mode: "test", catalog: [], artworks: [], titles: [], choices: [0, 0], cursor: null, photoTitle: "", draft: "", bleDevices: [], bleText: "\u5148\u5524\u9192\u753B\u5C4F\uFF0C\u518D\u641C\u7D22\u84DD\u7259\u8BBE\u5907\u3002", paired: false, ssid: "", wifiPassword: "", syncConfigured: false, status: null, connectedDeviceId: "", preparing: false },
+        data: { releaseVersion: "1.1.12", editingPassword: false, binding: false, bindingError: "", setupExpanded: false, user: null, error: "", message: "", busy: false, contentMode: "prayer", showActions: true, mode: "test", catalog: [], artworks: [], titles: [], choices: [0, 0], cursor: null, photoTitle: "", draft: "", bleDevices: [], bleText: "\u5148\u5524\u9192\u753B\u5C4F\uFF0C\u518D\u641C\u7D22\u84DD\u7259\u8BBE\u5907\u3002", paired: false, ssid: "", wifiPassword: "", syncConfigured: false, status: null, connectedDeviceId: "", preparing: false, heartbeatUrl: "", heartbeatText: "", delivered: null },
         diagnostics() {
           const { bleDiagnostics } = require_ble();
           wx.setClipboardData({ data: bleDiagnostics(), success: () => wx.showToast({ title: "\u8FDE\u63A5\u8BCA\u65AD\u5DF2\u590D\u5236", icon: "none" }) });
+        },
+        statusDiagnostics() {
+          const snapshot = this.connection.snapshot, payload = JSON.stringify({ status: this.data.status, syncState: this.data.syncState, connection: { paired: snapshot.paired, deviceId: snapshot.connectedDeviceId, wifiConnected: snapshot.wifiConnected, receivedAt: snapshot.receivedAt, delivered: this.connection.delivered }, heartbeat: this.heartbeatProbe }, null, 2);
+          wx.setClipboardData({ data: payload, success: () => wx.showToast({ title: "\u72B6\u6001\u8BCA\u65AD\u5DF2\u590D\u5236", icon: "none" }) });
+        },
+        async heartbeatAddress() {
+          if (!this.data.paired) {
+            this.setData({ error: "\u8BF7\u5148\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\uFF0C\u518D\u8BFB\u53D6\u5FC3\u8DF3\u5730\u5740\u3002" });
+            return;
+          }
+          if (this.data.binding) {
+            this.setData({ error: "\u6B63\u5728\u8BA4\u4E3B\uFF0C\u8BF7\u7A0D\u5019\u518D\u8BFB\u53D6\u5FC3\u8DF3\u5730\u5740\u3002" });
+            return;
+          }
+          this.setData({ busy: true, error: "" });
+          try {
+            const probe = await this.ble.client.restoreHeartbeatURL();
+            this.heartbeatProbe = { url: probe.url || null, result: probe.result, normal: "https://playmath.cn/api/v1/device/heartbeat", checkedAt: (/* @__PURE__ */ new Date()).toISOString() };
+            this.setData({ heartbeatUrl: probe.url || "", heartbeatText: { restored: "\u914D\u5BF9\u5730\u5740\u5DF2\u5F52\u4F4D \xB7 \u8BF7\u590D\u5236\u72B6\u6001\u8BCA\u65AD\u53D6\u8BC1", clean: "\u5FC3\u8DF3\u5730\u5740\u6B63\u5E38 \xB7 \u8BF7\u590D\u5236\u72B6\u6001\u8BCA\u65AD\u53D6\u8BC1", foreign: "\u8BBE\u5907\u6307\u5411\u5176\u5B83\u4E91\u7AEF\uFF0C\u672A\u6539\u52A8 \xB7 \u8BF7\u590D\u5236\u72B6\u6001\u8BCA\u65AD\u53D6\u8BC1", empty: "\u753B\u5C4F\u672A\u56DE\u590D\u5FC3\u8DF3\u5730\u5740", failed: "\u8BFB\u53D6\u5931\u8D25\uFF0C\u8BF7\u5524\u9192\u753B\u5C4F\u540E\u91CD\u8BD5" }[probe.result] || "\u68C0\u67E5\u5B8C\u6210" });
+          } catch (e) {
+            api.error(this, e);
+          } finally {
+            this.setData({ busy: false });
+          }
+        },
+        async toggleDelivered() {
+          if (this.connection.delivered) {
+            this.connection.clearDelivered();
+            this.setData({ message: "\u5DF2\u64A4\u9500\u624B\u52A8\u6807\u8BB0\uFF0C\u56DE\u5230\u8BBE\u5907\u771F\u5B9E\u56DE\u6267\u72B6\u6001\u3002" });
+            return;
+          }
+          const status = this.data.status, sha = status?.build?.sha256, deviceId = this.connection.snapshot.connectedDeviceId || status?.device?.id;
+          if (!sha || !/^[a-f0-9]{64}$/.test(sha) || !/^[a-f0-9]{12}$/.test(deviceId || "")) {
+            this.setData({ error: "\u8BF7\u5148\u8FDE\u63A5\u753B\u5C4F\u5E76\u7B49\u5F85\u5185\u5BB9\u5C31\u7EEA\uFF0C\u518D\u6807\u8BB0\u5B8C\u6210\u3002" });
+            return;
+          }
+          this.connection.markDelivered(sha, deviceId, "user-confirmed", status?.plan?.artworkIds?.[0] || null);
+          this.setData({ message: "\u5DF2\u6807\u8BB0\u753B\u5C4F\u663E\u793A\u65B0\u753B\u3002\u518D\u70B9\u4E00\u6B21\u300C\u5DF2\u6807\u8BB0\u5B8C\u6210\u300D\u53EF\u64A4\u9500\u3002" });
         },
         onLoad() {
         },
@@ -2910,24 +3113,33 @@
           const user = getApp().globalData.user;
           if (!user || !this.data.paired || this.data.binding) return;
           const known = this.connection.snapshot.connectedDeviceId;
-          if (known && this.data.status?.device?.id === known && this.data.status.device.active) return;
+          const bound = this.data.status;
+          if (known && bound?.syncConfigured === true && bound?.device?.id === known && bound.device.active) return;
           const key = user.id + ":" + this.connection.target + ":" + this.connection.client.epoch;
           if (this.bindAttempt === key) return;
           this.bindAttempt = key;
           const epoch = this.connection.client.epoch;
           this.connectionNotice = true;
           this.setData({ binding: true, bindingError: "", error: "", message: "" });
-          try {
+          let timer = null;
+          const work = (async () => {
             const id = known || await this.connection.resolveIdentity(api.request);
             if (getApp().globalData.user?.id !== user.id || epoch !== this.connection.client.epoch || !this.connection.snapshot.paired) return;
             await api.request("/api/account/ritual/device", { deviceId: id });
             this.setData({ message: "", error: "" });
+          })();
+          const deadline = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error("\u8BA4\u4E3B\u8D85\u65F6\uFF1A\u753B\u5C4F\u672A\u5728\u9650\u5B9A\u65F6\u95F4\u5185\u56DE\u62A5\uFF0C\u8BF7\u4FDD\u6301\u753B\u5C4F\u5524\u9192\u540E\u70B9\u300C\u8BA4\u4E3B\u5E76\u5173\u8054\u8D26\u6237\u300D\u91CD\u8BD5\u3002")), 75e3);
+          });
+          try {
+            await Promise.race([work, deadline]);
           } catch (e) {
             if (epoch === this.connection.client.epoch && this.connection.snapshot.paired) {
               this.setData({ bindingError: e.message });
               api.error(this, e);
             }
           } finally {
+            clearTimeout(timer);
             this.setData({ binding: false });
           }
         },
@@ -3438,6 +3650,7 @@
   // mini-review-entry.js
   window.MINI_START_TAB = "mine";
   window.MINI_TEMPLATES = { "mine": { "wxml": `<view class="page">
+ <view wx:if="{{user&&syncState&&(syncState.phase==='stored'||syncState.phase==='rendered')}}" class="paper complete-banner"><text class="complete-badge">\u2713 \u672C\u6B21\u65B0\u753B\u5DF2\u4F20\u8F93\u5B8C\u6210\u5E76\u5B58\u5165\u753B\u5C4F</text><text class="note">{{syncState.completedAt&&syncLastSeen?'\u8BBE\u5907\u56DE\u62A5\u65F6\u95F4 '+syncLastSeen:'\u672C\u673A\u5DF2\u786E\u8BA4\u9001\u8FBE'}}\u3002\u6B64\u5904\u65E0\u9700\u518D\u64CD\u4F5C\uFF0C\u5230\u753B\u5C4F\u6309\u300CIMG\u300D\u2192 \u786E\u8BA4\u952E\u67E5\u770B\u5373\u53EF\u3002</text></view>
  <text class="kicker">A WISH OF YOUR OWN / 01</text>
  <text class="title">\u8BB8\u613F\u6C60</text>
  <text class="subtitle">\u9009\u4E00\u4EFD\u7948\u613F\uFF0C\u6311\u4E00\u79CD\u753B\u98CE\uFF0C\u8BA9\u5FC3\u613F\u5165\u753B\u3002</text>
@@ -3501,12 +3714,14 @@
 `, "css": ".inline-action{display:flex;align-items:stretch;gap:calc(16 * var(--rpx))}.inline-action .field{flex:1}.inline-action button{min-width:calc(132 * var(--rpx));padding-left:calc(18 * var(--rpx));padding-right:calc(18 * var(--rpx))}.wish-group{padding-bottom:calc(16 * var(--rpx))}.paper .section-title{margin-bottom:0}\n\n.art-style-heading{margin-top:calc(32 * var(--rpx))}.art-style-row{display:flex;align-items:center;gap:calc(20 * var(--rpx));margin:calc(14 * var(--rpx)) 0}.art-style-row .choice{flex:1}.art-style-row .note{margin-top:calc(4 * var(--rpx));font-size:calc(22 * var(--rpx))}.art-style-row .text-button{flex-shrink:0}\n\n.generation-panel{margin-top:calc(28 * var(--rpx));padding:calc(24 * var(--rpx));background:#F6F1E7;border-radius:calc(16 * var(--rpx))}.generation-steps{display:flex;justify-content:space-between;gap:calc(12 * var(--rpx));margin:calc(24 * var(--rpx)) 0;color:#81796d;font-size:calc(23 * var(--rpx))}.generation-steps .current{color:#415B48;font-weight:600}.generated-image{display:block;width:100%;margin-top:calc(24 * var(--rpx));border-radius:calc(12 * var(--rpx))}\n" }, "network": { "wxml": `<view class="page"><text class="note">\u771F\u673A\u6D4B\u8BD5\u7248 {{releaseVersion}}</text>
  <button wx:if="{{!status.plan}}" class="secondary" bindtap="wish">\u5148\u53BB\u8BB8\u613F\u6C60\u751F\u6210\u7948\u798F\u56FE</button>
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
-  <text class="section-title">\u753B\u9762\u540C\u6B65\u8FDB\u5C55</text><text class="label">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <text class="section-title">\u753B\u9762\u540C\u6B65\u8FDB\u5C55</text><text wx:if="{{syncState.phase==='stored'||syncState.phase==='rendered'}}" class="complete-badge">\u2713 \u672C\u6B21\u540C\u6B65\u5DF2\u5B8C\u6210</text><text class="label">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <text wx:if="{{syncState.phase==='stored'||syncState.phase==='rendered'}}" class="complete-note">\u672C\u6B21\u5185\u5BB9\u5DF2\u9001\u8FBE\u753B\u5C4F \xB7 {{syncState.completedAt&&syncLastSeen?'\u8BBE\u5907\u56DE\u62A5\u65F6\u95F4 '+syncLastSeen:'\u672C\u673A\u5DF2\u786E\u8BA4\u9001\u8FBE'}}\u3002\u6B64\u5904\u65E0\u9700\u518D\u64CD\u4F5C\uFF0C\u4E5F\u65E0\u9700\u91CD\u65B0\u751F\u6210\u6216\u91CD\u65B0\u8FDE\u63A5\u3002</text>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
-  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">\u2460 \u5185\u5BB9\u5C31\u7EEA</text><text class="{{syncState.step>=2?'complete':''}}">\u2461 \u4E0B\u8F7D\u4E2D</text><text class="{{syncState.step>=3?'complete':''}}">\u2462 \u5DF2\u4FDD\u5B58</text><text class="{{syncState.step>=4?'complete':''}}">\u2463 \u5DF2\u5237\u65B0</text></view>
+  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">\u2460 \u5185\u5BB9\u5C31\u7EEA</text><text class="{{syncState.step>=2?'complete':''}}">\u2461 \u4E0B\u8F7D\u4E2D</text><text class="{{syncState.step>=3?'complete':''}}">{{syncState.phase==='stored'||syncState.phase==='rendered'?'\u2462 \u4F20\u8F93\u5B8C\u6210':'\u2462 \u5DF2\u4FDD\u5B58'}}</text><text wx:if="{{syncState.phase!=='stored'&&syncState.phase!=='rendered'}}" class="{{syncState.step>=4?'complete':''}}">\u2463 \u5DF2\u5237\u65B0</text></view>
   <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'}}" disabled="{{!paired||busy}}">\u91CD\u65B0\u68C0\u67E5\u540C\u6B65</button>
+  <button class="text-button spaced" bindtap="toggleDelivered" wx:if="{{paired}}" disabled="{{busy}}">{{delivered?'\u5DF2\u6807\u8BB0\u5B8C\u6210 \xB7 \u70B9\u51FB\u64A4\u9500':'\u753B\u5C4F\u5DF2\u663E\u793A\u65B0\u753B \xB7 \u6807\u8BB0\u5B8C\u6210'}}</button>
  </view>
-<text class="kicker">CONNECT YOUR COMPANION / 02</text><text class="title">\u94FE\u63A5\u795E\u7269</text><text class="subtitle">\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u4E0E Wi-Fi\uFF0C\u5728\u8FD9\u91CC\u67E5\u770B\u753B\u9762\u66F4\u65B0\u72B6\u6001\u3002</text><view class="error">{{error}}</view><button wx:if="{{error}}" class="text-button" bindtap="diagnostics">\u590D\u5236\u8FDE\u63A5\u8BCA\u65AD</button><view wx:if="{{message}}" class="notice">{{message}}</view><block><view class="paper connection-summary"><text class="section-title">\u5F53\u524D\u8FDE\u63A5</text><text class="note">\u84DD\u7259\uFF1A{{paired?'\u5DF2\u8FDE\u63A5':'\u672A\u8FDE\u63A5'}} \xB7 Wi-Fi\uFF1A{{wifiConnected?'\u5DF2\u8054\u7F51':'\u672A\u786E\u8BA4\u8054\u7F51'}}</text><text wx:if="{{!paired}}" class="note">\u84DD\u7259\u672A\u8FDE\u63A5\u3002\u8BF7\u5148\u5728\u4E0B\u65B9\u5524\u9192\u5E76\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\uFF0C\u8FDE\u4E0A\u540E\u4F1A\u81EA\u52A8\u8BA4\u4E3B\uFF0C\u65E0\u9700\u624B\u52A8\u8F93\u5165\u7F16\u53F7\u3002</text><text wx:if="{{paired&&!syncConfigured}}" class="note">\u84DD\u7259\u5DF2\u8FDE\u63A5\uFF0C\u6B63\u5728\u81EA\u52A8\u8BA4\u4E3B\uFF1B\u82E5\u672A\u81EA\u52A8\u5B8C\u6210\uFF0C\u53EF\u70B9\u4E0B\u65B9\u300C\u8BA4\u4E3B\u5E76\u5173\u8054\u8D26\u6237\u300D\u3002</text><text wx:if="{{connectedDeviceId}}" class="note">\u753B\u5C4F {{connectedDeviceId}}</text><button wx:if="{{paired&&wifiConnected}}" class="text-button" bindtap="toggleSetup">{{setupExpanded?'\u6536\u8D77\u8FDE\u63A5\u8BBE\u7F6E':'\u5C55\u5F00\u8FDE\u63A5\u8BBE\u7F6E'}}</button><button wx:if="{{paired&&!syncConfigured}}" class="primary spaced" bindtap="bind" disabled="{{busy||binding}}" loading="{{binding}}">\u8BA4\u4E3B\u5E76\u5173\u8054\u8D26\u6237</button></view><view wx:if="{{!paired||!wifiConnected||setupExpanded}}" class="paper"><text class="kicker">01 / \u8FDE\u63A5\u753B\u5C4F</text><text class="section-title">\u5148\u8BA9\u5B83\u8FDE\u4E0A\u7F51\u7EDC</text><text class="note">\u5524\u9192\u753B\u5C4F\uFF0C\u5F00\u542F\u624B\u673A\u84DD\u7259\u3002\u8BF7\u9009\u540D\u79F0\u4EE5 FRAMEFILMARK \u5F00\u5934\u7684\u8BBE\u5907\u3002</text><button class="secondary spaced" bindtap="scan" disabled="{{busy}}">\u641C\u7D22\u9644\u8FD1\u753B\u5C4F</button><button class="device" wx:for="{{bleDevices}}" wx:key="id" data-id="{{item.id}}" bindtap="connect" disabled="{{busy}}"><text>{{item.name}}</text><text class="muted">\u8FDE\u63A5</text></button><text class="note">{{bleText}}</text><view><text class="label">2.4 GHz Wi-Fi \u540D\u79F0</text><input class="field" value="{{ssid}}" data-field="ssid" bindinput="input" placeholder="\u586B\u5199\u5DF2\u6709 Wi-Fi \u540D\u79F0" maxlength="32"/><text class="label">Wi-Fi \u5BC6\u7801</text><view wx:if="{{savedSSID&&ssid===savedSSID&&!editingPassword}}"><input class="field" value="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" disabled/><text class="note">\u5DF2\u4FDD\u5B58\u5728\u753B\u5C4F\uFF0C\u5C06\u81EA\u52A8\u4F7F\u7528</text><button class="text-button" bindtap="changePassword">\u66F4\u6362\u5BC6\u7801</button></view><input wx:else class="field" value="{{wifiPassword}}" data-field="wifiPassword" bindinput="input" password placeholder="{{savedSSID?'\u5DF2\u4FDD\u5B58\u5728\u753B\u5C4F\uFF0C\u540C\u540D\u7F51\u7EDC\u53EF\u7559\u7A7A':'\u586B\u5199\u8BE5 Wi-Fi \u5F53\u524D\u4F7F\u7528\u7684\u5BC6\u7801'}}" maxlength="63"/><button class="primary spaced" bindtap="wifi" disabled="{{busy||!paired}}" loading="{{busy}}">{{paired?'\u8FDE\u63A5 Wi-Fi':'\u8BF7\u5148\u8FDE\u63A5\u84DD\u7259\uFF0C\u518D\u8FDE\u63A5 Wi-Fi'}}</button><button class="text-button" wx:if="{{paired}}" bindtap="disconnect" disabled="{{busy}}">\u65AD\u5F00\u84DD\u7259</button></view></view>
+<text class="kicker">CONNECT YOUR COMPANION / 02</text><text class="title">\u94FE\u63A5\u795E\u7269</text><text class="subtitle">\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\u4E0E Wi-Fi\uFF0C\u5728\u8FD9\u91CC\u67E5\u770B\u753B\u9762\u66F4\u65B0\u72B6\u6001\u3002</text><view class="error">{{error}}</view><view class="diagnostics"><button class="text-button" bindtap="diagnostics">\u590D\u5236\u8FDE\u63A5\u8BCA\u65AD</button><button class="text-button" bindtap="statusDiagnostics">\u590D\u5236\u72B6\u6001\u8BCA\u65AD</button><button class="text-button" bindtap="heartbeatAddress" disabled="{{busy}}">\u8BFB\u53D6\u8BBE\u5907\u5FC3\u8DF3\u5730\u5740</button></view><text wx:if="{{heartbeatText}}" class="note">{{heartbeatText}}</text><text wx:if="{{heartbeatUrl}}" class="note">\u8BBE\u5907\u5FC3\u8DF3\u5730\u5740\uFF1A{{heartbeatUrl}}</text><view wx:if="{{message}}" class="notice">{{message}}</view><block><view class="paper connection-summary"><text class="section-title">\u5F53\u524D\u8FDE\u63A5</text><text class="note">\u84DD\u7259\uFF1A{{paired?'\u5DF2\u8FDE\u63A5':'\u672A\u8FDE\u63A5'}} \xB7 Wi-Fi\uFF1A{{wifiConnected?'\u5DF2\u8054\u7F51':'\u672A\u786E\u8BA4\u8054\u7F51'}}</text><text wx:if="{{!paired}}" class="note">\u84DD\u7259\u672A\u8FDE\u63A5\u3002\u8BF7\u5148\u5728\u4E0B\u65B9\u5524\u9192\u5E76\u8FDE\u63A5\u753B\u5C4F\u84DD\u7259\uFF0C\u8FDE\u4E0A\u540E\u4F1A\u81EA\u52A8\u8BA4\u4E3B\uFF0C\u65E0\u9700\u624B\u52A8\u8F93\u5165\u7F16\u53F7\u3002</text><text wx:if="{{paired&&!syncConfigured}}" class="note">\u84DD\u7259\u5DF2\u8FDE\u63A5\uFF0C\u6B63\u5728\u81EA\u52A8\u8BA4\u4E3B\uFF1B\u82E5\u672A\u81EA\u52A8\u5B8C\u6210\uFF0C\u53EF\u70B9\u4E0B\u65B9\u300C\u8BA4\u4E3B\u5E76\u5173\u8054\u8D26\u6237\u300D\u3002</text><text wx:if="{{connectedDeviceId}}" class="note">\u753B\u5C4F {{connectedDeviceId}}</text><button wx:if="{{paired&&wifiConnected}}" class="text-button" bindtap="toggleSetup">{{setupExpanded?'\u6536\u8D77\u8FDE\u63A5\u8BBE\u7F6E':'\u5C55\u5F00\u8FDE\u63A5\u8BBE\u7F6E'}}</button><button wx:if="{{paired&&!syncConfigured}}" class="primary spaced" bindtap="bind" disabled="{{busy||binding}}" loading="{{binding}}">\u8BA4\u4E3B\u5E76\u5173\u8054\u8D26\u6237</button></view><view wx:if="{{!paired||!wifiConnected||setupExpanded}}" class="paper"><text class="kicker">01 / \u8FDE\u63A5\u753B\u5C4F</text><text class="section-title">\u5148\u8BA9\u5B83\u8FDE\u4E0A\u7F51\u7EDC</text><text class="note">\u5524\u9192\u753B\u5C4F\uFF0C\u5F00\u542F\u624B\u673A\u84DD\u7259\u3002\u8BF7\u9009\u540D\u79F0\u4EE5 FRAMEFILMARK \u5F00\u5934\u7684\u8BBE\u5907\u3002</text><button class="secondary spaced" bindtap="scan" disabled="{{busy}}">\u641C\u7D22\u9644\u8FD1\u753B\u5C4F</button><button class="device" wx:for="{{bleDevices}}" wx:key="id" data-id="{{item.id}}" bindtap="connect" disabled="{{busy}}"><text>{{item.name}}</text><text class="muted">\u8FDE\u63A5</text></button><text class="note">{{bleText}}</text><view><text class="label">2.4 GHz Wi-Fi \u540D\u79F0</text><input class="field" value="{{ssid}}" data-field="ssid" bindinput="input" placeholder="\u586B\u5199\u5DF2\u6709 Wi-Fi \u540D\u79F0" maxlength="32"/><text class="label">Wi-Fi \u5BC6\u7801</text><view wx:if="{{savedSSID&&ssid===savedSSID&&!editingPassword}}"><input class="field" value="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" disabled/><text class="note">\u5DF2\u4FDD\u5B58\u5728\u753B\u5C4F\uFF0C\u5C06\u81EA\u52A8\u4F7F\u7528</text><button class="text-button" bindtap="changePassword">\u66F4\u6362\u5BC6\u7801</button></view><input wx:else class="field" value="{{wifiPassword}}" data-field="wifiPassword" bindinput="input" password placeholder="{{savedSSID?'\u5DF2\u4FDD\u5B58\u5728\u753B\u5C4F\uFF0C\u540C\u540D\u7F51\u7EDC\u53EF\u7559\u7A7A':'\u586B\u5199\u8BE5 Wi-Fi \u5F53\u524D\u4F7F\u7528\u7684\u5BC6\u7801'}}" maxlength="63"/><button class="primary spaced" bindtap="wifi" disabled="{{busy||!paired}}" loading="{{busy}}">{{paired?'\u8FDE\u63A5 Wi-Fi':'\u8BF7\u5148\u8FDE\u63A5\u84DD\u7259\uFF0C\u518D\u8FDE\u63A5 Wi-Fi'}}</button><button class="text-button" wx:if="{{paired}}" bindtap="disconnect" disabled="{{busy}}">\u65AD\u5F00\u84DD\u7259</button></view></view>
 <button wx:if="{{!user}}" class="primary" bindtap="login">\u5FAE\u4FE1\u767B\u5F55\u540E\u8FDE\u63A5\u753B\u5C4F</button></block></view>
 
 <privacy-consent/>
@@ -3540,10 +3755,11 @@
 <privacy-consent/>
 `, "css": '.artwork{position:relative;margin:calc(30 * var(--rpx)) 0 calc(16 * var(--rpx));aspect-ratio:2/3;height:calc((100vw - calc(72 * var(--rpx)))*1.5);max-height:calc(1000 * var(--rpx));background:#fffaf0;border:calc(1 * var(--rpx)) solid #ccc5b4;border-radius:calc(6 * var(--rpx));box-shadow:0 calc(12 * var(--rpx)) calc(36 * var(--rpx)) rgba(65,91,72,.08);overflow:hidden}.painting{width:100%;height:100%;position:absolute}.art-title{position:absolute;top:calc(30 * var(--rpx));left:calc(28 * var(--rpx));writing-mode:vertical-rl;letter-spacing:calc(9 * var(--rpx));font-size:calc(25 * var(--rpx));font-family:"Songti SC",serif}.seal{position:absolute;right:calc(26 * var(--rpx));top:calc(30 * var(--rpx));width:calc(50 * var(--rpx));height:calc(56 * var(--rpx));border:calc(2 * var(--rpx)) solid #a44b3f;color:#a44b3f;text-align:center;line-height:calc(50 * var(--rpx));font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx))}.art-action{position:absolute;bottom:0;left:0;right:0;padding:calc(26 * var(--rpx)) calc(28 * var(--rpx)) calc(32 * var(--rpx));background:rgba(255,250,240,.95);border-top:calc(1 * var(--rpx)) solid #d2cdbf}.action-label{display:block;font-size:calc(22 * var(--rpx));letter-spacing:calc(3 * var(--rpx));color:#716e64}.action-text{font-family:"Songti SC",serif;font-size:calc(34 * var(--rpx));display:block;margin-top:calc(8 * var(--rpx));line-height:1.5}.blank{padding:calc(180 * var(--rpx)) calc(34 * var(--rpx))}.photo .painting{background:#fffaf0}\n\n.day-previews{display:flex;gap:calc(20 * var(--rpx));margin:calc(28 * var(--rpx)) 0}.day-preview{width:calc(50% - calc(10 * var(--rpx)))}.day-preview image{width:100%;height:calc(260 * var(--rpx));background:#fffcf5}.action-item{border-top:calc(1 * var(--rpx)) solid #dcd7cb;padding:calc(18 * var(--rpx)) 0}.action-option{display:block;margin-top:calc(20 * var(--rpx))}\n\n.reading-map{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(12 * var(--rpx));margin:calc(22 * var(--rpx)) 0 calc(30 * var(--rpx))}.reading-map>view{min-height:calc(142 * var(--rpx));padding:calc(18 * var(--rpx)) calc(16 * var(--rpx));border:calc(1 * var(--rpx)) solid #dcd7cb;border-radius:calc(8 * var(--rpx));background:#fffcf5}.reading-map>view:nth-child(2){background:#f4eee2}.map-no{display:block;font-family:Georgia,serif;font-size:calc(18 * var(--rpx));letter-spacing:calc(2 * var(--rpx));color:#b5975c}.map-name{display:block;font-family:"Songti SC",serif;font-size:calc(28 * var(--rpx));color:#334a3a;margin-top:calc(12 * var(--rpx))}.map-copy{display:block;font-size:calc(21 * var(--rpx));color:#8b877b;margin-top:calc(4 * var(--rpx))}\n' }, "screen": { "wxml": `<view class="page">
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
-  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.phase==='stored'||syncState.phase==='rendered'}}" class="complete-badge">\u2713 \u672C\u6B21\u540C\u6B65\u5DF2\u5B8C\u6210</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <text wx:if="{{syncState.phase==='stored'||syncState.phase==='rendered'}}" class="complete-note">\u672C\u6B21\u5185\u5BB9\u5DF2\u9001\u8FBE\u753B\u5C4F \xB7 {{syncState.completedAt&&syncLastSeen?'\u8BBE\u5907\u56DE\u62A5\u65F6\u95F4 '+syncLastSeen:'\u672C\u673A\u5DF2\u786E\u8BA4\u9001\u8FBE'}}\u3002\u6B64\u5904\u65E0\u9700\u518D\u64CD\u4F5C\uFF0C\u4E5F\u65E0\u9700\u91CD\u65B0\u751F\u6210\u6216\u91CD\u65B0\u8FDE\u63A5\u3002</text>
   <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'\u914D\u7F6E\u753B\u5C4F Wi-Fi':'\u53BB\u94FE\u63A5\u795E\u7269\u5E76\u540C\u6B65'}}</button>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
-  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">\u2460 \u5185\u5BB9\u5C31\u7EEA</text><text class="{{syncState.step>=2?'complete':''}}">\u2461 \u4E0B\u8F7D\u4E2D</text><text class="{{syncState.step>=3?'complete':''}}">\u2462 \u5DF2\u4FDD\u5B58</text><text class="{{syncState.step>=4?'complete':''}}">\u2463 \u5DF2\u5237\u65B0</text></view>
+  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">\u2460 \u5185\u5BB9\u5C31\u7EEA</text><text class="{{syncState.step>=2?'complete':''}}">\u2461 \u4E0B\u8F7D\u4E2D</text><text class="{{syncState.step>=3?'complete':''}}">{{syncState.phase==='stored'||syncState.phase==='rendered'?'\u2462 \u4F20\u8F93\u5B8C\u6210':'\u2462 \u5DF2\u4FDD\u5B58'}}</text><text wx:if="{{syncState.phase!=='stored'&&syncState.phase!=='rendered'}}" class="{{syncState.step>=4?'complete':''}}">\u2463 \u5DF2\u5237\u65B0</text></view>
   <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'}}" disabled="{{!paired||busy}}">\u91CD\u65B0\u68C0\u67E5\u540C\u6B65</button>
  </view>
  <text class="kicker">MAKE IT YOURS / 04</text>

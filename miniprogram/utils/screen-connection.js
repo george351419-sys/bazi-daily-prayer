@@ -1,26 +1,71 @@
 // One connection for the mini program, shared across tab pages.
 const {ArkBLE}=require('./ble');
 const {transferStatus,withLiveDownload,withConnection}=require('./transfer-status');
+const DELIVERY_KEY='prayer-mini-delivered-v1';
+// 小程序没有 localStorage：用 wx.setStorageSync 持久化；无 wx 的测试环境退回内存。
+const memory=new Map();
+const store={
+ get(key){try{const value=wx.getStorageSync(key);return value===undefined||value===null?'':value;}catch{return memory.get(key)||'';}},
+ set(key,value){try{wx.setStorageSync(key,value);}catch{memory.set(key,value);}},
+ remove(key){try{wx.removeStorageSync(key);}catch{memory.delete(key);}}
+};
+// 生成新画期间：后端 plan/build/deviceReport 还是上一幅画的快照，完成态必须压住。
+function generationFlag(){try{return !!getApp().globalData.generating;}catch{return false;}}
 class ScreenConnection{
  constructor(){
-  this.listeners=new Set();this.snapshot={bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,bleDevices:[],connectedDeviceId:''};
+  this.listeners=new Set();this.snapshot={bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,bleDevices:[],connectedDeviceId:'',receivedAt:0,delivered:null};
   this.foreground=true;this.allowed=false;this.attempts=0;this.busy=false;this.live=null;this.current=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
+  this.delivered=this.loadDelivered();
   this.client=new ArkBLE((bleText,paired)=>{
    paired=!!paired&&!!this.client?.id;
    const lost=this.snapshot.paired&&!paired;
    if(!paired||this.client?.status!==true){this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;}
-   this.snapshot={...this.snapshot,bleText,paired,wifiConnected:paired&&this.client?.status===true,receivedAt:Date.now(),connectedDeviceId:paired?this.hardwareId||'':''};
+   // 连接证据时间取"最近一次成功 BLE 往返"(lastContactAt)，不是"上次状态文本变化"。
+   // 断链时证据归零，不沿用旧值——否则重连后 6 秒内没有新往返时，会误显示"已联网正在检查"。
+   const receivedAt=paired?(this.client.lastContactAt||0):0;
+   this.snapshot={...this.snapshot,bleText,paired,wifiConnected:paired&&this.client?.status===true,receivedAt,connectedDeviceId:paired?this.hardwareId||'':''};
    if(!paired){this.snapshot.savedSSID=null;}
    if(lost){this.live=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;this.reconnect();}
    this.emit();
   },bleDevices=>{this.snapshot={...this.snapshot,bleDevices};this.emit();},value=>{
    this.live={...value,deviceId:this.hardwareId,receivedAt:Date.now()};this.emit();
+   // 手机通过蓝牙明确观测到设备回报"下载完成"：自动确认送达（与网页端同一判据）。
+   this.confirmDelivered(value);
   });
  }
  emit(){for(const listener of this.listeners)listener(this.snapshot);}
  subscribe(listener){this.listeners.add(listener);listener(this.snapshot);return ()=>this.listeners.delete(listener);}
- stateFor(status,artworkId){return withConnection(withLiveDownload(transferStatus(status,artworkId),status,this.live),status,{...this.snapshot,deviceId:this.hardwareId,syncRequestedAt:this.syncRequestedAt,requestedSha:this.requestedSha},Date.now(),artworkId);}
- acceptStatus(status){this.current=status;void this.syncPublished().catch(error=>this.notice('自动检查同步暂未成功：'+error.message));}
+ // 送达确认只接受两种真实证据：BLE 观测到设备回报下载完成，或用户亲眼看到新画后手动标记。
+ // 按 deviceId + 内容哈希隔离；换设备或换内容自动失效；绝不把"设备在线时长"当作送达。
+ loadDelivered(){try{const saved=JSON.parse(store.get(DELIVERY_KEY)||'null');if(saved&&/^[a-f0-9]{12}$/.test(saved.deviceId||'')&&/^[a-f0-9]{64}$/.test(saved.targetSha||''))return saved;}catch{}return null;}
+ markDelivered(sha,deviceId,evidence,artworkId=null){this.delivered={deliveredAt:Date.now(),targetSha:sha,deviceId,evidence,artworkId:artworkId||null};store.set(DELIVERY_KEY,JSON.stringify(this.delivered));this.snapshot={...this.snapshot,delivered:this.delivered};this.emit();}
+ clearDelivered(){if(!this.delivered)return;this.delivered=null;store.remove(DELIVERY_KEY);this.snapshot={...this.snapshot,delivered:null};this.emit();}
+ confirmDelivered(live){
+  if(!live||live.state!==2||this.delivered)return;
+  const status=this.current,sha=status&&status.build&&status.build.sha256,deviceId=this.hardwareId;
+  if(!sha||!deviceId||status.build.status!=='published')return;
+  // 不用"设备在线多久"推断送达——在线不等于内容已上屏，避免过度承诺。
+  if(!this.requestedSha||sha!==this.requestedSha)return;
+  if(status.device&&status.device.id&&status.device.id!==deviceId)return;
+  this.markDelivered(sha,deviceId,'ble-download-complete',status.plan?.artworkIds?.[0]||null);
+ }
+ stateFor(status,artworkId,isGenerating){
+  // 送达确认锁定到"当前这幅画"：网页端用 plan.artworkIds[0] 标识当前画作，
+  // 小程序端沿用同一判据，换生辰/愿望重新生成后上一幅的确认不得回灌。
+  const current=artworkId||status?.plan?.artworkIds?.[0]||null;
+  const flag=isGenerating??generationFlag();
+  // 生成新画期间只吃"新画生成中"，不吃任何旧画的下载进度与完成态。
+  const base=flag?transferStatus(status,current,true):withLiveDownload(transferStatus(status,current),status,this.live);
+  return withConnection(base,status,{...this.snapshot,deviceId:this.hardwareId,syncRequestedAt:this.syncRequestedAt,requestedSha:this.requestedSha,delivered:this.delivered},Date.now(),current);
+ }
+ acceptStatus(status){
+  this.current=status;
+  // 换了内容包、换了画屏，或计划换成了另一幅画：旧送达确认立即失效，
+  // 否则旧"✓ 本次同步已完成"会冒充新内容已完成。
+  const planned=status?.plan?.artworkIds?.[0]||null;
+  if(this.delivered&&((status?.build?.sha256&&this.delivered.targetSha!==status.build.sha256)||(status?.device?.id&&this.delivered.deviceId!==status.device.id)||(planned&&this.delivered.artworkId&&this.delivered.artworkId!==planned)))this.clearDelivered();
+  void this.syncPublished().catch(error=>this.notice('自动检查同步暂未成功：'+error.message));
+ }
  notice(bleText){this.snapshot={...this.snapshot,bleText};this.emit();}
  async scan(){this.allowed=false;clearTimeout(this.retryTimer);this.retryTimer=null;this.live=null;this.hardwareId='';await this.client.scan();}
  async connect(id){
@@ -59,7 +104,14 @@ class ScreenConnection{
  }
  async poll(){
   if(!this.foreground||!this.client.id||this.busy)return;
-  try{await this.serial(async()=>{await this.client.write(0x3a,[],this.client.epoch);await this.client.queryDownload();});}
+  try{
+   await this.serial(async()=>{await this.client.write(0x3a,[],this.client.epoch);await this.client.queryDownload();});
+   // 每 2 秒成功的 BLE 往返是链路存活证据。同步刷新 snapshot.receivedAt，
+   // 让 stateFor→withConnection 稳定显示「画屏已联网 · 正在检查」，而不是 6 秒无
+   // 连接状态变化就误退回「等待检查 / 去链接神物」。真断链时 write 抛错，走 catch，
+   // 证据自然过期、照常退回等待——与网页端 ark-network.js 的 lastContactAt 机制对齐。
+   this.snapshot={...this.snapshot,receivedAt:this.client.lastContactAt||Date.now()};this.emit();
+  }
   catch(error){this.live=null;this.notice('下载进度暂未读到：'+error.message);}
   await this.syncPublished().catch(error=>this.notice('自动检查同步暂未成功：'+error.message));
  }
@@ -71,6 +123,7 @@ class ScreenConnection{
  }
  async disconnect(){
   this.allowed=false;this.target=null;this.hardwareId='';this.live=null;this.current=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
+  this.snapshot={...this.snapshot,receivedAt:0,paired:false,wifiConnected:false,connectedDeviceId:''};
   clearTimeout(this.retryTimer);this.retryTimer=null;clearTimeout(this.backgroundTimer);clearInterval(this.pollTimer);this.pollTimer=null;
   await this.client.disconnect();
  }

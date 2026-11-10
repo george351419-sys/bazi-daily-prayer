@@ -1,4 +1,7 @@
 // Approved user-facing copy. One description paragraph per state.
+// 与 public/transfer-status.js 同源；S13 是小程序端唯一的有意差异：小程序没有固件
+// 升级入口（网页端 firmware-upgrade.html 要求退出小程序蓝牙连接，OTA 是网页专属），
+// 因此这里指向网页端，而不是把人引到没有该功能的「链接神物」。
 const STATUS_COPY = {
   "S01": {
     "title": "正在连接画屏",
@@ -50,7 +53,7 @@ const STATUS_COPY = {
   },
   "S13": {
     "title": "请先更新画屏固件",
-    "detail": "当前固件不能接收这份内容，请到「链接神物」更新固件。"
+    "detail": "当前固件不能接收这份内容，请先在网页端「链接神物」更新画屏固件，再回到小程序同步。"
   },
   "S14": {
     "title": "内容已就绪 · 等待设备联网检查",

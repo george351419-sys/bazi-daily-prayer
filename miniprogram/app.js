@@ -1,7 +1,7 @@
 const api = require('./utils/api');
 const {getScreenConnection}=require('./utils/screen-connection');
 App({
- globalData:{user:null,profile:null},
+ globalData:{user:null,profile:null,generating:false},
  onShow(){getScreenConnection().start();},
  onHide(){getScreenConnection().background();},
  onLaunch(){this.ready=this.restore();},

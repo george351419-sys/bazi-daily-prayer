@@ -1,9 +1,10 @@
 <view class="page">
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
-  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.phase==='stored'||syncState.phase==='rendered'}}" class="complete-badge">✓ 本次同步已完成</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <text wx:if="{{syncState.phase==='stored'||syncState.phase==='rendered'}}" class="complete-note">本次内容已送达画屏 · {{syncState.completedAt&&syncLastSeen?'设备回报时间 '+syncLastSeen:'本机已确认送达'}}。此处无需再操作，也无需重新生成或重新连接。</text>
   <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'配置画屏 Wi-Fi':'去链接神物并同步'}}</button>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
-  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">① 内容就绪</text><text class="{{syncState.step>=2?'complete':''}}">② 下载中</text><text class="{{syncState.step>=3?'complete':''}}">③ 已保存</text><text class="{{syncState.step>=4?'complete':''}}">④ 已刷新</text></view>
+  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">① 内容就绪</text><text class="{{syncState.step>=2?'complete':''}}">② 下载中</text><text class="{{syncState.step>=3?'complete':''}}">{{syncState.phase==='stored'||syncState.phase==='rendered'?'③ 传输完成':'③ 已保存'}}</text><text wx:if="{{syncState.phase!=='stored'&&syncState.phase!=='rendered'}}" class="{{syncState.step>=4?'complete':''}}">④ 已刷新</text></view>
   <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'}}" disabled="{{!paired||busy}}">重新检查同步</button>
  </view>
  <text class="kicker">MAKE IT YOURS / 04</text>

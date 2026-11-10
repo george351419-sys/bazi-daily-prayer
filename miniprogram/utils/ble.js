@@ -1,14 +1,23 @@
 // FrameFilm Ark command protocol; ported from public/ark-network.js (ForFilm GPL-3.0).
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb',CHAR='00002001-0000-1000-8000-00805f9b34fb';
+const HEARTBEAT_NORMAL='https://playmath.cn/api/v1/device/heartbeat';
+const HEARTBEAT_DIRTY_KEY='screen-heartbeat-url-dirty';
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
-const events=[];function trace(stage,detail=''){events.push({time:new Date().toISOString(),stage,detail});if(events.length>80)events.shift();try{wx.setStorageSync('screen-ble-diagnostics',events);}catch{}}
+// 小程序没有 localStorage：用 wx.setStorageSync 持久化；无 wx 的测试环境退回内存。
+const memory=new Map();
+const storage={
+ get(key){try{const value=wx.getStorageSync(key);return value===undefined||value===null?'':value;}catch{return memory.get(key)||'';}},
+ set(key,value){try{wx.setStorageSync(key,value);}catch{memory.set(key,value);}},
+ remove(key){try{wx.removeStorageSync(key);}catch{memory.delete(key);}}
+};
+const events=[];function trace(stage,detail=''){events.push({time:new Date().toISOString(),stage,detail});if(events.length>80)events.shift();storage.set('screen-ble-diagnostics',events);}
 function call(api,args){trace(api+':start');return new Promise((resolve,reject)=>wx[api](Object.assign({},args,{success:r=>{trace(api+':ok');resolve(r);},fail:e=>{trace(api+':fail',String(e.errCode||'')+' '+String(e.errMsg||'').replace(/[a-f0-9]{2}(?::[a-f0-9]{2}){5}/ig,'[device]'));reject(Object.assign(new Error(e.errMsg||'蓝牙操作未完成'),{errCode:e.errCode,stage:api}));}})));}
 function utf8(text){const bytes=[];for(const char of text){let n=char.codePointAt(0);if(n<128)bytes.push(n);else if(n<2048)bytes.push(192|(n>>6),128|(n&63));else if(n<65536)bytes.push(224|(n>>12),128|((n>>6)&63),128|(n&63));else bytes.push(240|(n>>18),128|((n>>12)&63),128|((n>>6)&63),128|(n&63));}return new Uint8Array(bytes);}
 function decode(bytes){let encoded='';for(const b of bytes)encoded+='%'+b.toString(16).padStart(2,'0');return decodeURIComponent(encoded).replace(/\0.*$/,'');}
 function packet(ch,payload){payload=payload||[];const b=new Uint8Array(payload.length+4);b.set([0x55,ch,payload.length]);b.set(payload,3);b[b.length-1]=b.slice(0,-1).reduce((a,v)=>(a+v)&255,0);return b;}
 function credentials(ssid,password){const name=utf8(ssid),secret=utf8(password);if(!name.length||name.length>32||/[\x00-\x1f\x7f]/.test(ssid))throw new Error('Wi-Fi 名称需为 1–32 个 UTF-8 字节。');if(secret.length<8||secret.length>63||/[\x00-\x1f\x7f]/.test(password))throw new Error('请核对该 Wi-Fi 的现有密码后重试。');return {name,secret};}
 class ArkBLE{
- constructor(state,found,download=()=>{}){this.download=download;this.state=state;this.found=found;this.epoch=0;this.maxWrite=20;this.devices=new Map();this.onValue=e=>{if(this.service&&this.char&&e.deviceId===this.id&&e.serviceId.toLowerCase()===this.service.toLowerCase()&&e.characteristicId.toLowerCase()===this.char.toLowerCase())this.receive(new Uint8Array(e.value));};this.onConnection=e=>{trace('native-connection',e.connected?'connected':'disconnected');if(e.deviceId===this.attemptId&&!this.id&&!e.connected){this.attemptDisconnected=true;return;}if(e.deviceId===this.id&&!e.connected){this.epoch++;this.id=null;this.status=null;if(this.identityRead){this.identityRead.reject(new Error('蓝牙已断开'));this.identityRead=null;}if(this.downloadRead){this.downloadRead.reject(new Error('蓝牙已断开'));this.downloadRead=null;}this.state('蓝牙已断开，正在尝试恢复；若画屏已休眠，请按键唤醒，无需重新填写 Wi-Fi。',false);}};}
+ constructor(state,found,download=()=>{}){this.download=download;this.state=state;this.found=found;this.epoch=0;this.maxWrite=20;this.devices=new Map();this.lastContactAt=0;this.onValue=e=>{if(this.service&&this.char&&e.deviceId===this.id&&e.serviceId.toLowerCase()===this.service.toLowerCase()&&e.characteristicId.toLowerCase()===this.char.toLowerCase())this.receive(new Uint8Array(e.value));};this.onConnection=e=>{trace('native-connection',e.connected?'connected':'disconnected');if(e.deviceId===this.attemptId&&!this.id&&!e.connected){this.attemptDisconnected=true;return;}if(e.deviceId===this.id&&!e.connected){this.epoch++;this.id=null;this.status=null;this.lastContactAt=0;if(this.identityRead){this.identityRead.reject(new Error('蓝牙已断开'));this.identityRead=null;}if(this.downloadRead){this.downloadRead.reject(new Error('蓝牙已断开'));this.downloadRead=null;}this.state('蓝牙已断开，正在尝试恢复；若画屏已休眠，请按键唤醒，无需重新填写 Wi-Fi。',false);}};}
  async listen(){
   await call('openBluetoothAdapter',{});
   if(!this.listening){wx.onBLECharacteristicValueChange(this.onValue);wx.onBLEConnectionStateChange(this.onConnection);this.listening=true;}
@@ -16,10 +25,10 @@ class ArkBLE{
  async scan(){if(this.scanning)return;await this.disconnect();await this.listen();this.devices.clear();this.listener=e=>{for(const d of e.devices||[]){if((d.name||d.localName||'').startsWith('FRAMEFILMARK'))this.devices.set(d.deviceId,{id:d.deviceId,name:d.name||d.localName,localName:d.localName||'',rssi:d.RSSI});}this.found(Array.from(this.devices.values()));};wx.onBluetoothDeviceFound(this.listener);await call('startBluetoothDevicesDiscovery',{allowDuplicatesKey:false});this.scanning=true;this.state('正在寻找画屏，请确认设备已唤醒。',false);this.scanTimer=setTimeout(()=>{this.stopScan();if(!this.id)this.state('搜索已结束。未找到时，请唤醒画屏并重新搜索。',false);},15000);}
  async stopScan(){clearTimeout(this.scanTimer);if(this.scanning){this.scanning=false;await call('stopBluetoothDevicesDiscovery',{}).catch(()=>{});}if(this.listener){wx.offBluetoothDeviceFound(this.listener);this.listener=null;}}
  async closeHandle(id){if(id)await call('closeBLEConnection',{deviceId:id}).catch(()=>{});}
- async connect(id){
-  if(this.connecting)throw new Error('正在连接画屏，请稍候。');
-  const previousId=this.id;this.id=null;this.attemptId=null;this.connecting=true;this.status=null;this.service=null;this.char=null;
-  const epoch=++this.epoch;
+  async connect(id){
+   if(this.connecting)throw new Error('正在连接画屏，请稍候。');
+   const previousId=this.id;this.id=null;this.attemptId=null;this.connecting=true;this.status=null;this.service=null;this.char=null;this.lastContactAt=0;
+   const epoch=++this.epoch;
   const check=()=>{if(epoch!==this.epoch)throw new Error('连接已取消或断开，请唤醒画屏后重试。');};
   try{
    await this.stopScan();await this.listen();await pause(350);check();
@@ -40,6 +49,9 @@ class ArkBLE{
    this.maxWrite=20;if(wx.getBLEMTU){const mtu=await call('getBLEMTU',{deviceId:id,writeType:'write'}).catch(()=>null);check();if(mtu&&mtu.mtu)this.maxWrite=mtu.mtu-3;}
    await pause(300);check();await this.write(0x3a,[],epoch);check();
    this.state('蓝牙已连接，正在检查画屏已保存的 Wi-Fi。',true);
+   // 认主中断后画屏心跳地址可能残留本站配对地址：有脏标记时连接成功即幂等归位，
+   // 否则设备会一直打配对地址——BLE 显示在线，云端却收不到心跳，新内容永远下发不了。
+   if(this.heartbeatDirty())await this.restoreHeartbeatURL(epoch);
   }catch(e){
    this.id=null;this.status=null;this.service=null;this.char=null;this.attemptId=null;
    await this.closeHandle(id);this.state('蓝牙未连接。请唤醒画屏后重试；若其他手机或网页正在连接，请先在那边断开。',false);
@@ -47,15 +59,37 @@ class ArkBLE{
    throw e;
   }finally{this.attemptId=null;this.connecting=false;}
  }
- async write(ch,data,epoch){const b=packet(ch,data);if(epoch!==this.epoch||!this.id)throw new Error('蓝牙已断开，请重新连接。');if(b.length>this.maxWrite)throw new Error('当前蓝牙连接可写长度不足，请重新连接以协商 MTU；本固件不支持拆分配网指令。');await call('writeBLECharacteristicValue',{deviceId:this.id,serviceId:this.service,characteristicId:this.char,value:b.buffer,writeType:'write'});await pause(200);if(epoch!==this.epoch)throw new Error('蓝牙已断开');}
- receive(b){if(!this.id)return;if(b.length<4||b[0]!==0x55||b.length!==b[2]+4||b.slice(0,-1).reduce((s,x)=>(s+x)&255,0)!==b[b.length-1])return;if(b[1]===0x3f&&this.identityRead){const reader=this.identityRead;this.identityRead=null;try{reader.resolve(decode(b.slice(3,-1)));}catch{reader.reject(new Error('画屏身份通道回复无效'));}}if(b[1]===0x3a&&b[2]===1){this.status=b[3]===1;this.state(this.status?'画屏已确认 Wi-Fi 联网。':'蓝牙已连接，Wi-Fi 尚未连接。',true);}if(b[1]===0x3d&&b[2]===2){const value={state:b[3],progress:b[4]};this.download(value);if(this.downloadRead){this.downloadRead.resolve(value);this.downloadRead=null;}}if(b[1]===0x33){try{this.ssid=decode(b.slice(3,-1));}catch{this.ssid=null;}}}
+ async write(ch,data,epoch){const b=packet(ch,data);if(epoch!==this.epoch||!this.id)throw new Error('蓝牙已断开，请重新连接。');if(b.length>this.maxWrite)throw new Error('当前蓝牙连接可写长度不足，请重新连接以协商 MTU；本固件不支持拆分配网指令。');const command=ch.toString(16).padStart(2,'0');trace('write:'+command+':start');await call('writeBLECharacteristicValue',{deviceId:this.id,serviceId:this.service,characteristicId:this.char,value:b.buffer,writeType:'write'});await pause(200);if(epoch!==this.epoch)throw new Error('蓝牙已断开');trace('write:'+command+':done');// 写入成功同样证明链路存活（部分设备只在状态变化时上报 0x3a，不会每次查询都 notify）。
+  this.lastContactAt=Date.now();}
+ receive(b){if(!this.id)return;if(b.length<4||b[0]!==0x55||b.length!==b[2]+4||b.slice(0,-1).reduce((s,x)=>(s+x)&255,0)!==b[b.length-1])return;// 收到校验通过的设备回包 = 链路仍存活的地面真相，记录接触时间供 UI 续期在线证据。
+  this.lastContactAt=Date.now();trace('notify:'+b[1].toString(16).padStart(2,'0')+':'+b.length);if(b[1]===0x3f&&this.identityRead){const reader=this.identityRead;this.identityRead=null;try{reader.resolve(decode(b.slice(3,-1)));}catch{reader.reject(new Error('画屏身份通道回复无效'));}}if(b[1]===0x3a&&b[2]===1){this.status=b[3]===1;this.state(this.status?'画屏已确认 Wi-Fi 联网。':'蓝牙已连接，Wi-Fi 尚未连接。',true);}if(b[1]===0x3d&&b[2]===2){const value={state:b[3],progress:b[4]};this.download(value);if(this.downloadRead){this.downloadRead.resolve(value);this.downloadRead=null;}}if(b[1]===0x33){try{this.ssid=decode(b.slice(3,-1));}catch{this.ssid=null;}}}
  async readHeartbeatURL(){
   const epoch=this.epoch;const read=new Promise((resolve,reject)=>{this.identityRead={resolve,reject};});read.catch(()=>{});
   const timer=setTimeout(()=>{this.identityRead?.reject(new Error('画屏未回复身份通道，请保持唤醒后重试。'));this.identityRead=null;},3000);
   try{await this.write(0x3f,[],epoch);return await read;}finally{clearTimeout(timer);this.identityRead=null;}
  }
+ // 认主会把设备云端心跳地址临时改成 ?link=<nonce> 配对地址。若认主中途蓝牙断开，
+ // resolveIdentity 的 finally 因要求连接仍在而无法写回，设备会一直打配对地址：
+ // BLE 显示 Wi-Fi 在线，云端却收不到心跳，新内容永远下发不了。用持久化标记记住
+ // 这种脏状态，下次连接成功时幂等归位（与网页端 ark-network.js 同款机制）。
+ heartbeatDirty(){return storage.get(HEARTBEAT_DIRTY_KEY)==='1';}
+ markHeartbeatDirty(){storage.set(HEARTBEAT_DIRTY_KEY,'1');trace('heartbeat-url:dirty');}
+ clearHeartbeatDirty(){storage.remove(HEARTBEAT_DIRTY_KEY);}
+ async restoreHeartbeatURL(epoch=this.epoch){
+  try{
+   const current=await this.readHeartbeatURL();
+   trace('heartbeat-url:read');
+   if(current===HEARTBEAT_NORMAL){this.clearHeartbeatDirty();trace('heartbeat-url:clean');return {result:'clean',url:current};}
+   if(!current){trace('heartbeat-url:empty');return {result:'empty',url:current};}
+   // 只归位本站地址与本站配对 challenge；指向其它云端的设备不擅自改写。
+   if(current&&!current.startsWith(HEARTBEAT_NORMAL+'?link=')){trace('heartbeat-url:foreign');return {result:'foreign',url:current};}
+   await this.write(0x3e,utf8(HEARTBEAT_NORMAL),epoch);
+   this.clearHeartbeatDirty();trace('heartbeat-url:restored');return {result:'restored',url:current};
+  }catch(error){trace('heartbeat-url:restore-failed:'+String((error&&error.message)||'Error'));return {result:'failed',url:null};}
+ }
  async resolveIdentity(request){
-  const epoch=this.epoch,original=await this.readHeartbeatURL(),normal='https://playmath.cn/api/v1/device/heartbeat';
+  trace('identity:begin');
+  const epoch=this.epoch,original=await this.readHeartbeatURL(),normal=HEARTBEAT_NORMAL;
   const priorChallenge=original.startsWith(normal+'?link=')&&/^[a-f0-9]{32}&device_id=$/.test(original.slice((normal+'?link=').length));if(original&&original!==normal&&!priorChallenge)throw new Error('画屏使用了其他云端地址，请先核对设备配置。');
   const challenge=await request('/api/account/ritual/device',{beginPairing:true});
   if(!/^[a-f0-9]{32}$/.test(challenge.nonce||'')||challenge.heartbeatURL!==normal+'?link='+challenge.nonce+'&device_id=')throw new Error('设备识别服务回复无效。');
@@ -70,7 +104,15 @@ class ArkBLE{
     await pause(2000);
    }
    throw new Error('尚未收到画屏认证回报，请保持画屏唤醒并点击重试关联。');
-  }finally{if(changed&&epoch===this.epoch&&this.id)await this.write(0x3e,utf8(normal),epoch);}
+  }catch(error){trace('identity:failed');throw error;}
+  finally{
+   if(changed){
+    let restored=false;
+    if(epoch===this.epoch&&this.id){try{await this.write(0x3e,utf8(normal),epoch);restored=true;}catch{}}
+    // 蓝牙已断开或写回失败：留标记，等下次连接成功后 restoreHeartbeatURL 归位。
+    if(restored)this.clearHeartbeatDirty();else this.markHeartbeatDirty();
+   }
+  }
  }
  async readSavedSSID(){
   const epoch=this.epoch;this.ssid=null;await this.write(0x33,[],epoch);const end=Date.now()+1500;
@@ -102,4 +144,4 @@ class ArkBLE{
  async syncNow(){if(!this.id)throw new Error('请先连接画屏蓝牙。');await this.resumeWifi();if(!this.id)throw new Error('蓝牙已断开');this.state('已请求检查云端更新；等待内容保存回执后，可在画屏选择“画面”并按确认键进入。需要 ritual.6 固件。',true);}
  async disconnect(){if(this.identityRead){this.identityRead.reject(new Error('蓝牙已断开'));this.identityRead=null;}this.status=null;this.epoch++;if(this.downloadRead){this.downloadRead.reject(new Error('蓝牙已断开'));this.downloadRead=null;}await this.stopScan();const id=this.id||this.attemptId;this.id=null;this.attemptId=null;if(id)await call('closeBLEConnection',{deviceId:id}).catch(()=>{});if(wx.offBLECharacteristicValueChange)wx.offBLECharacteristicValueChange(this.onValue);if(wx.offBLEConnectionStateChange)wx.offBLEConnectionStateChange(this.onConnection);this.listening=false;await call('closeBluetoothAdapter',{}).catch(()=>{});this.state('蓝牙未连接。',false);}
 }
-module.exports={bleDiagnostics:()=>JSON.stringify(events,null,2),ArkBLE,packet,utf8,decode,credentials};
+module.exports={bleDiagnostics:()=>JSON.stringify(events,null,2),ArkBLE,packet,utf8,decode,credentials,storage};
