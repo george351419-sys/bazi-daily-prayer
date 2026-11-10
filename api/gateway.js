@@ -36,6 +36,13 @@ export async function handleRequest(req,res,config){
  res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Session-Token, X-CSRF-Token, X-Account-Token');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.method==='OPTIONS')return res.status(204).end();
  const route=String(req.query.route||new URL(req.url,'http://localhost').pathname.replace(/^\/api\//,'')).replace(/^\//,'');
+  const diagnosticReport=route.match(/^diagnostic-reports\/([a-f0-9]{36})$/);
+  if(diagnosticReport&&req.method==='GET'){
+   const repo=accountRepository(config),key='diagnostic-report/'+diagnosticReport[1],report=await repo.get(key);
+   if(!report||report.expiresAt<Date.now())return send(res,404,{error:'诊断报告不存在或已过期。'});
+   await repo.delete(key);
+   return send(res,200,{report:report.data,createdAt:report.createdAt});
+  }
   if(route.startsWith('internal/ritual-worker/')){
    try{
     const pathname=new URL(req.url,'http://localhost').pathname;
@@ -86,6 +93,14 @@ export async function handleRequest(req,res,config){
    if(route==='account/me'&&req.method==='GET'){const account=await currentAccount(config,req);return send(res,200,{user:account?userView(account):null,profile:account?await getProfile(config,account):null});}
    if(route==='account/logout'&&req.method==='POST'){await logout(config,await currentAccount(config,req));res.setHeader('Set-Cookie',accountCookie(config,'',true));return send(res,200,{ok:true});}
    const account=await requireAccount(config,req);
+   if(route==='account/ritual/diagnostic'&&req.method==='POST'){
+    const allowed=['preparation','build','deviceReport','connection','heartbeat'];
+    const data=Object.fromEntries(allowed.filter(k=>body[k]!==undefined).map(k=>[k,body[k]]));
+    if(!Object.keys(data).length||JSON.stringify(data).length>12000)throw new AccountError(400,'诊断内容为空或过长。');
+    const id=randomBytes(18).toString('hex'),now=Date.now();
+    await accountRepository(config).put('diagnostic-report/'+id,{createdAt:new Date(now).toISOString(),expiresAt:now+2*60*60*1000,data},{onlyIfNew:true});
+    return send(res,201,{reportId:id,expiresAt:new Date(now+2*60*60*1000).toISOString()});
+   }
    if(route==='account/nickname'&&req.method==='POST')return send(res,200,{user:await saveNickname(config,account,body.nickname)});
    if(route==='account/photos'&&req.method==='POST')return send(res,201,await uploadPhoto(config,account,body));
    if(route==='account/ritual'&&req.method==='GET')return send(res,200,await ritualStatus(config,account));
