@@ -1,5 +1,5 @@
 <view class="page">
- <view wx:if="{{user&&syncState&&(syncState.phase==='stored'||syncState.phase==='rendered')}}" class="paper complete-banner"><text class="complete-badge">✓ 本次新画已传输完成并存入画屏</text><text class="note">{{syncState.completedAt&&syncLastSeen?'设备回报时间 '+syncLastSeen:'本机已确认送达'}}。此处无需再操作，到画屏按「IMG」→ 确认键查看即可。</text></view>
+ <view wx:if="{{user&&syncState&&(syncState.phase==='stored'||syncState.phase==='rendered')}}" class="paper complete-banner"><text class="complete-badge">{{syncState.phase==='rendered'?'✓ 新内容已在画屏刷新':'✓ 内容已保存 · 现在可以进入画面'}}</text><text class="note">{{syncState.phase==='rendered'?'设备回报时间 '+syncLastSeen+'。':'请在画屏上选择「画面」并按确认键查看；设备回报刷新后，小程序会自动更新状态。'}}</text></view>
  <text class="kicker">A WISH OF YOUR OWN / 01</text>
  <text class="title">许愿池</text>
  <text class="subtitle">选一份祈愿，挑一种画风，让心愿入画。</text>

@@ -342,10 +342,10 @@ export function setupNetwork(){
  }
  function clearDelivered(){delivered=null;try{localStorage.removeItem(DELIVERY_KEY);}catch{}}
  try{const saved=JSON.parse(localStorage.getItem(DELIVERY_KEY)||'null');if(saved&&/^[a-f0-9]{12}$/.test(saved.deviceId||'')&&/^[a-f0-9]{64}$/.test(saved.targetSha||''))delivered=saved;}catch{}
- const CONFIRM_LABEL='画屏已显示新画 · 标记完成',CONFIRMED_LABEL='已标记完成 · 点击撤销';
+ const CONFIRM_LABEL='我已在画屏看到新画（可选标记）',CONFIRMED_LABEL='已手动标记看到新画 · 点击撤销';
  const confirmBtn=document.createElement('button');confirmBtn.type='button';confirmBtn.className='text-button ark-diag-button';
  confirmBtn.textContent=delivered?CONFIRMED_LABEL:CONFIRM_LABEL;
- confirmBtn.title='亲眼看到画屏已显示新画时点此确认；这是手动标记，不是设备回执。再点一次可撤销，恢复真实状态';
+ confirmBtn.title='可选：亲眼看到画屏已显示新画后点此作本机标记。不会向后台发送设备回执；再点一次可撤销。';
  state.after(confirmBtn);
  confirmBtn.addEventListener('click',()=>{
   // 允许撤销：旧标记会长期把页面伪装成“已完成”，遮住设备真实未下载的证据。

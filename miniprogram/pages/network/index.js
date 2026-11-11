@@ -26,7 +26,7 @@ Page({
   const status=this.data.status,sha=status?.build?.sha256,deviceId=this.connection.snapshot.connectedDeviceId||status?.device?.id;
   if(!sha||!/^[a-f0-9]{64}$/.test(sha)||!/^[a-f0-9]{12}$/.test(deviceId||'')){this.setData({error:'请先连接画屏并等待内容就绪，再标记完成。'});return;}
   this.connection.markDelivered(sha,deviceId,'user-confirmed',status?.plan?.artworkIds?.[0]||null);
-  this.setData({message:'已标记画屏显示新画。再点一次「已标记完成」可撤销。'});
+  this.setData({message:'已作本机手动标记；这不会替画屏向后台发送刷新回执。再次点击可撤销。'});
  },
  onLoad(){},
  changePassword(){this.setData({editingPassword:true,wifiPassword:''});},

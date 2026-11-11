@@ -60,7 +60,7 @@ test('the mini program locks the transfer card to "new picture generating" while
  assert.equal(connection.stateFor(old,'old',false).phase,'stored','生成结束后回到真实判定');
 });
 
-test('a manual delivery confirmation is stored, can be undone, and is dropped when the plan switches to another picture',()=>{
+test('a manual delivery confirmation is distinct from storage, can be undone, and is dropped when the plan switches to another picture',()=>{
  const {getScreenConnection}=require('../utils/screen-connection');
  const connection=getScreenConnection();
  const sha='a'.repeat(64),device='b'.repeat(12);
@@ -68,8 +68,8 @@ test('a manual delivery confirmation is stored, can be undone, and is dropped wh
  connection.markDelivered(sha,device,'user-confirmed','art-1');
  assert.ok(connection.delivered);
  const state=connection.stateFor(status,'art-1');
- assert.equal(state.phase,'stored');
- assert.equal(state.completedAt,undefined,'手动标记是伪完成态，不得伪造设备回报时间');
+ assert.equal(state.phase,'user-confirmed');
+ assert.equal(state.completedAt,undefined,'手动标记不得伪造设备回报时间，也不能冒充设备回执');
  connection.clearDelivered();
  assert.equal(connection.delivered,null);
  assert.notEqual(connection.stateFor(status,'art-1').phase,'stored','撤销后回到设备真实回执状态');

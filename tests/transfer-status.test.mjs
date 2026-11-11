@@ -42,7 +42,7 @@ test('当前包的保存和刷新凭据在休眠后仍有效，但不套用到�
  const asleep={...ready,build:{...ready.build,sha256:'current'},deviceReport:{...ready.deviceReport,stale:true,targetSha:'current',stored:true}};
  assert.equal(transferStatus(asleep,'new').phase,'stored');
  assert.equal(transferStatus(asleep,'new').completedAt,ready.deviceReport.lastSeen,'深睡变 stale 后完成态仍带真实回执时间');
- assert.match(transferStatus(asleep,'new').detail,/尚未回报/);
+ assert.match(transferStatus(asleep,'new').detail,/选择「画面」并按确认键查看/);
  assert.equal(transferStatus({...asleep,deviceReport:{...asleep.deviceReport,renderedCurrent:true,renderReport:{day:0}}},'new').phase,'rendered');
  assert.equal(transferStatus({...asleep,build:{...asleep.build,sha256:'next'}},'new').phase,'waiting');
 });
@@ -121,13 +121,13 @@ test('BLE 观测到设备回报下载完成时不继续显示百分比进度',as
 test('内容包保存与当前画面刷新分开确认；手动确认不冒充设备回执',()=>{
  const done=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true}},'new');
  assert.equal(done.phase,'stored');
- assert.match(done.title,/内容包已存入/);
- assert.match(done.detail,/尚未回报当前画面已刷新/);
+ assert.match(done.title,/内容已保存 · 现在可以进入画面/);
+ assert.match(done.detail,/选择「画面」并按确认键查看/);
  assert.equal(done.step,3,'仅保存内容包只点亮前三步');
  assert.equal(done.completedAt,ready.deviceReport.lastSeen);
  const refreshed=transferStatus({...ready,deviceReport:{...ready.deviceReport,stored:true,renderedCurrent:true,renderReport:{day:0}}},'new');
  assert.equal(refreshed.step,4);
- assert.match(refreshed.title,/完成/);
+ assert.match(refreshed.title,/新内容已在画屏刷新/);
  // 未完成态不能被误标为完成
  const waiting=transferStatus(ready,'new');
  assert.equal(waiting.phase,'confirming');
@@ -141,7 +141,7 @@ test('重连翻新 bindingId 令 pendingUpdate 翻转时，已发布内容不再
  const reconnect={...ready,preparation:{ready:true},pendingUpdate:true,build:{...ready.build,sha256:'cur'},deviceReport:{lastSeen:'2026-10-30T04:59:00Z',stale:false,stored:false,targetSha:'cur'}};
  const stale=transferStatus(reconnect,'new');
  assert.equal(stale.phase,'waiting','心跳未更新也停在等待检查，不回退下发态');
- assert.match(stale.title,/等待最新设备检查/);
+ assert.match(stale.title,/等待画屏检查新内容/);
  // 心跳已新鲜但仍无存储/刷新回执：应落到确认/等待，绝不是回到「正在安排下发」。
  const fresh=transferStatus({...reconnect,deviceReport:{...reconnect.deviceReport,lastSeen:'2026-10-30T05:01:00Z'}},'new');
  assert.notEqual(fresh.phase,'publishing','心跳新鲜也不该倒退回下发态');
@@ -170,7 +170,7 @@ test('正在生成新画时压住上一幅画的完成态，绝不串台显示�
  // 生成结束后（第三参回落 false）恢复真实判定：此刻若后端已切到新画计划，才按新画走。
  assert.equal(withConnection(transferStatus(oldDrawing,'old',false),oldDrawing,connection,now,'old').phase,'user-confirmed');
 });
-test('三份状态文案副本保持一致，且完成态不说「现在可以进入」这种待办口吻',async()=>{
+test('网页与小程序状态文案保持一致，保存后提示用户进入画面查看',async()=>{
  const {readFileSync}=await import('node:fs');
  const copy=JSON.parse(readFileSync(new URL('../content/transfer-copy.json',import.meta.url),'utf8'));
  for(const rel of ['../public/transfer-status.js','../miniprogram/utils/transfer-status.js']){
@@ -181,7 +181,7 @@ test('三份状态文案副本保持一致，且完成态不说「现在可以�
    assert.ok(source.includes(detail),rel+' 缺少 '+id+' 说明');
   }
  }
- for(const id of ['S20','S22'])assert.match(copy[id].title,/内容包已存入/);
+ for(const id of ['S20','S22']){assert.match(copy[id].title,/内容已保存 · 现在可以进入画面/);assert.match(copy[id].detail,/选择「画面」并按确认键查看/);}
  assert.doesNotMatch(copy.S26.title,/传输完成|同步已完成/,'生成中文案不得出现完成态措辞');
 });
 test('内容包保存态不渲染完成横幅，当前画面回执才渲染完成态',async()=>{
