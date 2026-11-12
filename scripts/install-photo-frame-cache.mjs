@@ -17,10 +17,11 @@ for(const [file,account] of [['scripts/run-ritual-worker-remote.mjs','accountId'
   if(old.split(needle).length!==2)throw new Error('Cannot safely patch '+file+'; runtime format differs. No files changed.');
   next=old.replace(needle,"'--answers',path.join(tmp,'answers.json'),...(plan.contentMode==='photo'?['--cache-dir',path.join(c.RITUAL_FRAME_CACHE_DIR||path.join(root,'.runtime','ritual-frame-cache'),"+account+")]:[]),'--out'");
  }else if(!old.includes('RITUAL_FRAME_CACHE_DIR'))throw new Error('Unknown existing cache configuration in '+file+'; no files changed.');
- if(!next.includes("photoRenderVersion:'center-cover-v2'")){
+ next=next.replace("photoRenderVersion:'center-cover-v2'","photoRenderVersion:'source-only-center-v3'");
+ if(!next.includes("photoRenderVersion:'source-only-center-v3'")){
   const marker='const manifest={...plan,';
   if(next.includes('photoRenderVersion')||next.split(marker).length!==2)throw new Error('Cannot safely update photo render version in '+file+'; no files changed.');
-  next=next.replace(marker,"const manifest={...plan,...(plan.contentMode==='photo'?{photoRenderVersion:'center-cover-v2'}:{}),");
+  next=next.replace(marker,"const manifest={...plan,...(plan.contentMode==='photo'?{photoRenderVersion:'source-only-center-v3'}:{}),");
  }
  execFileSync(process.execPath,['--check','--input-type=module'],{input:next,stdio:['pipe','pipe','pipe']});
  if(next!==old)changes.push({file,target,old:Buffer.from(old),next:Buffer.from(next)});

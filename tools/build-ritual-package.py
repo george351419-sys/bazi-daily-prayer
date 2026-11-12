@@ -107,7 +107,7 @@ def main():
   films=[];cache_hits=0
   def convert_frame(f):
    with Image.open(f) as original:
-    frame=center_photo_frame(original)
+    frame=center_photo_frame(original,photo=plan.get('contentMode')=='photo')
     film,_=_encoder().convert_for_device(frame.rotate(180),'pro',{'dither_type':'floyd_steinberg','dither_strength':80},screen_profile=profile_screen(ARK_PROFILE));return film
   for f in args.images:
    film,hit=cached_frame(f,args.cache_dir if plan.get('contentMode')=='photo' else None,fingerprint,convert_frame);films.append(film);cache_hits+=int(hit)

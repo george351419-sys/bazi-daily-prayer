@@ -5,17 +5,27 @@ import tempfile
 from pathlib import Path
 
 # Bump whenever resize, alpha composition, rotation, palette or dithering changes.
-FRAME_RECIPE = 'ark-photo-center-cover-v2-480x720-white-exif-lanczos-rotate180-floyd80'
+FRAME_RECIPE = 'ark-photo-source-only-v3-480x720-exif-lanczos-rotate180-floyd80'
 FRAME_BYTES = 172832
 
-def center_photo_frame(original):
-    """Apply camera orientation first, then cover the screen around both midpoints."""
+def center_photo_frame(original, *, photo=True):
+    """Photo adaptation samples only the source: no padding or generated background."""
     from PIL import Image, ImageOps
-    image = ImageOps.exif_transpose(original).convert('RGBA')
-    canvas = Image.new('RGBA', image.size, 'white')
-    canvas.alpha_composite(image)
-    return ImageOps.fit(canvas.convert('RGB'), (480, 720),
-                        method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+    image = ImageOps.exif_transpose(original)
+    if photo:
+        if image.mode in ('RGBA', 'LA') or 'transparency' in image.info:
+            alpha = image.convert('RGBA').getchannel('A')
+            if alpha.getextrema()[0] < 255:
+                raise ValueError('Transparent photo requires an explicit background; no fill was generated')
+        source = image.convert('RGB')
+    else:
+        # Preserve the existing non-photo compiler path.
+        rgba = image.convert('RGBA')
+        source = Image.new('RGBA', rgba.size, 'white')
+        source.alpha_composite(rgba)
+        source = source.convert('RGB')
+    return ImageOps.fit(source, (480, 720), method=Image.Resampling.LANCZOS,
+                        centering=(0.5, 0.5))
 
 def encoder_fingerprint(root):
     digest = hashlib.sha256(FRAME_RECIPE.encode())

@@ -52,7 +52,7 @@ do{
     if(pair.every(Boolean)){records=pair;startsAt=previous+'T01:00:00+08:00';}
    }
    const personalized=records.map((record,index)=>personalizeActionOptions(record.mapping)[index]);
-   const manifest={...plan,...(plan.contentMode==='photo'?{photoRenderVersion:'center-cover-v2'}:{}),actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-balanced-v4':'prayer-overlay-balanced-v4',artworkIds:records.map(r=>r.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((r,i)=>({date:r.date,artworkId:r.id,actions:personalized[i]}))};
+   const manifest={...plan,...(plan.contentMode==='photo'?{photoRenderVersion:'source-only-center-v3'}:{}),actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-balanced-v4':'prayer-overlay-balanced-v4',artworkIds:records.map(r=>r.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((r,i)=>({date:r.date,artworkId:r.id,actions:personalized[i]}))};
    const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),state=await repo.get('ritual-build/'+id);
    if(mac&&ritualPublication(state)?.deviceId===mac&&ritualPublication(state)?.bindingId===bindingId&&ritualPublication(state)?.signature===signature){if(state.status!=='published')await repo.put('ritual-build/'+id,{...state,status:'published',nextAttemptAt:null});continue;}
    let prepared=state?.prepared?.signature===signature?state.prepared:null;
