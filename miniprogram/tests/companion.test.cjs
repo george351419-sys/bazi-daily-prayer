@@ -16,3 +16,8 @@ test('uploaded page can load every real dependency through the packaging rules',
  load(path.join(root,'pages/today/index.js'));assert.equal(typeof page.onShow,'function');
  let selected;page.getTabBar=()=>({setData:p=>selected=p.selected});page.setData=p=>Object.assign(page.data,p);page.refresh=async()=>{};page.onShow();assert.equal(selected,2);assert.equal(page.active,true);
 });
+
+test('a single server recommendation receives distinct same-slot alternatives with explanations',()=>{
+ for(let hour=7;hour<23;hour+=2){const value=currentActions({planDays:[{artworkId:'a',actions:[{id:'server',hour,text:'当前动作',detail:'当前说明'}]}]},{id:'a'},Date.parse('2026-11-12T'+String(hour).padStart(2,'0')+':30:00+08:00'));assert.ok(value.options.length>1);assert.ok(value.options.every(a=>a.hour===hour&&a.detail&&a.reason));assert.equal(new Set(value.options.map(a=>a.text)).size,value.options.length);}
+});
+test('section headings are peers and explanation button follows the image without image names',()=>{const template=fs.readFileSync(require.resolve('../pages/today/index.wxml'),'utf8');assert.ok(template.indexOf('查看祈福图解读')>template.indexOf('class="painting"'));assert.ok(template.includes('class="secondary spaced wide"'));assert.ok(!template.includes('{{artworkTitle}}'));assert.ok(template.includes('<text class="section-title companion-heading">页间一刻</text>'));assert.ok(template.includes('<text class="section-title companion-heading">翻一页</text>'));});
