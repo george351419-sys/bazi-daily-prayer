@@ -1,3 +1,4 @@
+import {SyncIdleRelease} from './sync-idle.js?v=20261112-photo-cache-power-v1';
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
 import {renderTransfer,withConnection} from './transfer-status.js?v=20261110-ble-contact-v1';
@@ -334,6 +335,11 @@ export function setupNetwork(){
  const diagnostics=document.createElement('button');diagnostics.type='button';diagnostics.className='text-button ark-diag-button';diagnostics.textContent='复制连接诊断';state.after(diagnostics);diagnostics.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify(client.diagnostics||[],null,2));diagnostics.textContent='连接诊断已复制';}catch{diagnostics.textContent='无法复制，请允许剪贴板权限后重试';}});
  let busy=false,connectedDevice=null,downloadTimer=null,downloadBusy=false,announcedDevice=null;
  let reconnectTimer=null,reconnectAttempts=0,reconnectBusy=false,rememberedDevice=null,allowReconnect=false,latestStatus=null,latestTransferState=null,syncSha=null,syncBusy=false,connection=null,syncRequestedAt=null,requestedSha=null,forceSync=false,delivered=null,heartbeatProbe=null;
+ const idleRelease=new SyncIdleRelease({read:()=>({status:latestStatus,connection:{paired:!!client.characteristic,deviceId:client.deviceId,delivered,generating:generatingContent,busy:busy||downloadBusy||syncBusy||client.networkBusy||client.identifying,blocked:contentSaving}}),release:()=>{allowReconnect=false;rememberedDevice=null;clearTimeout(reconnectTimer);reconnectTimer=null;client.disconnect('内容已保存，已自动断开蓝牙以节省电量；查看画面无需保持连接。');}});
+ let generatingContent=false,contentSaving=false;
+ document.addEventListener('prayer:content-saving',event=>{contentSaving=event.detail.active;idleRelease.update();});
+ document.addEventListener('prayer:generating',()=>{generatingContent=true;idleRelease.cancel();});
+ document.addEventListener('prayer:generation-settled',()=>{generatingContent=false;idleRelease.update();});
  const statusDiag=document.createElement('button');statusDiag.type='button';statusDiag.className='text-button ark-diag-button';statusDiag.textContent='复制状态诊断';state.after(statusDiag);statusDiag.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({status:latestStatus,transfer:latestTransferState,connection,heartbeat:heartbeatProbe},null,2));statusDiag.textContent='状态诊断已复制';}catch{statusDiag.textContent='无法复制，请允许剪贴板权限后重试';}});
  // 设备下载完成后常因 WiFi 抖动/休眠没能把“已存储”回执发回云端，导致网页状态滞后。
  // 送达确认只接受两种真实证据：手机 BLE 观测到设备回报下载完成，或用户亲眼看到新画后手动标记。
@@ -370,6 +376,7 @@ export function setupNetwork(){
  // 否则旧“✓ 本次同步已完成”会回灌到新画的进度里。delivered 仅按 deviceId+内容哈希隔离，
  // 而 build.sha256 在重新生成后不会立刻变化，所以必须显式清掉并广播。
  document.addEventListener('prayer:generated',()=>{
+  generatingContent=false;idleRelease.cancel();
   if(!delivered)return;
   clearDelivered();
   if(connection)connection={...connection,delivered:null};
@@ -384,6 +391,7 @@ export function setupNetwork(){
   // 若还没有新的成功往返，残留的旧时间会让卡片误显示"已联网正在检查"。
   const receivedAt=client.characteristic?(client.lastContactAt||0):0;
   connection={paired:!!client.characteristic,deviceId:client.deviceId,wifiConnected:client.lastStatus===true,receivedAt,syncRequestedAt,requestedSha,delivered};
+  idleRelease.update();
   document.dispatchEvent(new CustomEvent('prayer:ark-connection',{detail:connection}));
   if(latestTransferState)renderTransfer(transfer,withConnection(latestTransferState,latestStatus,connection,Date.now(),latestStatus?.plan?.artworkIds?.[0]||null));
  }
@@ -486,7 +494,7 @@ export function setupNetwork(){
   syncBusy=true;try{await client.ensureWifi();if(client.lastStatus===true){syncSha=sha;forceSync=false;requestedSha=sha;syncRequestedAt=Date.now();announceConnection();}}finally{syncBusy=false;}
  }
  document.addEventListener('prayer:transfer-status',event=>{
-  latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();
+  latestStatus=event.detail.result;latestTransferState=event.detail.state;updateConnectionControls();idleRelease.update();
   // 换了内容包或换了画屏，之前的送达确认即失效，避免旧标记冒充新内容已完成。
   if(delivered&&((latestStatus?.build?.sha256&&delivered.targetSha!==latestStatus.build.sha256)||(latestStatus?.device?.id&&delivered.deviceId!==latestStatus.device.id))){console.warn('[ark][diag] delivered cleared — build/device changed',{deliveredTargetSha:delivered?.targetSha,newBuildSha:latestStatus?.build?.sha256,deliveredDevice:delivered?.deviceId,newDevice:latestStatus?.device?.id});clearDelivered();if(connection)connection={...connection,delivered:null};confirmBtn.textContent=CONFIRM_LABEL;}
   renderTransfer(transfer,withConnection(event.detail.state,latestStatus,{...connection,delivered},Date.now(),latestStatus?.plan?.artworkIds?.[0]||null));
@@ -513,8 +521,8 @@ export function setupNetwork(){
   if(!client.characteristic){state.textContent='请先连接附近画屏蓝牙，再点击立即检查同步。';location.hash='network-onboarding';root.scrollIntoView({behavior:'smooth'});return;}
   try{await syncPublished(true);}catch(error){state.textContent='检查同步未启动：'+error.message;}
  });
- connect.onclick=async()=>{busy=true;connect.disabled=true;try{allowReconnect=true;reconnectAttempts=0;clearTimeout(reconnectTimer);reconnectTimer=null;while(downloadBusy)await sleep(25);await client.connect();rememberedDevice=client.device;await buildInfoRead;await client.ensureWifi();await syncPublished();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{busy=false;connect.disabled=false;send.disabled=!client.characteristic;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}};
- disconnect.onclick=()=>{allowReconnect=false;clearTimeout(reconnectTimer);reconnectTimer=null;client.disconnect();};
+ connect.onclick=async()=>{idleRelease.cancel();busy=true;connect.disabled=true;try{allowReconnect=true;reconnectAttempts=0;clearTimeout(reconnectTimer);reconnectTimer=null;while(downloadBusy)await sleep(25);await client.connect();rememberedDevice=client.device;await buildInfoRead;await client.ensureWifi();await syncPublished();}catch(e){state.textContent=e.name==='NotFoundError'?'已取消设备选择，可以再次连接。':'蓝牙连接失败：'+(e.message||e.name||'未知错误');}finally{busy=false;connect.disabled=false;send.disabled=!client.characteristic;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}};
+ disconnect.onclick=()=>{idleRelease.cancel();allowReconnect=false;clearTimeout(reconnectTimer);reconnectTimer=null;client.disconnect();};
  bind.onclick=()=>document.dispatchEvent(new CustomEvent('prayer:ark-bind',{detail:connectedDevice}));
  form.elements.ssid.addEventListener('input',()=>{editingPassword=false;password.value='';updatePassword();});
  root.querySelector('[data-change-wifi-password]')?.addEventListener('click',()=>{editingPassword=true;updatePassword();password.focus();});
@@ -524,5 +532,5 @@ export function setupNetwork(){
   finally{form.elements.wifiPassword.value='';editingPassword=false;updatePassword();for(const control of form.elements)control.disabled=false;busy=false;send.disabled=!client.characteristic;connect.disabled=false;void syncPublished().catch(error=>{state.textContent='自动检查同步暂未成功：'+error.message;});}
  };
  root.querySelector('[data-show-password]').onchange=event=>{form.elements.wifiPassword.type=event.target.checked?'text':'password';};
- window.addEventListener('pagehide',()=>{form.elements.wifiPassword.value='';allowReconnect=false;clearTimeout(reconnectTimer);client.disconnect();});
+ window.addEventListener('pagehide',()=>{idleRelease.cancel();form.elements.wifiPassword.value='';allowReconnect=false;clearTimeout(reconnectTimer);client.disconnect();});
 }

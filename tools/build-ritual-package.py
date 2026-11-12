@@ -91,7 +91,7 @@ def build(plan,films,answers,font):
   struct.pack_into('<I',header,12,0);struct.pack_into('<I',header,40,1)
  return bytes(header)+b''.join(frames+strips+answer_bits)
 def main():
- p=argparse.ArgumentParser();p.add_argument('--plan',required=True);source=p.add_mutually_exclusive_group(required=True);source.add_argument('--films',nargs=2);source.add_argument('--images',nargs=2);p.add_argument('--answers',required=True);p.add_argument('--font',default='/System/Library/Fonts/Supplemental/Songti.ttc');p.add_argument('--encoder-root');p.add_argument('--out',required=True);args=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--cache-dir');p.add_argument('--plan',required=True);source=p.add_mutually_exclusive_group(required=True);source.add_argument('--films',nargs=2);source.add_argument('--images',nargs=2);p.add_argument('--answers',required=True);p.add_argument('--font',default='/System/Library/Fonts/Supplemental/Songti.ttc');p.add_argument('--encoder-root');p.add_argument('--out',required=True);args=p.parse_args()
  plan=json.loads(Path(args.plan).read_text());answers=json.loads(Path(args.answers).read_text());answers=answers.get('answers',answers) if isinstance(answers,dict) else answers
  if args.films:
   films=[Path(f).read_bytes() for f in args.films]
@@ -102,12 +102,17 @@ def main():
   if encoder_root is None:raise ValueError('FrameFilm prayer-service encoder not found; pass --encoder-root')
   sys.path.insert(0,str(encoder_root))
   from prayer_device.core import _encoder, profile_screen, ARK_PROFILE
-  films=[]
-  for f in args.images:
+  from ritual_frame_cache import cached_frame, encoder_fingerprint
+  fingerprint=encoder_fingerprint(encoder_root)
+  films=[];cache_hits=0
+  def convert_frame(f):
    with Image.open(f) as original:
     image=ImageOps.exif_transpose(original).convert('RGBA');canvas=Image.new('RGBA',image.size,'white');canvas.alpha_composite(image);canvas=ImageOps.fit(canvas.convert('RGB'),(480,720),method=Image.Resampling.LANCZOS)
     frame=Image.new('RGB',(480,720),'white');frame.paste(canvas,((480-canvas.width)//2,(720-canvas.height)//2))
-    film,_=_encoder().convert_for_device(frame.rotate(180),'pro',{'dither_type':'floyd_steinberg','dither_strength':80},screen_profile=profile_screen(ARK_PROFILE));films.append(film)
+    film,_=_encoder().convert_for_device(frame.rotate(180),'pro',{'dither_type':'floyd_steinberg','dither_strength':80},screen_profile=profile_screen(ARK_PROFILE));return film
+  for f in args.images:
+   film,hit=cached_frame(f,args.cache_dir if plan.get('contentMode')=='photo' else None,fingerprint,convert_frame);films.append(film);cache_hits+=int(hit)
+  print(json.dumps({'event':'frame-cache','hits':cache_hits,'total':len(films)}))
  data=build(plan,films,answers,args.font);target=Path(args.out);target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)
  print(json.dumps({'file':str(target),'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'answers':len(answers)}))
 if __name__=='__main__':main()

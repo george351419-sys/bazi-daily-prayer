@@ -1,7 +1,7 @@
 import {readAPIResponse} from './api-response.js?v=20261101-safe-bottom-v3';
-import {setupNetwork} from './ark-network.js?v=20261110-ble-contact-v1';
+import {setupNetwork} from './ark-network.js?v=20261112-photo-cache-power-v1';
 import './art-style-ui.js?v=20261101-safe-bottom-v3';
-import {setupAccounts} from './account-ui.js?v=20261112-photo-sync-v1';
+import {setupAccounts} from './account-ui.js?v=20261112-photo-cache-power-v1';
 import {WISH_GROUPS} from './wishes.js';
 import {normalizeBirthDate} from './date-input.js?v=20261017-solar';
 import {setupBirthInputs} from './birth-picker.js?v=20261017-solar';
@@ -55,7 +55,7 @@ async function handle(job,seq,autoImage=true){
  if(job.managedAutomatically&&job.status!=='complete'){show('#progress',false);lock(false);document.dispatchEvent(new CustomEvent('prayer:generation-settled'));setText('#generation-error','每日画作正在由后台准备，可在“我的画册 → 我的画屏”查看进度和重试归档发布。');show('#generation-error',true);show('#retry-image',false);return;}
  if(job.status==='mapped'&&autoImage){renderProgress({phase:'解读完成，正在准备绘制画面',status:'generating'});const next=await request('/api/jobs/'+job.id+'/image',{jobToken:job.token});return handle(next,seq,false);}
  show('#progress',false);lock(false);
- if(job.status==='complete'){accounts.refresh();accounts.showGeneratedArtwork(job);if(cacheKey&&!accounts.enabled){try{sessionStorage.setItem(cacheKey,JSON.stringify(job));const h=JSON.parse(sessionStorage.getItem(profileKey)||'[]');if(!h.some(x=>x.date===job.date&&x.deity===job.mapping.deity))h.push({date:job.date,deity:job.mapping.deity,wish:job.mapping.wish_id});sessionStorage.setItem(profileKey,JSON.stringify(h.slice(-14)));}catch{}}try{await displayImage(job);}catch(e){setText('#generation-error',e.message);show('#generation-error',true);}show('#retry-image',false);void accounts.ensureRitualReady();}
+ if(job.status==='complete'){document.dispatchEvent(new CustomEvent('prayer:generation-settled'));accounts.refresh();accounts.showGeneratedArtwork(job);if(cacheKey&&!accounts.enabled){try{sessionStorage.setItem(cacheKey,JSON.stringify(job));const h=JSON.parse(sessionStorage.getItem(profileKey)||'[]');if(!h.some(x=>x.date===job.date&&x.deity===job.mapping.deity))h.push({date:job.date,deity:job.mapping.deity,wish:job.mapping.wish_id});sessionStorage.setItem(profileKey,JSON.stringify(h.slice(-14)));}catch{}}try{await displayImage(job);}catch(e){setText('#generation-error',e.message);show('#generation-error',true);}show('#retry-image',false);void accounts.ensureRitualReady();}
  else if(job.status==='analysis_failed'){document.dispatchEvent(new CustomEvent('prayer:generation-settled'));setText('#form-error',job.error);show('#form-error',true);show('#empty-state',true);}
  else if(job.status==='image_failed'||job.status==='mapped'){document.dispatchEvent(new CustomEvent('prayer:generation-settled'));setText('#generation-error',job.error||'文案已完成，可以尝试生成画面。');show('#generation-error',true);show('#retry-image',true);}
 }

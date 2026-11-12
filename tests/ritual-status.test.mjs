@@ -197,3 +197,16 @@ test('four-photo rotation with a two-photo stored package shows stored without i
  assert.equal(result.preparation.ready,true);assert.equal(result.deviceReport.stored,true);assert.equal(result.deviceReport.renderedCurrent,false);
  const {transferStatus}=await import('../public/transfer-status.js');assert.equal(transferStatus(result).phase,'stored');
 });
+
+test('unchanged photo save preserves revision and rotation while edits create a new plan',async t=>{
+ const {c,repo,account,ids}=await setup(t);
+ for(const id of ids){const record=await repo.get('artworks/'+account.id+'/'+id);await saveArtwork(c,account,{...record,source:'upload'});}
+ const body={contentMode:'photo',showActions:true,artworkIds:ids.slice(0,2)};
+ const first=(await configureRitual(c,account,body)).plan;
+ const repeat=(await configureRitual(c,account,body)).plan;
+ assert.deepEqual(repeat,first);
+ const reorder=(await configureRitual(c,account,{...body,artworkIds:body.artworkIds.slice().reverse()})).plan;
+ assert.notEqual(reorder.revision,first.revision);
+ const actions=(await configureRitual(c,account,{...body,showActions:false})).plan;assert.notEqual(actions.revision,reorder.revision);
+ const added=(await configureRitual(c,account,{...body,artworkIds:ids.slice(0,3)})).plan;assert.notEqual(added.revision,actions.revision);
+});

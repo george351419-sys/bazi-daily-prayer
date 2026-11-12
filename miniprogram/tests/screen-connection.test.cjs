@@ -11,7 +11,7 @@ function session(){
   async configure(){this.commands.push('configure');}
   async disconnect(){this.id=null;this.lastContactAt=0;this.state('蓝牙未连接',false);}
  }
- const context={module:{exports:{}},require:name=>name==='./ble'?{ArkBLE:BLE}:require('../utils/transfer-status'),Date,Set,Error,console,setTimeout:(fn,ms)=>{const id=++sequence;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++sequence;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id)};
+ const context={module:{exports:{}},require:name=>name==='./ble'?{ArkBLE:BLE}:name==='./sync-progress'?require('../utils/sync-progress'):name==='./sync-idle'?require('../utils/sync-idle'):require('../utils/transfer-status'),Date,Set,Error,console,setTimeout:(fn,ms)=>{const id=++sequence;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++sequence;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id)};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../utils/screen-connection.js'),'utf8'),context);
  return {...context.module.exports,timers,intervals};
 }
@@ -103,3 +103,19 @@ test('missing hardware identity remains actionable and never uses the iOS BLE UU
 });
 test('disconnect clears Wi-Fi and stale binding notices consistently across page summaries',async()=>{const env=session(),c=await connected(env),s={syncConfigured:false,plan:{},preparation:{ready:true}};const page={active:true,data:{status:s,message:'正在核验身份',error:'蓝牙已断开',binding:true},setData(p){Object.assign(this.data,p);}};env.observeConnection(page);assert.equal(page.data.error,'');c.client.id=null;c.client.status=null;c.client.state('蓝牙已断开',false);assert.equal(page.data.paired,false);assert.equal(page.data.wifiConnected,false);assert.equal(page.data.binding,false);assert.equal(page.data.message,'');assert.doesNotMatch(page.data.syncState.title,/已连接/);});
 test('late Wi-Fi replies after native disconnect cannot resurrect Bluetooth state',()=>{const {ArkBLE,packet}=require('../utils/ble');const states=[];const b=new ArkBLE((text,paired)=>states.push({text,paired}),()=>{});b.id='screen';b.status=true;b.onConnection({deviceId:'screen',connected:false});b.receive(packet(0x3a,[1]));assert.equal(b.status,null);assert.equal(states.length,1);assert.equal(states[0].paired,false);});
+
+test('stored current content releases BLE after grace period and never auto-reconnects',async()=>{
+ const env=session(),c=await connected(env),status=ready();status.deviceReport.stored=true;
+ c.acceptStatus(status);
+ const deadline=[...env.timers.values()].find(timer=>timer.ms===30000);assert.ok(deadline);
+ deadline.fn();for(let i=0;i<6;i++)await Promise.resolve();
+ assert.equal(c.snapshot.paired,false);assert.equal(c.allowed,false);assert.equal(c.target,null);assert.equal(env.intervals.size,0);
+ c.start();assert.equal([...env.timers.values()].some(timer=>timer.ms===3000),false);
+});
+test('saving a new photo plan cancels automatic release until new package receipt',async()=>{
+ const env=session(),c=await connected(env),status=ready();status.deviceReport.stored=true;c.acceptStatus(status);
+ assert.ok([...env.timers.values()].some(timer=>timer.ms===30000));
+ c.setContentSaving(true);assert.equal([...env.timers.values()].some(timer=>timer.ms===30000),false);
+ c.acceptStatus({...status,pendingUpdate:true});c.setContentSaving(false);
+ assert.equal([...env.timers.values()].some(timer=>timer.ms===30000),false);
+});

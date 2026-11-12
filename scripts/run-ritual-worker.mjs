@@ -64,7 +64,7 @@ do{
     await writeFile(path.join(tmp,'plan.json'),JSON.stringify(manifest),{mode:0o600});await writeFile(path.join(tmp,'answers.json'),JSON.stringify({answers}),{mode:0o600});
     for(let i=0;i<2;i++){const image=await privateImage(c,{id},records[i]);await writeFile(path.join(tmp,`day-${i}.png`),image.bytes,{mode:0o600});await progress('images',{completed:i+1,total:2});}
     await progress('encoding');
-    await exec(c.PRAYER_TEST_PYTHON||'/opt/homebrew/bin/python3',[path.join(root,'tools/build-ritual-package.py'),'--plan',path.join(tmp,'plan.json'),'--images',path.join(tmp,'day-0.png'),path.join(tmp,'day-1.png'),'--answers',path.join(tmp,'answers.json'),'--out',path.join(tmp,'ritual.bin'),...(c.RITUAL_FONT?['--font',c.RITUAL_FONT]:[])],{timeout:120000,maxBuffer:100000});
+    await exec(c.PRAYER_TEST_PYTHON||'/opt/homebrew/bin/python3',[path.join(root,'tools/build-ritual-package.py'),'--plan',path.join(tmp,'plan.json'),'--images',path.join(tmp,'day-0.png'),path.join(tmp,'day-1.png'),'--answers',path.join(tmp,'answers.json'),...(plan.contentMode==='photo'?['--cache-dir',path.join(c.RITUAL_FRAME_CACHE_DIR||path.join(root,'.runtime','ritual-frame-cache'),id)]:[]),'--out',path.join(tmp,'ritual.bin'),...(c.RITUAL_FONT?['--font',c.RITUAL_FONT]:[])],{timeout:120000,maxBuffer:100000});
     const staged=await stageRitualPackage(c,await readFile(path.join(tmp,'ritual.bin')),{onProgress:counts=>progress('uploading',counts)});
     prepared={...staged,signature,manifest,preparedAt:new Date().toISOString()};
     if(!await save({...state,prepared,status:'ready',stage:'ready',progress:null,attemptedRevision:plan.revision}))continue;

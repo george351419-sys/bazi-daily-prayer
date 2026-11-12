@@ -7,7 +7,7 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
  const description=document.querySelector('#custom .section-top p');if(description)description.textContent='先上传自己的图片，再安排每日轮播；是否附加微行动也由你决定。';
  const node=(tag,text)=>{const item=document.createElement(tag);if(text)item.textContent=text;return item;};
  let syncTimer=null,syncHost=null,connection=null,lastSyncResult=null,liveDownload=null,syncRun=0;
- function renderSync(result){if(!syncHost)return;const state=withConnection(withLiveDownload(transferStatus(result),result,liveDownload),result,connection);renderTransfer(syncHost,state);if(!connection?.paired||!connection?.wifiConnected||!result.syncConfigured){const link=node('a',!connection?.paired?'连接画屏蓝牙与 Wi-Fi':!connection?.wifiConnected?'配置画屏 Wi-Fi':'绑定画屏并同步');link.href='#network-onboarding';link.className='secondary';syncHost.append(link);}document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state}}));}
+ function renderSync(result){if(!syncHost)return;const state=withConnection(withLiveDownload(transferStatus(result),result,liveDownload),result,connection);renderTransfer(syncHost,state);if(!['stored','rendered','user-confirmed'].includes(state.phase)&&(!connection?.paired||!connection?.wifiConnected||!result.syncConfigured)){const link=node('a',!connection?.paired?'连接画屏蓝牙与 Wi-Fi':!connection?.wifiConnected?'配置画屏 Wi-Fi':'绑定画屏并同步');link.href='#network-onboarding';link.className='secondary';syncHost.append(link);}document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state}}));}
  document.addEventListener('prayer:ark-connection',event=>{connection=event.detail;if(syncHost&&lastSyncResult)renderSync(lastSyncResult);});
  document.addEventListener('prayer:ark-download',event=>{liveDownload={...event.detail,receivedAt:Date.now()};if(syncHost&&lastSyncResult)renderSync(lastSyncResult);});
  let mode='prayer',rotationStart='',position=0,showActions=true,selected=[],artworks=[],cursor=null,busy=false,message='',rootPlan=null,urls=new Map();
@@ -99,13 +99,14 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
  }
  async function savePlan(){
   if(busy||!getUser())return;if(!selected.length){message='请先上传并选择至少一张自己的图片。';render();return;}
+  document.dispatchEvent(new CustomEvent('prayer:content-saving',{detail:{active:true}}));
   busy=true;message=mode==='photo'?'正在保存并更新轮播…':'正在切换为我的作品…';render();
   try{const status=await request('/api/account/ritual',{mode:'daily',contentMode:'photo',showActions,artworkIds:selected.slice()});lastSyncResult=status;liveDownload=null;rootPlan=status.plan||rootPlan;mode='photo';position=photoPosition(rootPlan);message='照片计划已保存，正在准备画屏内容。请查看下方同步进度；尚未连接时，可先连接画屏蓝牙与 Wi-Fi。';}
   catch(error){message=error.message;}
-  finally{busy=false;render();}
+  finally{busy=false;render();document.dispatchEvent(new CustomEvent('prayer:content-saving',{detail:{active:false}}));}
  }
  async function switchToPrayer(){
-  if(busy||!getUser())return;busy=true;message='正在准备今日与明日祈福图…';render();
+  if(busy||!getUser())return;document.dispatchEvent(new CustomEvent('prayer:content-saving',{detail:{active:true}}));busy=true;message='正在准备今日与明日祈福图…';render();
   try{
    let prepared=await request('/api/account/ritual/prepare',{mode:'daily'});
    if(prepared.job){message='次日祈福画正在绘制；完成后会自动切回祈福图。';render();await request('/api/jobs/'+prepared.job.id+'/image',{jobToken:prepared.job.token});prepared=await request('/api/account/ritual/prepare',{mode:'daily'});}
@@ -114,7 +115,7 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
    lastSyncResult=status;liveDownload=null;rootPlan=status.plan||null;showActions=true;
    mode='prayer';selected=[];message='已切换回祈福图；等待画框领取并回报。';
   }catch(error){message='切换回祈福图未完成：'+error.message;}
-  finally{busy=false;render();}
+  finally{busy=false;render();document.dispatchEvent(new CustomEvent('prayer:content-saving',{detail:{active:false}}));}
  }
  return {refresh,reset};
 }

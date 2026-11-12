@@ -1,11 +1,14 @@
 <view class="page">
  <view wx:if="{{user&&syncState}}" class="paper sync-panel">
   <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.phase==='rendered'}}" class="complete-badge">✓ 画屏已回报显示当前内容</text><text wx:if="{{syncState.phase==='user-confirmed'}}" class="complete-badge">✓ 你已确认画屏显示新画</text><text wx:if="{{syncState.phase==='stored'}}" class="complete-badge">✓ 内容已保存 · 现在可以进入画面</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
-  <text wx:if="{{syncState.phase==='rendered'||syncState.phase==='user-confirmed'}}" class="complete-note">{{syncState.phase==='rendered'?'设备回报时间 '+syncLastSeen:syncState.phase==='user-confirmed'?'这是你的手动确认；设备尚未回报当前画面已刷新。':'画屏尚未回报当前画面已刷新。'}}{{syncState.phase==='stored'?' 内容包保存回执不代表屏上已经显示最新画。':''}}</text>
+  <text wx:if="{{syncState.phase==='rendered'||syncState.phase==='user-confirmed'}}" class="complete-note">{{syncState.phase==='rendered'?'设备回报时间 '+syncLastSeen:'这是你的手动确认；设备尚未回报当前画面已刷新。'}}</text>
   <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'配置画屏 Wi-Fi':'去链接神物并同步'}}</button>
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
+  <text wx:if="{{syncState.elapsedText}}" class="note">{{syncState.elapsedText}}</text>
+  <text wx:if="{{syncState.connectionHint}}" class="note">{{syncState.connectionHint}}</text>
   <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">① 内容就绪</text><text class="{{syncState.step>=2?'complete':''}}">② 下载中</text><text class="{{syncState.step>=3?'complete':''}}">{{syncState.phase==='stored'||syncState.phase==='rendered'||syncState.phase==='user-confirmed'?'③ 内容包已保存':'③ 已保存'}}</text><text class="{{syncState.step>=4?'complete':''}}">{{syncState.phase==='rendered'?'④ 画屏已回报刷新':syncState.phase==='user-confirmed'?'④ 你已确认画面':syncState.phase==='stored'?'④ 现在可以进入画面':'④ 等待画面刷新'}}</text></view>
-  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'}}" disabled="{{!paired||busy}}">重新检查同步</button>
+  <button wx:if="{{syncState.action==='diagnostic'}}" class="secondary spaced" bindtap="connectScreen">前往链接神物发送诊断</button>
+  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'||(paired&&status.build.status==='published')}}" disabled="{{!paired||busy||binding||checkingSync}}" loading="{{checkingSync}}">重新检查同步</button>
  </view>
  <text class="kicker">MAKE IT YOURS / 04</text>
  <text class="title">自定义</text>
@@ -18,6 +21,7 @@
   <button class="primary spaced" bindtap="login">微信登录</button>
  </view>
  <view wx:else>
+  <button wx:if="{{(!paired||!wifiConnected||!syncConfigured)&&syncState.phase!=='stored'&&syncState.phase!=='rendered'&&syncState.phase!=='user-confirmed'}}" class="secondary spaced wide" bindtap="connectScreen">{{!paired?'连接画屏蓝牙与 Wi-Fi':!wifiConnected?'配置画屏 Wi-Fi':'绑定画屏并同步'}}</button>
   <view class="mode-banner">
    <view>
     <text class="kicker">CURRENT SCREEN</text>

@@ -94,10 +94,10 @@ export function setupRitual({request,fetchImage,getUser}){
   };
   form.addEventListener('change',()=>{dirty=true;});
   form.onsubmit=async event=>{
-   event.preventDefault();if(saving||uploading)return;const life=lifecycle;saving=true;clearTimeout(timer);for(const control of form.elements)control.disabled=true;
-   try{await request('/api/account/ritual',{contentMode:contentMode.value,showActions:showActions.checked,mode:mode.value,artworkIds:contentMode.value==='photo'?[...new Set(selects.map(s=>s.value))]:selects.map(s=>s.value)});if(alive(life)){dirty=false;saving=false;if(active)await refresh();}}
+   event.preventDefault();if(saving||uploading)return;const life=lifecycle;saving=true;document.dispatchEvent(new CustomEvent('prayer:content-saving',{detail:{active:true}}));clearTimeout(timer);for(const control of form.elements)control.disabled=true;
+   try{const saved=await request('/api/account/ritual',{contentMode:contentMode.value,showActions:showActions.checked,mode:mode.value,artworkIds:contentMode.value==='photo'?[...new Set(selects.map(s=>s.value))]:selects.map(s=>s.value)});if(alive(life))updateTransfer(saved);if(alive(life)){dirty=false;saving=false;if(active)await refresh();}}
    catch(error){if(alive(life)){status.textContent=error.message;settingsState.textContent=error.message;schedule();}}
-   finally{if(alive(life)){saving=false;for(const control of form.elements)control.disabled=false;}}
+   finally{document.dispatchEvent(new CustomEvent('prayer:content-saving',{detail:{active:false}}));if(alive(life)){saving=false;for(const control of form.elements)control.disabled=false;}}
   };
   const picture=node('section');picture.id='ritual-picture';picture.className='ritual-companion-block';
   const pictureHead=node('div');pictureHead.className='ritual-block-heading';const pictureKicker=node('span','01 / PICTURE READING');pictureKicker.className='eyebrow';pictureHead.append(pictureKicker,node('h5','画面解读'),node('p','先看画里有什么，再读它为什么落在今天。'));

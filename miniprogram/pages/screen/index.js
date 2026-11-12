@@ -6,6 +6,7 @@ const {rotationIndex}=require('../../utils/ritual-view');
 const {syncPrayerPair,syncGeneratedPrayer}=require('../../utils/ritual-sync');
 
 Page({
+ syncPhotos:true,
  data:{
   user:null,error:'',message:'',busy:false,photoMode:false,showActions:true,maxPhotos:6,photoSelection:[],rotationPosition:0,
   photoItems:[],availablePhotos:[],catalog:[],cursor:null,status:null,syncConfigured:false,preparing:false,
@@ -17,10 +18,10 @@ Page({
  onUnload(){this.onHide();},
  async pollSync(){
   clearTimeout(this.syncTimer);if(!this.active||!this.data.user)return;const run=this.run;
-  try{const status=await api.request('/api/account/ritual');if(!this.active||run!==this.run)return;this.connection.acceptStatus(status);this.setData({status,syncState:this.connection.stateFor(status),syncLastSeen:receiptTime(status.deviceReport?.lastSeen)});}catch(e){if(this.active&&run===this.run)this.setData({syncState:{phase:'unavailable',title:'同步状态暂不可用',detail:'正在重新读取设备回报，请稍候。',step:0}});}
+  try{const status=await api.request('/api/account/ritual');if(!this.active||run!==this.run)return;this.connection.acceptStatus(status);this.setData({status,syncState:this.connection.stateFor(status,null),syncLastSeen:receiptTime(status.deviceReport?.lastSeen)});}catch(e){if(this.active&&run===this.run)this.setData({syncState:{phase:'unavailable',title:'同步状态暂不可用',detail:'正在重新读取设备回报，请稍候。',step:0}});}
   if(this.active&&run===this.run)this.syncTimer=setTimeout(()=>this.pollSync(),this.data.syncState?.phase==='rendered'?30000:2000);
  },
- async syncNow(){if(!this.data.paired){api.error(this,new Error('请先连接附近画屏蓝牙。'));return;}try{await this.ble.syncNow();this.setData({message:'已请求画屏重新检查内容。下载成功不等于已显示，请看下方同步阶段。'});await this.pollSync();}catch(e){api.error(this,e);}},
+ async syncNow(){if(this.data.checkingSync||this.data.busy||this.data.binding)return;if(!this.data.paired){api.error(this,new Error('请先连接附近画屏蓝牙。'));return;}this.setData({checkingSync:true,error:''});try{await this.ble.syncNow();this.setData({message:'已确认画屏联网，等待设备下一次自动检查；本次操作不会主动断开 Wi-Fi。'});await this.pollSync();}catch(e){api.error(this,e);}finally{this.setData({checkingSync:false});}},
  async load(){
   const run=this.run;
   try{
@@ -80,20 +81,22 @@ Page({
   if(this.data.busy)return;
   const ids=this.photoSelection.slice();
   if(!ids.length){api.error(this,new Error('请先上传并选择至少一张自己的图片。'));return;}
+  this.connection?.setContentSaving?.(true);
   this.setData({busy:true,error:'',message:this.data.photoMode?'正在保存并更新轮播…':'正在切换为我的作品…'});
-  try{const status=await api.request('/api/account/ritual',{mode:'daily',contentMode:'photo',showActions:this.data.showActions,artworkIds:ids});if(!this.active)return;this.rotationStartDate=status.plan&&status.plan.rotationStartDate||this.rotationStartDate;this.setData({status,photoMode:true,rotationPosition:rotationIndex(this.rotationStartDate,ids.length),syncConfigured:status.syncConfigured===true,message:status.syncConfigured?'已确认使用自己的作品，正在准备画屏内容；完成后再检查设备连接。':'已确认使用自己的作品，正在准备内容；准备完成后请到「链接神物」连接画屏。'});}
+  try{const status=await api.request('/api/account/ritual',{mode:'daily',contentMode:'photo',showActions:this.data.showActions,artworkIds:ids});this.connection.acceptStatus(status);if(!this.active)return;this.rotationStartDate=status.plan&&status.plan.rotationStartDate||this.rotationStartDate;this.setData({status,photoMode:true,rotationPosition:rotationIndex(this.rotationStartDate,ids.length),syncConfigured:status.syncConfigured===true,syncState:this.connection.stateFor(status,null),message:'照片计划已保存，正在准备画屏内容。可在上方查看进度；尚未连接时，请先到「链接神物」连接画屏。'});void this.pollSync();}
   catch(e){if(this.active)api.error(this,e);}
-  finally{if(this.active)this.setData({busy:false});}
+  finally{this.connection?.setContentSaving?.(false);if(this.active)this.setData({busy:false});}
  },
  async switchPrayer(){
   if(this.data.busy)return;
+  this.connection?.setContentSaving?.(true);
   this.setData({busy:true,error:'',message:'正在准备今日与明日祈福图…'});
   try{
    const {status}=await syncPrayerPair({mode:'daily'});
-   if(!this.active)return;
+   this.connection.acceptStatus(status);if(!this.active)return;
    this.photoSelection=[];this.rotationStartDate='';this.setData({status,photoMode:false,rotationPosition:0,syncConfigured:status.syncConfigured===true,message:'已切换回祈福图；等待画框领取并回报。'});this.rebuildPhotos();
   }catch(e){if(this.active)api.error(this,e);}
-  finally{if(this.active)this.setData({busy:false});}
+  finally{this.connection?.setContentSaving?.(false);if(this.active)this.setData({busy:false});}
  },
  async more(){if(this.data.busy||!this.data.cursor)return;this.setData({busy:true,error:''});try{const page=await api.request('/api/account/artworks?cursor='+encodeURIComponent(this.data.cursor));if(!this.active)return;this.setData({catalog:this.data.catalog.concat(page.items),cursor:page.cursor||null});this.rebuildPhotos();await this.hydratePhotos(this.run);}catch(e){if(this.active)api.error(this,e);}finally{if(this.active)this.setData({busy:false});}},
  async scan(){if(this.data.busy)return;this.setData({busy:true,error:'',bleDevices:[]});try{await authorize();await this.ble.scan();}catch(e){if(this.active)api.error(this,e);}finally{if(this.active)this.setData({busy:false});}},
