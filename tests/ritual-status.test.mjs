@@ -120,6 +120,7 @@ test('a formally bound device that reports the current package stored is shown a
  const now=Date.now();
  cloud('reports/'+device,{targetSha:'c'.repeat(64),stored:true,lastSeen:new Date(now).toISOString()});
  const before=await ritualStatus(c,account,now);
+ assert.equal(before.preparation.ready,true,'已发布的当前内容不应因历史绑定字段退回排队');
  assert.equal(before.deviceReport.stored,true,'正式绑定后设备回报已存当前包应判为已存储');
  await repo.put('ritual-preparation/'+account.id,{status:'queued',artworkId:'new-image'});
  const waiting=await ritualStatus(c,account,now);
@@ -150,4 +151,49 @@ test('encoded variant 39 resolves the final option of the second-day final slot'
  const result=await ritualStatus(c,account);
  assert.equal(result.position.actionIndex,7);assert.equal(result.position.actionVariant,4);
  assert.equal(result.action.id,days[1][7].alternatives[3].id);assert.equal(result.displaySource,'device_report');
+});
+
+test('photo publication matches the compiled pair and keeps device day evidence',async t=>{
+ const {c,repo,account,device,ids,cloud}=await setup(t);
+ for(const id of ids){const record=await repo.get('artworks/'+account.id+'/'+id);await saveArtwork(c,account,{...record,source:'upload'});}
+ const {ritualPhotoPair}=await import('../lib/ritual.mjs');
+ for(const selected of [ids.slice(0,1),ids.slice(0,3),ids.slice(0,4)]){
+  const plan=(await configureRitual(c,account,{contentMode:'photo',artworkIds:selected})).plan;
+  for(const offset of [0,86400000]){
+   const now=Date.now()+offset,pair=ritualPhotoPair(selected,plan.rotationStartDate,now);
+   const published=manifest({...plan,startsAt:new Date(now+7*3600000).toISOString().slice(0,10)+'T01:00:00+08:00'},pair.artworkIds);
+   await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:published,sha256:'c'.repeat(64)}});
+   cloud('reports/'+device,{targetSha:'c'.repeat(64),stored:true,lastSeen:new Date(now).toISOString(),renderReport:{day:1,action:-1,answer:-1}});
+   const status=await ritualStatus(c,account,now);
+   assert.equal(status.pendingUpdate,false);assert.equal(status.preparation.ready,true);assert.equal(status.deviceReport.stored,true);assert.equal(status.artwork.id,pair.artworkIds[1]);
+   await repo.put('ritual/'+account.id,{...plan,revision:'different'});
+   assert.equal((await ritualStatus(c,account,now)).deviceReport.stored,false);
+   await repo.put('ritual/'+account.id,plan);
+  }
+ }
+});
+
+test('old prayer preparation cannot mask a published photo receipt',async t=>{
+ const {c,repo,account,device,ids,cloud}=await setup(t);
+ const record=await repo.get('artworks/'+account.id+'/'+ids[0]);await saveArtwork(c,account,{...record,source:'upload'});
+ const plan=(await configureRitual(c,account,{contentMode:'photo',artworkIds:[ids[0]]})).plan;
+ await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:manifest(plan,[ids[0],ids[0]]),sha256:'c'.repeat(64)}});
+ await repo.put('ritual-preparation/'+account.id,{status:'queued',artworkId:'old-prayer'});
+ cloud('reports/'+device,{targetSha:'c'.repeat(64),stored:true,lastSeen:new Date().toISOString(),renderReport:{day:0,action:-1,answer:-1}});
+ const result=await ritualStatus(c,account);
+ assert.equal(result.preparation.ready,true);assert.equal(result.preparation.stage,'ready');assert.equal(result.deviceReport.stored,true);assert.equal(result.deviceReport.renderedCurrent,true);
+ const {transferStatus}=await import('../public/transfer-status.js');
+ assert.equal(transferStatus(result).phase,'rendered');
+});
+
+test('four-photo rotation with a two-photo stored package shows stored without inventing render confirmation',async t=>{
+ const {c,repo,account,device,ids,cloud}=await setup(t);
+ for(const id of ids){const record=await repo.get('artworks/'+account.id+'/'+id);await saveArtwork(c,account,{...record,source:'upload'});}
+ const plan=(await configureRitual(c,account,{contentMode:'photo',artworkIds:ids})).plan;
+ const sha='7b9892f96562d3eee2f3633ac6620d516ac0d4a516aa1b5d67ab9b8ef18f1160';
+ await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:manifest(plan,ids.slice(0,2)),sha256:sha}});
+ cloud('reports/'+device,{targetSha:sha,stored:true,downloadState:2,downloadProgress:100,lastSeen:new Date().toISOString(),renderReport:null,renderStage:'stored_waiting_render'});
+ const result=await ritualStatus(c,account);
+ assert.equal(result.preparation.ready,true);assert.equal(result.deviceReport.stored,true);assert.equal(result.deviceReport.renderedCurrent,false);
+ const {transferStatus}=await import('../public/transfer-status.js');assert.equal(transferStatus(result).phase,'stored');
 });

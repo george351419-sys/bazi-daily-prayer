@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withConnection} from './transfer-status.js?v=20261110-ble-contact-v1';
+import {transferStatus,renderTransfer,withConnection,withLiveDownload} from './transfer-status.js?v=20261110-ble-contact-v1';
 import {preparePhoto} from './photo-upload.js';
 
 export function setupCustomPhoto({request,fetchImage,getUser}){
@@ -6,13 +6,14 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
  if(!root)return {refresh(){},reset(){}};
  const description=document.querySelector('#custom .section-top p');if(description)description.textContent='先上传自己的图片，再安排每日轮播；是否附加微行动也由你决定。';
  const node=(tag,text)=>{const item=document.createElement(tag);if(text)item.textContent=text;return item;};
- let syncTimer=null,syncHost=null,connection=null,lastSyncResult=null;
- function renderSync(result){const state=withConnection(transferStatus(result),result,connection);renderTransfer(syncHost,state);document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state}}));}
+ let syncTimer=null,syncHost=null,connection=null,lastSyncResult=null,liveDownload=null,syncRun=0;
+ function renderSync(result){if(!syncHost)return;const state=withConnection(withLiveDownload(transferStatus(result),result,liveDownload),result,connection);renderTransfer(syncHost,state);if(!connection?.paired||!connection?.wifiConnected||!result.syncConfigured){const link=node('a',!connection?.paired?'连接画屏蓝牙与 Wi-Fi':!connection?.wifiConnected?'配置画屏 Wi-Fi':'绑定画屏并同步');link.href='#network-onboarding';link.className='secondary';syncHost.append(link);}document.dispatchEvent(new CustomEvent('prayer:transfer-status',{detail:{result,state}}));}
  document.addEventListener('prayer:ark-connection',event=>{connection=event.detail;if(syncHost&&lastSyncResult)renderSync(lastSyncResult);});
+ document.addEventListener('prayer:ark-download',event=>{liveDownload={...event.detail,receivedAt:Date.now()};if(syncHost&&lastSyncResult)renderSync(lastSyncResult);});
  let mode='prayer',rotationStart='',position=0,showActions=true,selected=[],artworks=[],cursor=null,busy=false,message='',rootPlan=null,urls=new Map();
 
  function clearUrls(){for(const url of urls.values())URL.revokeObjectURL(url);urls.clear();}
- function reset(){clearTimeout(syncTimer);syncHost=null;lastSyncResult=null;mode='prayer';rotationStart='';position=0;showActions=true;selected=[];artworks=[];cursor=null;busy=false;message='';rootPlan=null;clearUrls();root.replaceChildren();}
+ function reset(){syncRun++;liveDownload=null;clearTimeout(syncTimer);syncHost=null;lastSyncResult=null;mode='prayer';rotationStart='';position=0;showActions=true;selected=[];artworks=[];cursor=null;busy=false;message='';rootPlan=null;clearUrls();root.replaceChildren();}
  function photoPosition(plan){
   const ids=plan?.artworkIds||[];if(plan?.contentMode!=='photo'||!ids.length)return 0;
   const start=/^\d{4}-\d{2}-\d{2}$/.test(plan.rotationStartDate||'')?Date.parse(plan.rotationStartDate+'T00:00:00Z'):NaN;
@@ -39,6 +40,7 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
   controls.append(up,down,remove);article.append(visual,copy,controls);return article;
  }
  function render(){
+  syncRun++;clearTimeout(syncTimer);
   if(!getUser()){root.replaceChildren();return;}
   const uploads=artworks.filter(item=>item.status==='complete'&&item.source==='upload'),byId=new Map(uploads.map(item=>[item.id,item]));
   selected=selected.filter(id=>byId.has(id)).slice(0,6);
@@ -59,7 +61,7 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
   form.append(state,buttons,node('small','确认后会保存账户内容并交给画框同步；实际显示以设备回执为准。'));
   choose.onclick=()=>void uploadFiles(file);
   form.onsubmit=event=>{event.preventDefault();void savePlan();};
-  settings.append(form);root.append(settings);syncHost=node('div');syncHost.setAttribute('role','status');root.append(syncHost);if(rootPlan)void pollSync();
+  settings.append(form);root.append(settings);syncHost=node('div');syncHost.setAttribute('role','status');root.append(syncHost);if(lastSyncResult&&lastSyncResult.plan?.revision===rootPlan?.revision)renderSync(lastSyncResult);if(rootPlan)void pollSync();
  }
  async function uploadFiles(file){
   if(busy||!getUser())return;const files=[...file.files],room=6-selected.length;if(!files.length){message='请先选择图片。';render();return;}if(room<1){message='轮播已满 6 张，请先移除一张再添加。';render();return;}
@@ -85,20 +87,20 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
   busy=true;message='正在读取画屏设置…';render();
   try{
    const [status,page]=await Promise.all([request('/api/account/ritual'),request('/api/account/artworks')]);
-   rootPlan=status.plan||null;mode=rootPlan?.contentMode==='photo'?'photo':'prayer';selected=mode==='photo'?(rootPlan.artworkIds||[]).slice(0,6):[];rotationStart=rootPlan?.rotationStartDate||'';position=photoPosition(rootPlan);showActions=rootPlan?.showActions!==false;artworks=page.items;cursor=page.cursor||null;message='';
+   lastSyncResult=status;rootPlan=status.plan||null;mode=rootPlan?.contentMode==='photo'?'photo':'prayer';selected=mode==='photo'?(rootPlan.artworkIds||[]).slice(0,6):[];rotationStart=rootPlan?.rotationStartDate||'';position=photoPosition(rootPlan);showActions=rootPlan?.showActions!==false;artworks=page.items;cursor=page.cursor||null;message='';
   }catch(error){message=error.message;}
   finally{busy=false;render();}
  }
  async function pollSync(){
-  clearTimeout(syncTimer);if(!getUser()||!syncHost)return;const owner=getUser().id;
-  try{const result=await request('/api/account/ritual');if(getUser()?.id!==owner||!syncHost)return;if(rootPlan?.revision&&result.plan?.revision!==rootPlan.revision){syncTimer=setTimeout(pollSync,2000);return;}lastSyncResult=result;renderSync(result);}
-  catch(error){if(syncHost)syncHost.textContent='同步状态暂不可用：'+error.message;}
-  if(getUser()?.id===owner&&syncHost)syncTimer=setTimeout(pollSync,2000);
+  clearTimeout(syncTimer);if(!getUser()||!syncHost)return;const owner=getUser().id,run=syncRun;
+  try{const result=await request('/api/account/ritual');if(run!==syncRun||getUser()?.id!==owner||!syncHost)return;if(rootPlan?.revision&&result.plan?.revision!==rootPlan.revision){syncTimer=setTimeout(pollSync,2000);return;}lastSyncResult=result;renderSync(result);}
+  catch(error){if(run===syncRun&&syncHost)syncHost.textContent='同步状态暂不可用：'+error.message;}
+  if(run===syncRun&&getUser()?.id===owner&&syncHost)syncTimer=setTimeout(pollSync,2000);
  }
  async function savePlan(){
   if(busy||!getUser())return;if(!selected.length){message='请先上传并选择至少一张自己的图片。';render();return;}
   busy=true;message=mode==='photo'?'正在保存并更新轮播…':'正在切换为我的作品…';render();
-  try{const status=await request('/api/account/ritual',{mode:'daily',contentMode:'photo',showActions,artworkIds:selected.slice()});rootPlan=status.plan||rootPlan;mode='photo';position=photoPosition(rootPlan);message='已确认切换为自己的作品，正在准备画屏内容；准备完成后会提示是否需要连接设备。';}
+  try{const status=await request('/api/account/ritual',{mode:'daily',contentMode:'photo',showActions,artworkIds:selected.slice()});lastSyncResult=status;liveDownload=null;rootPlan=status.plan||rootPlan;mode='photo';position=photoPosition(rootPlan);message='照片计划已保存，正在准备画屏内容。请查看下方同步进度；尚未连接时，可先连接画屏蓝牙与 Wi-Fi。';}
   catch(error){message=error.message;}
   finally{busy=false;render();}
  }
@@ -108,7 +110,8 @@ export function setupCustomPhoto({request,fetchImage,getUser}){
    let prepared=await request('/api/account/ritual/prepare',{mode:'daily'});
    if(prepared.job){message='次日祈福画正在绘制；完成后会自动切回祈福图。';render();await request('/api/jobs/'+prepared.job.id+'/image',{jobToken:prepared.job.token});prepared=await request('/api/account/ritual/prepare',{mode:'daily'});}
    if(prepared.status!=='ready'||!Array.isArray(prepared.artworkIds))throw new Error('今日与明日祈福画尚未准备好。');
-   await request('/api/account/ritual',{mode:'daily',contentMode:'prayer',showActions:true,artworkIds:prepared.artworkIds});
+   const status=await request('/api/account/ritual',{mode:'daily',contentMode:'prayer',showActions:true,artworkIds:prepared.artworkIds});
+   lastSyncResult=status;liveDownload=null;rootPlan=status.plan||null;showActions=true;
    mode='prayer';selected=[];message='已切换回祈福图；等待画框领取并回报。';
   }catch(error){message='切换回祈福图未完成：'+error.message;}
   finally{busy=false;render();}

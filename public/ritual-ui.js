@@ -95,7 +95,7 @@ export function setupRitual({request,fetchImage,getUser}){
   form.addEventListener('change',()=>{dirty=true;});
   form.onsubmit=async event=>{
    event.preventDefault();if(saving||uploading)return;const life=lifecycle;saving=true;clearTimeout(timer);for(const control of form.elements)control.disabled=true;
-   try{await request('/api/account/ritual',{contentMode:contentMode.value,showActions:showActions.checked,mode:mode.value,artworkIds:selects.map(s=>s.value)});if(alive(life)){dirty=false;saving=false;if(active)await refresh();}}
+   try{await request('/api/account/ritual',{contentMode:contentMode.value,showActions:showActions.checked,mode:mode.value,artworkIds:contentMode.value==='photo'?[...new Set(selects.map(s=>s.value))]:selects.map(s=>s.value)});if(alive(life)){dirty=false;saving=false;if(active)await refresh();}}
    catch(error){if(alive(life)){status.textContent=error.message;settingsState.textContent=error.message;schedule();}}
    finally{if(alive(life)){saving=false;for(const control of form.elements)control.disabled=false;}}
   };
@@ -204,9 +204,10 @@ export function setupRitual({request,fetchImage,getUser}){
  });
  function updateTransfer(result,override){
   lastTransferResult=result||null;
-  const artworkId=latestGenerated?.id||generatedArtwork?.id||null;
+  const photo=result?.plan?.contentMode==='photo';
+  const artworkId=photo?null:latestGenerated?.id||generatedArtwork?.id||null;
   const completedPlan=artworkId&&result?.plan?.artworkIds?.includes(artworkId);
-  if(completedPlan)prepareFailure=null;
+  if(completedPlan||photo)prepareFailure=null;
   // 生成新画期间强制"新画生成中"：后端此刻仍是上一幅画的快照，完成态一律是旧画的，必须压住。
   // generating 时不吃 override/prepareFailure/liveDownload，避免任何旧画证据改写成传输完成。
   const state=generating?withConnection(transferStatus(result,artworkId,true),result,connection,Date.now(),artworkId):withConnection(override||(!preparing&&prepareFailure&&!completedPlan?prepareFailure:withLiveDownload(transferStatus(result,artworkId),result,liveDownload)),result,connection,Date.now(),artworkId);
@@ -229,7 +230,7 @@ export function setupRitual({request,fetchImage,getUser}){
    shell.submit.textContent=result.syncConfigured===false?'保存画屏设置':'保存并同步到画屏';
    shell.deliveryNote.textContent=result.syncConfigured===false?'内容保存到你的账户；请先通过蓝牙连接并绑定画屏，自动同步才会启用。':'设备下次联网时领取新内容；网页保存成功不代表设备已完成显示。';
    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-   const generated=latestGenerated?.status==='complete'&&latestGenerated.date===today?latestGenerated:null;
+   const generated=result.plan?.contentMode!=='photo'&&latestGenerated?.status==='complete'&&latestGenerated.date===today?latestGenerated:null;
    const planDays=result.planDays?.length?result.planDays:result.days||[];
    const effective=generated?{...result,planDays:planDays.map((day,index)=>index===0?{...day,title:generated.mapping.title,artworkId:generated.id,image:generated.image,mapping:generated.mapping,actions:personalizeActions(day.actions||[],generated.mapping,0)}:day)}:result;
    shell.status.textContent=(result.notice||'选两幅已有画作，开始两天体验。')+(generated&&result.plan?.artworkIds?.[0]!==generated.id?' 网页已显示刚完成的今日画；设备仍在领取上一版两日内容。':'');
@@ -247,7 +248,7 @@ export function setupRitual({request,fetchImage,getUser}){
   ensureShell();host.hidden=false;preparing=true;prepareFailure=null;updateTransfer(null,{phase:'preparing',title:'正在准备次日画作',detail:'今日画作已完成；需补齐明日画作后，才能更新两日画屏内容并开始 Wi-Fi 传输。',step:0,percent:null});shell.status.textContent='正在检查两日画作；缺少次日画作时会为你补齐。';
   if(status.plan?.contentMode==='photo'){
    shell.status.textContent='当前使用你的照片计划，不会自动替换为次日祈福画。需要祈福模式时请在上方手动切换。';
-   preparing=false;return false;
+   preparing=false;updateTransfer(status);return false;
   }
   try{
    let prepared=await request('/api/account/ritual/prepare',{mode:shell.mode.value||status.plan?.mode||'daily'});
