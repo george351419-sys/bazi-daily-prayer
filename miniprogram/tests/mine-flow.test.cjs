@@ -33,3 +33,16 @@ test('birthday mode requires an actual time; clearing it enables the non-natal p
 test('optional birthday details survive login and keep the original personalized picture path',async()=>{
  const {page,app,wish,style}=setup();await page.onShow();wish('W20');style('spirit');for(const [field,value]of Object.entries({birthDate:'1992-10-17',birthTime:'22:30',city:'上海'}))page.field({currentTarget:{dataset:{field}},detail:{value}});await page.generate();await page.wechatAuth();assert.equal(app.globalData.generationProfile.birthDate,'1992-10-17');assert.equal(app.globalData.generationProfile.birthTime,'22:30');assert.equal(app.globalData.generationProfile.contentMode,undefined);
 });
+
+test('returning account restores saved birthday, wishes and selected art style without a write',async()=>{
+ const {page,app,calls}=setup({user:{id:'returning'}});
+ app.globalData.profile={gender:'male',birthDate:'1992-10-17',birthTime:'22:30',calendar:'lunar',leap:true,city:'上海',wishes:['W20','W35'],artStyle:'spirit'};
+ await page.onShow();assert.equal(page.data.profile.birthDate,'1992-10-17');assert.equal(page.data.profile.birthTime,'22:30');assert.equal(page.data.profile.calendar,'lunar');assert.equal(page.data.profile.leap,true);assert.equal(page.data.styleSelected,true);assert.equal(page.data.profile.artStyle,'spirit');assert.deepEqual(Array.from(page.data.profile.wishes),['W20','W35']);assert.equal(page.data.groups.flatMap(g=>g.items).find(w=>w.id==='W20').selected,true);assert.deepEqual(calls,[]);
+});
+test('restoring saved preferences does not discard edits across tab changes or leak across accounts',async()=>{
+ const {page,app,style}=setup({user:{id:'first'}});await page.onShow();style('spirit');page.onHide();await page.onShow();assert.equal(page.data.profile.artStyle,'spirit');
+ app.globalData.user={id:'second'};app.globalData.profile={birthDate:'2000-01-02',birthTime:'03:04',wishes:['W35'],artStyle:'cute'};await page.onShow();assert.equal(page.data.profile.artStyle,'cute');assert.equal(page.data.profile.birthDate,'2000-01-02');assert.deepEqual(Array.from(page.data.profile.wishes),['W35']);
+});
+test('logging in with no new choices restores the account preferences',()=>{
+ const {page,app}=setup();page.profileOwner='guest';page.accept({user:{id:'returning'},profile:{birthDate:'1990-01-01',birthTime:'08:00',artStyle:'folk',wishes:['W02']}},'登录成功');assert.equal(page.data.styleSelected,true);assert.equal(page.data.profile.artStyle,'folk');assert.equal(page.data.profile.birthDate,'1990-01-01');
+});

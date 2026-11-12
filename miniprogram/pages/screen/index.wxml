@@ -1,15 +1,4 @@
 <view class="page">
- <view wx:if="{{user&&syncState}}" class="paper sync-panel">
-  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.phase==='rendered'}}" class="complete-badge">✓ 画屏已回报显示当前内容</text><text wx:if="{{syncState.phase==='user-confirmed'}}" class="complete-badge">✓ 你已确认画屏显示新画</text><text wx:if="{{syncState.phase==='stored'}}" class="complete-badge">✓ 内容已保存 · 现在可以进入画面</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
-  <text wx:if="{{syncState.phase==='rendered'||syncState.phase==='user-confirmed'}}" class="complete-note">{{syncState.phase==='rendered'?'设备回报时间 '+syncLastSeen:'这是你的手动确认；设备尚未回报当前画面已刷新。'}}</text>
-  <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'配置画屏 Wi-Fi':'去链接神物并同步'}}</button>
-  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
-  <text wx:if="{{syncState.elapsedText}}" class="note">{{syncState.elapsedText}}</text>
-  <text wx:if="{{syncState.connectionHint}}" class="note">{{syncState.connectionHint}}</text>
-  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">① 内容就绪</text><text class="{{syncState.step>=2?'complete':''}}">② 下载中</text><text class="{{syncState.step>=3?'complete':''}}">{{syncState.phase==='stored'||syncState.phase==='rendered'||syncState.phase==='user-confirmed'?'③ 内容包已保存':'③ 已保存'}}</text><text class="{{syncState.step>=4?'complete':''}}">{{syncState.phase==='rendered'?'④ 画屏已回报刷新':syncState.phase==='user-confirmed'?'④ 你已确认画面':syncState.phase==='stored'?'④ 现在可以进入画面':'④ 等待画面刷新'}}</text></view>
-  <button wx:if="{{syncState.action==='diagnostic'}}" class="secondary spaced" bindtap="connectScreen">前往链接神物发送诊断</button>
-  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'||(paired&&status.build.status==='published')}}" disabled="{{!paired||busy||binding||checkingSync}}" loading="{{checkingSync}}">重新检查同步</button>
- </view>
  <text class="kicker">MAKE IT YOURS / 04</text>
  <text class="title">自定义</text>
  <text class="subtitle">先上传自己的图片，再安排每天出现的那一张。</text>
@@ -21,7 +10,7 @@
   <button class="primary spaced" bindtap="login">微信登录</button>
  </view>
  <view wx:else>
-  <button wx:if="{{(!paired||!wifiConnected||!syncConfigured)&&syncState.phase!=='stored'&&syncState.phase!=='rendered'&&syncState.phase!=='user-confirmed'}}" class="secondary spaced wide" bindtap="connectScreen">{{!paired?'连接画屏蓝牙与 Wi-Fi':!wifiConnected?'配置画屏 Wi-Fi':'绑定画屏并同步'}}</button>
+
   <view class="mode-banner">
    <view>
     <text class="kicker">CURRENT SCREEN</text>
@@ -79,6 +68,43 @@
    <button class="primary wide" bindtap="savePhoto" disabled="{{busy||!photoSelection.length}}" loading="{{busy}}">{{photoMode?'保存并更新内容':'确认切换为自己作品'}}</button>
    <button wx:if="{{photoMode}}" class="secondary wide" bindtap="switchPrayer" disabled="{{busy}}">切换回祈福图</button>
    <text class="note">保存成功代表账户计划已更新；画框实际显示以设备领取和回执为准。</text>
+  </view>
+ </view>
+ <view wx:if="{{user&&showSyncProgress&&syncState}}" id="photo-sync-progress" class="paper sync-panel">
+  <text class="section-title">{{syncState.title}}</text><text wx:if="{{syncState.phase==='rendered'}}" class="complete-badge">✓ 画屏已回报显示当前内容</text><text wx:if="{{syncState.phase==='user-confirmed'}}" class="complete-badge">✓ 你已确认画屏显示新画</text><text wx:if="{{syncState.phase==='stored'}}" class="complete-badge">✓ 内容已保存 · 现在可以进入画面</text><text wx:if="{{syncState.detail}}" class="note">{{syncState.detail}}</text>
+  <text wx:if="{{syncState.phase==='rendered'||syncState.phase==='user-confirmed'}}" class="complete-note">{{syncState.phase==='rendered'?'设备回报时间 '+syncLastSeen:'这是你的手动确认；设备尚未回报当前画面已刷新。'}}</text>
+  <button wx:if="{{syncState.action==='connect'||syncState.action==='wifi'}}" class="primary spaced" bindtap="connectScreen">{{syncState.action==='wifi'?'配置画屏 Wi-Fi':'去链接神物并同步'}}</button>
+  <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
+  <text wx:if="{{syncState.elapsedText}}" class="note">{{syncState.elapsedText}}</text>
+  <text wx:if="{{syncState.connectionHint}}" class="note">{{syncState.connectionHint}}</text>
+  <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">① 内容就绪</text><text class="{{syncState.step>=2?'complete':''}}">② 下载中</text><text class="{{syncState.step>=3?'complete':''}}">{{syncState.phase==='stored'||syncState.phase==='rendered'||syncState.phase==='user-confirmed'?'③ 内容包已保存':'③ 已保存'}}</text><text class="{{syncState.step>=4?'complete':''}}">{{syncState.phase==='rendered'?'④ 画屏已回报刷新':syncState.phase==='user-confirmed'?'④ 你已确认画面':syncState.phase==='stored'?'④ 现在可以进入画面':'④ 等待画面刷新'}}</text></view>
+  <button wx:if="{{syncState.action==='diagnostic'}}" class="secondary spaced" bindtap="connectScreen">前往链接神物发送诊断</button>
+  <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'||(paired&&status.build.status==='published')}}" disabled="{{!paired||busy||binding||checkingSync}}" loading="{{checkingSync}}">重新检查同步</button>
+  <button wx:if="{{syncState.action!=='connect'&&syncState.action!=='wifi'&&(!paired||!wifiConnected||!syncConfigured)&&syncState.phase!=='stored'&&syncState.phase!=='rendered'&&syncState.phase!=='user-confirmed'}}" class="secondary spaced wide" bindtap="connectScreen">{{!paired?'连接画屏蓝牙与 Wi-Fi':!wifiConnected?'配置画屏 Wi-Fi':'绑定画屏并同步'}}</button>
+ </view>
+ <view wx:if="{{user}}" class="paper presentation-settings">
+  <button class="text-button wide" bindtap="togglePresentation">画屏呈现设置 {{settingsExpanded?'收起':'展开'}}</button>
+  <view wx:if="{{settingsExpanded}}">
+   <radio-group class="pill-row" bindchange="presentationContent">
+    <label class="pill {{settingsContentMode==='prayer'?'selected':''}}"><radio value="prayer" checked="{{settingsContentMode==='prayer'}}" hidden/>祈福图</label>
+    <label class="pill {{settingsContentMode==='photo'?'selected':''}}"><radio value="photo" checked="{{settingsContentMode==='photo'}}" hidden/>自己的照片</label>
+   </radio-group>
+   <text wx:if="{{settingsContentMode==='photo'}}" class="note">照片与顺序使用上方「每日轮播」的选择，最多 6 张。</text>
+   <block wx:else>
+    <text class="label">今日画面</text>
+    <picker range="{{settingsTitles}}" value="{{settingsChoices[0]}}" data-day="0" bindchange="presentationChoice" disabled="{{busy||!settingsArtworks.length}}"><view class="field">{{settingsArtworks[settingsChoices[0]]?settingsArtworks[settingsChoices[0]].title:'暂无可选画作'}}</view></picker>
+    <text class="label">明日画面</text>
+    <picker range="{{settingsTitles}}" value="{{settingsChoices[1]}}" data-day="1" bindchange="presentationChoice" disabled="{{busy||!settingsArtworks.length}}"><view class="field">{{settingsArtworks[settingsChoices[1]]?settingsArtworks[settingsChoices[1]].title:'暂无可选画作'}}</view></picker>
+    <text class="label">播放方式</text>
+    <radio-group class="pill-row" bindchange="presentationMode">
+     <label class="pill {{settingsMode==='daily'?'selected':''}}"><radio value="daily" checked="{{settingsMode==='daily'}}" hidden/>日常 · 01:00 换画</label>
+     <label class="pill {{settingsMode==='test'?'selected':''}}"><radio value="test" checked="{{settingsMode==='test'}}" hidden/>测试 · 每 2 分钟换动作</label>
+    </radio-group>
+    <button class="secondary spaced" bindtap="preparePresentation" disabled="{{busy}}" loading="{{busy}}">准备今日与明日画作</button>
+   </block>
+   <view class="check-row"><text>附加呈现微行动建议</text><switch checked="{{showActions}}" bindchange="actions" color="#415B48" disabled="{{busy}}"/></view>
+   <button wx:if="{{cursor}}" class="text-button" bindtap="more" disabled="{{busy}}">载入更多画作</button>
+   <button class="primary spaced wide" bindtap="savePresentation" disabled="{{busy}}" loading="{{busy}}">保存并更新内容</button>
   </view>
  </view>
  <canvas type="2d" id="photo-canvas" class="photo-canvas" style="width:{{photoCanvasWidth||1440}}px;height:{{photoCanvasHeight||1440}}px;"></canvas>

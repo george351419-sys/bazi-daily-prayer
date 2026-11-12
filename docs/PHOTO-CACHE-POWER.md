@@ -12,7 +12,7 @@
 
 Worker 默认缓存目录：运行目录 `.runtime/ritual-frame-cache/<accountId>`。可通过 `RITUAL_FRAME_CACHE_DIR` 指定私人持久目录，不要放到 public、dist 或共享静态目录。
 
-Web/后台需经 GitHub main 推送触发 EdgeOne 构建。Worker 更新命令：先运行 `node scripts/install-photo-frame-cache.mjs --check`，再运行 `node scripts/install-photo-frame-cache.mjs`。安装器仅更新两个 Python 编译文件，并给现有 Worker 脚本加入缓存参数；保留其余运行时修复及 worker.env，自动备份后重启。小程序使用 `/Users/bessie/Desktop/命理唐卡/daily-prayer-web/miniprogram` 编译并上传 1.1.24，保留原目录中其他已完成的连接修复。
+Web/后台需经 GitHub main 推送触发 EdgeOne 构建。Worker 更新命令：先运行 `node scripts/install-photo-frame-cache.mjs --check`，再运行 `node scripts/install-photo-frame-cache.mjs`。安装器仅更新两个 Python 编译文件，并给现有 Worker 脚本加入缓存参数；保留其余运行时修复及 worker.env，自动备份后重启。小程序使用 `/Users/bessie/Desktop/命理唐卡/daily-prayer-web/miniprogram` 编译并上传 1.1.25，保留原目录中其他已完成的连接修复。
 
 ## 完成后断连
 

@@ -140,7 +140,7 @@ function observeConnection(page){
  if(page.stopConnection)page.stopConnection();
  page.stopConnection=connection.subscribe(snapshot=>{
   if(!page.active)return;
-  const data={...snapshot};const changed=page.data.paired!==snapshot.paired||page.data.wifiConnected!==snapshot.wifiConnected;if(changed||page.connectionNotice){data.message='';data.error='';page.connectionNotice=false;}if(!snapshot.paired){data.binding=false;data.bindingError='';}if(snapshot.savedSSID&&!page.data.ssid)data.ssid=snapshot.savedSSID;if(page.data.status&&!page.preparingPair&&!page.prepareFailure)data.syncState=connection.stateFor(page.data.status,page.syncPhotos?null:page.generatedArtworkId);
+  const data={...snapshot};const changed=page.data.paired!==snapshot.paired||page.data.wifiConnected!==snapshot.wifiConnected;if(changed||page.connectionNotice){data.message='';data.error='';page.connectionNotice=false;}if(!snapshot.paired){data.binding=false;data.bindingError='';}if(snapshot.savedSSID&&!page.data.ssid)data.ssid=snapshot.savedSSID;if(page.data.status&&!page.preparingPair&&!page.prepareFailure&&!page.savingContent)data.syncState=connection.stateFor(page.data.status,page.syncPhotos?null:page.generatedArtworkId);
   page.setData(data);
  });
  return connection;

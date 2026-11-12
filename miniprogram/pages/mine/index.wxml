@@ -16,7 +16,7 @@
  </view>
  <view class="paper">
   <button class="text-button" bindtap="toggleBirthday">个性化设置 · 生日纪念（选填） {{birthdayOpen?'收起':'展开'}}</button>
-  <text class="note">不填写也可以生成；已填资料仅用于个性化画面。</text>
+  <text class="note">不填写也可以生成；已填资料仅用于个性化画面。</text><text wx:if="{{profile.birthDate}}" class="note">生日资料：{{profile.birthDate}} {{profile.birthTime}} · {{profile.calendar==='lunar'?'农历':'公历'}}</text>
   <view wx:if="{{birthdayOpen}}">
    <text class="label">性别</text>
    <view class="choice-row">
