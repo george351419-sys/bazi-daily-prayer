@@ -31,7 +31,3 @@ Web 和小程序使用一致的 SyncIdleRelease 判据。只有当前设备、�
 ## 居中取景（center-cover-v2）
 
 上传保留完整原图，微信 Canvas 的 CSS 尺寸与像素尺寸、导出区域保持一致。Worker 先处理拍摄方向，再以 centering=(0.5, 0.5) 等比例铺满 480×720；横图左右对称裁切，长图上下对称裁切。新缓存 recipe 与 photoRenderVersion 使旧转换结果和旧内容包自动重建。
-
-## 原图约束（source-only-center-v3）
-
-照片画面不创建背景、不补边、不扩图。只校正拍摄方向、以中心点等比例裁切缩放并转换屏幕色彩。已上传 JPEG 不含透明通道；直接向编译器提供透明照片时拒绝自动铺底。祈福图的既有透明合成逻辑保持不变。更新缓存 recipe 和 photoRenderVersion 后，旧包会重新编译。

@@ -16,11 +16,9 @@ test('cache installer preserves newer worker code and private configuration and 
  const run=(...args)=>execFileSync(process.execPath,['scripts/install-photo-frame-cache.mjs','--runtime='+dir,...args],{env,encoding:'utf8'});
  run('--check');assert.equal(await readFile(path.join(dir,'scripts/run-ritual-worker-remote.mjs'),'utf8'),old);
  run('--no-restart');const patched=await readFile(path.join(dir,'scripts/run-ritual-worker-remote.mjs'),'utf8');
- assert.ok(patched.includes('Preserve newer runtime fixes'));assert.ok(patched.includes('RITUAL_FRAME_CACHE_DIR'));assert.ok(patched.includes("photoRenderVersion:'source-only-center-v3'"));
+ assert.ok(patched.includes('Preserve newer runtime fixes'));assert.ok(patched.includes('RITUAL_FRAME_CACHE_DIR'));assert.ok(patched.includes("photoRenderVersion:'center-cover-v2'"));
  assert.equal(await readFile(path.join(dir,'worker.env'),'utf8'),'KEEP_THIS_CONFIGURATION');
  const backups=await readdir(path.join(dir,'.runtime/cache-install-backups'));assert.ok(backups.length);
  assert.equal(await readFile(path.join(dir,'.runtime/cache-install-backups',backups[0],'scripts/run-ritual-worker-remote.mjs'),'utf8'),old);
  run('--no-restart');assert.equal(await readFile(path.join(dir,'scripts/run-ritual-worker-remote.mjs'),'utf8'),patched);
- await writeFile(path.join(dir,'scripts/run-ritual-worker-remote.mjs'),patched.replace("photoRenderVersion:'source-only-center-v3'","photoRenderVersion:'center-cover-v2'"));
- run('--no-restart');assert.equal(await readFile(path.join(dir,'scripts/run-ritual-worker-remote.mjs'),'utf8'),patched,'upgrades the previous centered-cache version safely');
 });

@@ -69,14 +69,7 @@ class CenterCropTests(unittest.TestCase):
     def test_transparency_is_white_and_portrait_keeps_full_image(self):
         from PIL import Image
         image=Image.new('RGBA',(480,720),(255,0,0,0));image.putpixel((240,360),(255,0,0,255))
-        with self.assertRaises(ValueError): center_photo_frame(image)
-        frame=center_photo_frame(image,photo=False)
-        self.assertEqual(frame.getpixel((0,0)),(255,255,255));self.assertEqual(frame.getpixel((240,360)),(255,0,0))
-
-    def test_opaque_photo_has_no_added_top_or_border_fill(self):
-        from PIL import Image
-        image=Image.new('RGB',(480,720),(0,0,255))
         frame=center_photo_frame(image)
-        self.assertEqual(frame.tobytes(),image.tobytes())
+        self.assertEqual(frame.getpixel((0,0)),(255,255,255));self.assertEqual(frame.getpixel((240,360)),(255,0,0))
 
 if __name__ == '__main__': unittest.main()
