@@ -122,7 +122,12 @@ if(result.syncConfigured===undefined)return copyState('S01','checking');
  if(!result.syncConfigured&&!result.plan)return copyState('S02','unbound');
  if(artworkId&&result.plan?.contentMode==='photo')return copyState('S03','photo');
  if(artworkId&&!result.plan?.artworkIds?.includes(artworkId))return copyState('S04','preparing');
- if(result.preparation?.stage==='retrying'||(!result.preparation&&result.build?.status==='retrying'))return copyState('S05','retrying');
+ if(result.preparation?.stage==='retrying'||(result.build?.status==='retrying'&&(!result.build.attemptedRevision||result.build.attemptedRevision===result.plan?.revision))){
+  const stage=result.build?.failure?.stage;
+  const titles={uploading:'内容包上传失败 · 后台正在重试',publishing:'内容包发布失败 · 后台正在重试',encoding:'图片转换暂未完成 · 后台正在重试',images:'读取原图暂未完成 · 后台正在重试'};
+  if(titles[stage])return {...copyState('S05','retrying'),title:titles[stage],detail:['uploading','publishing'].includes(stage)?'已完成的内容会继续复用，恢复后自动继续；无需重新上传照片或重新配网。':'后台会继续处理，画屏保留原有画面。',failureStage:stage,action:null,retryAt:result.build.nextAttemptAt||null};
+  return copyState('S05','retrying');
+ }
  const prep=result.preparation;
  if(prep&&!prep.ready){
   const stage=prep.stage,count=prep.progress,percent=stage==='uploading'&&count?.total>0?Math.round(count.completed/count.total*100):null;
@@ -165,7 +170,7 @@ export function transferAction(state){
 export function withConnection(state,result={},connection,now=Date.now(),artworkId=null){
  state=state.connectionBase||state;
  // 正在生成新画：旧画的送达确认与蓝牙连接提示都不得把"新画生成中"改写成完成态或其他态。
- if(state.phase==='generating')return {...state,action:null};
+ if(state.phase==='generating'||state.failureStage)return {...state,action:null};
  // 手机已确认设备收到本次内容（BLE 观测到下载完成，或用户亲眼看到新画后手动标记）：
  // 这是比陈旧云端回执更强的地面真相，不受 6 秒蓝牙新鲜度窗口限制，也不被“尚未收到回报”覆盖。
  // artworkId 把送达确认锁定到“当前这幅画”：换了生辰/愿望重新生成后，上一幅的送达确认不得回灌到新画。

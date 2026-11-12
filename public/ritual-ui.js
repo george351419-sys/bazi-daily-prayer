@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261110-ble-contact-v1';
+import {transferStatus,renderTransfer,withLiveDownload,withConnection} from './transfer-status.js?v=20261112-upload-recovery-v1';
 import {renderConsumerReading,consumerReadingMarkdown} from './reading-view.js';
 import {preparePhoto} from './photo-upload.js';
 export function setupRitual({request,fetchImage,getUser}){
@@ -218,7 +218,7 @@ export function setupRitual({request,fetchImage,getUser}){
   // 完成态是用户最该看到的状态：即使这次会话没生成过图（例如重开网页），也要显示。
   const finished=['stored','rendered'].includes(state.phase);
   if(besideImage&&(finished||latestGenerated||!besideImage.hidden))renderTransfer(besideImage,state);
-  if(state.phase==='retrying'&&state.step===0){for(const target of [shell?.transfer,besideImage].filter(Boolean)){const retry=node('button','重试同步');retry.type='button';retry.className='secondary';retry.onclick=()=>void prepare();target.append(retry);}}
+  if(state.phase==='retrying'&&state.step===0&&!state.failureStage){for(const target of [shell?.transfer,besideImage].filter(Boolean)){const retry=node('button','重试同步');retry.type='button';retry.className='secondary';retry.onclick=()=>void prepare();target.append(retry);}}
  }
  async function refresh(){
   if(saving||uploading)return;active=true;const turn=++epoch,life=lifecycle;clearTimeout(timer);if(!getUser()){reset();return;}

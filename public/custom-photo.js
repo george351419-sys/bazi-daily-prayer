@@ -1,4 +1,4 @@
-import {transferStatus,renderTransfer,withConnection,withLiveDownload} from './transfer-status.js?v=20261110-ble-contact-v1';
+import {transferStatus,renderTransfer,withConnection,withLiveDownload} from './transfer-status.js?v=20261112-upload-recovery-v1';
 import {preparePhoto} from './photo-upload.js';
 
 export function setupCustomPhoto({request,fetchImage,getUser}){

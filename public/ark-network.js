@@ -1,7 +1,7 @@
 import {SyncIdleRelease} from './sync-idle.js?v=20261112-photo-cache-power-v1';
 // ForFilm Ark wire protocol: tools/ForFilm/js/bluetooth.js (GPL-3.0).
 // Credentials go directly to the chosen peripheral, never to an HTTP endpoint.
-import {renderTransfer,withConnection} from './transfer-status.js?v=20261110-ble-contact-v1';
+import {renderTransfer,withConnection} from './transfer-status.js?v=20261112-upload-recovery-v1';
 const SERVICE='00002000-0000-1000-8000-00805f9b34fb';
 const CHARACTERISTIC='00002001-0000-1000-8000-00805f9b34fb';
 const HEARTBEAT_NORMAL='https://playmath.cn/api/v1/device/heartbeat';

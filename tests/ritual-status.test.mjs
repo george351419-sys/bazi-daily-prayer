@@ -210,3 +210,12 @@ test('unchanged photo save preserves revision and rotation while edits create a 
  const actions=(await configureRitual(c,account,{...body,showActions:false})).plan;assert.notEqual(actions.revision,reorder.revision);
  const added=(await configureRitual(c,account,{...body,artworkIds:ids.slice(0,3)})).plan;assert.notEqual(added.revision,actions.revision);
 });
+
+test('published-format retry retains its failure stage, timestamps and revision in status',async t=>{
+ const {c,repo,account,ids}=await setup(t);
+ const plan=(await configureRitual(c,account,{mode:'test',artworkIds:ids.slice(0,2)})).plan;
+ await repo.put('ritual-build/'+account.id,{status:'retrying',attemptedRevision:plan.revision,stageUpdatedAt:'2026-11-12T14:00:00Z',prepared:{manifest:manifest(plan,ids.slice(0,2)),preparedAt:'2026-11-12T13:59:00Z'},failure:{stage:'publishing',httpStatus:502,retryable:true}});
+ const result=await ritualStatus(c,account);assert.equal(result.preparation.ready,true);assert.equal(result.build.failure.stage,'publishing');assert.equal(result.build.stageUpdatedAt,'2026-11-12T14:00:00Z');assert.equal(result.build.preparedAt,'2026-11-12T13:59:00Z');
+ const {transferStatus}=await import('../public/transfer-status.js');assert.match(transferStatus(result).title,/发布失败/);
+ const next=(await configureRitual(c,account,{mode:'test',artworkIds:ids.slice(2)}));assert.equal(next.build.failure,null);assert.equal(transferStatus(next).phase,'preparing');
+});
