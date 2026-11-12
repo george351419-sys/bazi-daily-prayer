@@ -1,8 +1,8 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>画屏固件升级</title><style>body{font:17px/1.7 system-ui;max-width:760px;margin:35px auto;padding:20px;color:#183329;background:#f5f5ef}button{font:inherit;padding:13px;margin:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px;border-radius:12px}.ok{color:#08713e}.bad{color:#b12a28}label{display:block;margin:12px 0}input:not([type=checkbox]){display:block;box-sizing:border-box;width:100%;font:inherit;padding:12px;border:1px solid #aabbb0;border-radius:6px;background:white}button:disabled{opacity:.5}form{border-block:1px solid #aabbb0;padding:16px 0;margin:20px 0}</style><h1>画屏固件升级</h1><p>目标：3.2.5-ritual.10。固件通过 HTTPS 下载并校验，再通过蓝牙升级和核验；适配指定构建的出厂版 3.2.5，以及 ritual.3 / ritual.5 / ritual.6 / ritual.8 / ritual.9。请保持画屏供电，并退出手机小程序的蓝牙连接。先选择蓝牙设备，再点击第 3 步升级；Wi-Fi 配网可选。蓝牙名称在系统弹窗中选择，无需输入蓝牙密码。</p><button id="connect">1. 选择并连接蓝牙设备</button><button id="rescan">重新选择蓝牙设备</button><button id="read" disabled>读取运行版本</button><form id="wifi"><h2>2. 设置画屏 Wi-Fi</h2><p>请输入画屏附近的 2.4 GHz 网络。此步用于后续画作同步，可跳过并直接升级。</p><label>Wi-Fi 名称<input id="ssid" name="ssid" required maxlength="32" autocomplete="off" placeholder="输入 2.4 GHz Wi-Fi 名称"></label><label>Wi-Fi 密码<input id="password" name="password" type="password" required minlength="8" maxlength="63" autocomplete="off" placeholder="输入 Wi-Fi 密码"></label><label><input id="show-password" type="checkbox">显示密码</label><button id="configure" type="submit" disabled>写入并连接 Wi-Fi</button><p>密码仅通过蓝牙传给画屏，不上传服务器；提交结束后清空。</p></form><button id="upgrade" disabled>3. 通过蓝牙升级并核验</button><pre id="state" role="status" aria-live="polite">等待连接。</pre><pre id="detail">升级后需版本与编译指纹同时匹配，才显示成功。</pre><script type="module">
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>画屏固件升级</title><style>body{font:17px/1.7 system-ui;max-width:760px;margin:35px auto;padding:20px;color:#183329;background:#f5f5ef}button{font:inherit;padding:13px;margin:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px;border-radius:12px}.ok{color:#08713e}.bad{color:#b12a28}label{display:block;margin:12px 0}input:not([type=checkbox]){display:block;box-sizing:border-box;width:100%;font:inherit;padding:12px;border:1px solid #aabbb0;border-radius:6px;background:white}button:disabled{opacity:.5}form{border-block:1px solid #aabbb0;padding:16px 0;margin:20px 0}</style><h1>画屏固件升级</h1><p>目标：3.2.5-ritual.10。固件通过 HTTPS 下载并校验，再通过蓝牙升级和核验；适配指定构建的出厂版 3.2.5，以及 ritual.3 / ritual.5 / ritual.6 / ritual.8 / ritual.9。请保持画屏供电，并退出手机小程序的蓝牙连接。先选择蓝牙设备，再点击第 3 步升级；Wi-Fi 配网可选。蓝牙名称在系统弹窗中选择，无需输入蓝牙密码。</p><button id="connect">1. 选择并连接蓝牙设备</button><button id="rescan">重新选择蓝牙设备</button><button id="read" disabled>读取运行版本</button><form id="wifi"><h2>2. 设置画屏 Wi-Fi</h2><p>请输入画屏附近的 2.4 GHz 网络。此步用于后续画作同步，可跳过并直接升级。</p><label>Wi-Fi 名称<input id="ssid" name="ssid" required maxlength="32" autocomplete="off" placeholder="输入 2.4 GHz Wi-Fi 名称"></label><label>Wi-Fi 密码<input id="password" name="password" type="password" required minlength="8" maxlength="63" autocomplete="off" placeholder="输入 Wi-Fi 密码"></label><label><input id="show-password" type="checkbox">显示密码</label><button id="configure" type="submit" disabled>写入并连接 Wi-Fi</button><p>密码仅通过蓝牙传给画屏，不上传服务器；提交结束后清空。</p></form><button id="upgrade" disabled>3. 通过蓝牙升级并核验</button><button id="upgrade-wifi" disabled>3. 通过 Wi-Fi 下载固件并核验（ritual.9）</button><pre id="state" role="status" aria-live="polite">等待连接。</pre><pre id="detail">升级后需版本与编译指纹同时匹配，才显示成功。</pre><script type="module">
 import {ArkNetwork} from './ark-network.js?v=20261110-ble-contact-v1';
 const state=document.querySelector('#state'),detail=document.querySelector('#detail'),upgrade=document.querySelector('#upgrade'),readButton=document.querySelector('#read');
 const wifiForm=document.querySelector('#wifi'),ssid=document.querySelector('#ssid'),password=document.querySelector('#password'),configure=document.querySelector('#configure');
-const refreshControls=()=>{const disabled=busy||connecting||!client.characteristic;configure.disabled=disabled;readButton.disabled=disabled;upgrade.disabled=disabled;ssid.disabled=busy;password.disabled=busy;};
+const refreshControls=()=>{const disabled=busy||connecting||!client.characteristic;configure.disabled=disabled;readButton.disabled=disabled;upgrade.disabled=disabled;document.querySelector('#upgrade-wifi').disabled=disabled;ssid.disabled=busy;password.disabled=busy;};
 const expected=await fetch('./firmware/ritual-10.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('固件清单不可用');return r.json();});
 let chosen,busy=false,lastInfo,forcePicker=false,connecting=false;
 const bluetooth={requestDevice:async options=>{
@@ -48,7 +48,7 @@ wifiForm.onsubmit=async event=>{
 };
 window.addEventListener('pagehide',()=>{password.value='';client.disconnect();});
 readButton.onclick=async()=>{try{const info=await read();state.textContent=matches(info)?'已确认：当前运行 '+expected.version+'，编译指纹一致。':'当前运行固件尚未匹配目标。';}catch(e){state.textContent=e.message;}};
-upgrade.onclick=async()=>{
+upgrade.onclick=async(useWifi=false)=>{
  if(busy||connecting||!client.characteristic)return;
  busy=true;refreshControls();document.querySelector('#rescan').disabled=true;upgrade.disabled=true;readButton.disabled=true;document.querySelector('#connect').disabled=true;state.className='';
  try{
@@ -60,7 +60,11 @@ upgrade.onclick=async()=>{
   chosen=client.device;state.textContent='正在通过 HTTPS 获取并校验固件，再通过蓝牙传入画屏。请保持供电、页面开启和蓝牙连接，预计需要数分钟。';
   const response=await fetch('./firmware/'+expected.file,{cache:'no-store'});if(!response.ok)throw Error('固件文件下载失败');
   const image=new Uint8Array(await response.arrayBuffer());if(image.length!==expected.bytes)throw Error('固件长度与清单不一致，未写入画屏。');
-  await client.startBleOta(image,expected.sha256);
+  if(useWifi===true){
+   if(before.version!=='3.2.5-ritual.9'||before.sha!=='8b0d9eb16b1a06b5f473cc017f3c13c52a671ad5b79ad330a33053c0a9463e46')throw Error('当前构建尚未核验 Wi-Fi OTA，请选择蓝牙升级；旧固件不会尝试 Wi-Fi OTA。');
+   state.textContent='正在请求画屏通过 Wi-Fi 下载并校验固件；蓝牙用于进度和最终确认。';
+   await client.startWifiOta('https://playmath.cn/firmware/'+expected.file,expected.bytes,expected.sha256);
+  }else await client.startBleOta(image,expected.sha256);
   state.textContent='固件已校验并申请切换，等待重启后读取运行指纹…';
   await new Promise(r=>setTimeout(r,10000));client.disconnect();
   let lastError;
@@ -73,4 +77,5 @@ upgrade.onclick=async()=>{
  }catch(e){state.className='bad';state.textContent='尚未确认升级成功：'+e.message;}
  finally{busy=false;document.querySelector('#rescan').disabled=false;document.querySelector('#connect').disabled=false;readButton.disabled=!client.characteristic;upgrade.disabled=!client.characteristic;refreshControls();}
 };
+document.querySelector('#upgrade-wifi').onclick=()=>upgrade.onclick(true);
 </script></html>

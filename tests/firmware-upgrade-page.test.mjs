@@ -13,7 +13,7 @@ async function setup(initial=old,connectionError){
   async connect(){if(connectionError==='HANG')return new Promise(()=>{});const error=Array.isArray(connectionError)?connectionError.shift():connectionError;if(error)throw Error(error);this.characteristic={};this.options.onState({paired:true,text:'connected'});}
   async configure(ssid,password){configured.push({ssid,password});if(password==='bad-password')throw Error('密码错误');}
   async readBuildInfo(){return {otaMax:1945600,project:'frame_film_ark',...info};}
-  async startWifiOta(){wifiStarts++;throw Error('画屏拒绝启动 Wi-Fi 固件下载，错误码 2。');}
+  async startWifiOta(){wifiStarts++;if(initial.wifiSuccess){info={version:target.version,sha:target.elfSha256};return true;}throw Error('画屏拒绝启动 Wi-Fi 固件下载，错误码 2。');}
   async startBleOta(image,sha){assert.equal(image.length,target.bytes);assert.equal(sha,target.sha256);starts++;info={version:target.version,sha:target.elfSha256};return true;}
   disconnect(){this.characteristic=null;this.options.onState({paired:false,text:'disconnected'});}
  }
@@ -60,3 +60,6 @@ test("verified ritual.8 upgrades to ritual.9 through BLE",async()=>{const s=awai
 test('verified ritual.9 upgrades to ritual.10 through BLE',async()=>{const x=await setup({version:'3.2.5-ritual.9',sha:'8b0d9eb16b1a06b5f473cc017f3c13c52a671ad5b79ad330a33053c0a9463e46'});await x.elements.get('#connect').onclick();await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),1);assert.equal(x.wifiStarts(),0);});
 
 test('hung Bluetooth exits with a timeout and unlocks reconnect buttons',async()=>{const x=await setup(old,'HANG');await x.elements.get('#connect').onclick();assert.equal(x.elements.get('#connect').disabled,false);assert.equal(x.elements.get('#rescan').disabled,false);assert.match(x.elements.get('#state').textContent,/超时/);assert.equal(x.starts(),0);});
+
+test('verified ritual.9 can explicitly choose Wi-Fi OTA',async()=>{const x=await setup({version:'3.2.5-ritual.9',sha:'8b0d9eb16b1a06b5f473cc017f3c13c52a671ad5b79ad330a33053c0a9463e46',wifiSuccess:true});await x.elements.get('#connect').onclick();await x.elements.get('#upgrade-wifi').onclick();assert.equal(x.wifiStarts(),1);assert.equal(x.starts(),0);assert.match(x.elements.get('#state').textContent,/升级成功/);});
+test('old ritual.3 never enters Wi-Fi OTA even when explicitly requested',async()=>{const x=await setup();await x.elements.get('#connect').onclick();await x.elements.get('#upgrade-wifi').onclick();assert.equal(x.wifiStarts(),0);assert.equal(x.starts(),0);});

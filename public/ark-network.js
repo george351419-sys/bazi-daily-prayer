@@ -298,9 +298,13 @@ export class ArkNetwork {
   const tail=[...encoder.encode(ssid),0,...passwordBytes,0,...encoder.encode(url),0],payload=new Uint8Array(36+tail.length);payload.set(head);payload.set(tail,36);passwordBytes.fill(0);
   if(!ssid||payload.length>192)throw new Error('设备保存的 Wi‑Fi 信息或固件地址不完整。');
   const accepted=await this.request(0x57,payload,6000);if(accepted[0]!==0)throw new Error('画屏拒绝启动 Wi‑Fi 固件下载，错误码 '+accepted[0]+'。');
-  const deadline=Date.now()+140000;let status;
+  const otaDevice=this.device,deadline=Date.now()+300000;let status;
   while(Date.now()<deadline){
-   await this.delay(1000);status=await this.request(0x51,[],5000);const [state,progress,error,received,total]=[status[0],status[1],status[2],new DataView(status.buffer,status.byteOffset+3,4).getUint32(0),new DataView(status.buffer,status.byteOffset+7,4).getUint32(0)];
+   await this.delay(1000);
+   try{if(!this.characteristic)await this.connect(otaDevice);status=await this.request(0x51,[],5000);}
+   catch(error){this.trace('ota:status-retry');continue;}
+   if(status.length!==11)throw new Error('固件下载状态回复格式错误。');
+   const [state,progress,error,received,total]=[status[0],status[1],status[2],new DataView(status.buffer,status.byteOffset+3,4).getUint32(0),new DataView(status.buffer,status.byteOffset+7,4).getUint32(0)];
    this.onOta({state,progress,error,received,total});
    if(state===7){const applied=await this.request(0x58,[],6000);if(applied[0]!==0)throw new Error('固件下载完成，但应用新固件失败，错误码 '+applied[0]+'。');return true;}
    if(state===5||state===6)throw new Error('Wi‑Fi 固件下载失败，错误码 '+error+'。');
