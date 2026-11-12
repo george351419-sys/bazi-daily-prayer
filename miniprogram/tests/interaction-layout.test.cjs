@@ -7,7 +7,8 @@ test('custom sync and connection guidance are gated by an explicit save and sett
  assert.ok(screen.indexOf('id="photo-sync-progress"')<screen.indexOf('class="paper presentation-settings"'));
  assert.ok(screen.includes('wx:if="{{settingsExpanded}}"'));
  assert.equal(network.includes('画屏呈现设置'),false);
- assert.ok(network.indexOf('解除画屏绑定')>network.indexOf('bindtap="disconnect"'));
+ assert.ok(network.indexOf('画面同步进展')>network.indexOf('bindtap="disconnect"'));
+ assert.ok(network.indexOf('解除画屏绑定')>network.indexOf('画面同步进展'));
 });
 function page(){let p;const calls=[];const status={plan:{contentMode:'prayer',mode:'daily',artworkIds:['a','b']},syncConfigured:true};
  vm.runInNewContext(read('../pages/screen/index.js'),{Page:x=>p=x,clearTimeout(){},require:id=>id.endsWith('/api')?{request:async(url,body)=>{calls.push({url,body});return status;},error:(p,e)=>p.setData({error:e.message})}:id.endsWith('/ritual-view')?{rotationIndex:()=>0}:{}});
