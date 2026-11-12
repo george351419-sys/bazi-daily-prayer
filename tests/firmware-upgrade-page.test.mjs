@@ -10,7 +10,7 @@ async function setup(initial=old,connectionError){
  let info={...initial},starts=0,wifiStarts=0,configured=[];
  class Network {
   constructor(options){this.options=options;this.device={name:'FRAMEFILMARK-Elink'};}
-  async connect(){const error=Array.isArray(connectionError)?connectionError.shift():connectionError;if(error)throw Error(error);this.characteristic={};this.options.onState({paired:true,text:'connected'});}
+  async connect(){if(connectionError==='HANG')return new Promise(()=>{});const error=Array.isArray(connectionError)?connectionError.shift():connectionError;if(error)throw Error(error);this.characteristic={};this.options.onState({paired:true,text:'connected'});}
   async configure(ssid,password){configured.push({ssid,password});if(password==='bad-password')throw Error('密码错误');}
   async readBuildInfo(){return {otaMax:1945600,project:'frame_film_ark',...info};}
   async startWifiOta(){wifiStarts++;throw Error('画屏拒绝启动 Wi-Fi 固件下载，错误码 2。');}
@@ -18,7 +18,7 @@ async function setup(initial=old,connectionError){
   disconnect(){this.characteristic=null;this.options.onState({paired:false,text:'disconnected'});}
  }
  const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
- await new AsyncFunction('document','navigator','fetch','ArkNetwork','setTimeout','window',source)(document,{bluetooth:{}},async()=>({ok:true,json:async()=>target,arrayBuffer:async()=>new ArrayBuffer(target.bytes)}),Network,fn=>{fn();return 1;},{addEventListener(){}});
+ await new AsyncFunction('document','navigator','fetch','ArkNetwork','setTimeout','window',source)(document,{bluetooth:{}},async()=>({ok:true,json:async()=>target,arrayBuffer:async()=>new ArrayBuffer(target.bytes)}),Network,(fn,ms)=>{if(ms===25000){if(connectionError==='HANG'){fn();return 1;}return setTimeout(fn,ms);}fn();return 1;},{addEventListener(){}});
  return {elements,configured,starts:()=>starts,wifiStarts:()=>wifiStarts};
 }
 test('connecting only pairs; an explicit upgrade click starts and verifies BLE OTA',async()=>{const x=await setup();await x.elements.get('#connect').onclick();assert.equal(x.starts(),0);assert.equal(x.elements.get('#configure').disabled,false);await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),1);assert.match(x.elements.get('#state').textContent,/升级成功并已核验/);});
@@ -58,3 +58,5 @@ test('unrecognised factory 3.2.5 fingerprint is still blocked before firmware wr
 test("verified ritual.8 upgrades to ritual.9 through BLE",async()=>{const s=await setup({version:"3.2.5-ritual.8",sha:"d3f136ce612ab59d1617a08d36a065c0c04d921030eaaa445930cacfe2c5a584"});await s.elements.get("#connect").onclick();await s.elements.get("#upgrade").onclick();assert.equal(s.starts(),1);});
 
 test('verified ritual.9 upgrades to ritual.10 through BLE',async()=>{const x=await setup({version:'3.2.5-ritual.9',sha:'8b0d9eb16b1a06b5f473cc017f3c13c52a671ad5b79ad330a33053c0a9463e46'});await x.elements.get('#connect').onclick();await x.elements.get('#upgrade').onclick();assert.equal(x.starts(),1);assert.equal(x.wifiStarts(),0);});
+
+test('hung Bluetooth exits with a timeout and unlocks reconnect buttons',async()=>{const x=await setup(old,'HANG');await x.elements.get('#connect').onclick();assert.equal(x.elements.get('#connect').disabled,false);assert.equal(x.elements.get('#rescan').disabled,false);assert.match(x.elements.get('#state').textContent,/超时/);assert.equal(x.starts(),0);});
