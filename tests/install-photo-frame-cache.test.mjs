@@ -1,0 +1,24 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,writeFile,readFile,readdir,rm} from 'node:fs/promises';
+import {existsSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import path from 'node:path';
+import os from 'node:os';
+test('cache installer preserves newer worker code and private configuration and is repeatable',async t=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'photo-install-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ await mkdir(path.join(dir,'scripts'));await mkdir(path.join(dir,'tools'));
+ await writeFile(path.join(dir,'worker.env'),'KEEP_THIS_CONFIGURATION');
+ const old="// Preserve newer runtime fixes\nconst args=['--answers',path.join(tmp,'answers.json'),'--out'];\n";
+ await writeFile(path.join(dir,'scripts/run-ritual-worker-remote.mjs'),old);
+ await writeFile(path.join(dir,'tools/build-ritual-package.py'),'# old compiler\n');
+ const env={...process.env,PRAYER_TEST_PYTHON:process.env.PRAYER_TEST_PYTHON||(existsSync('/opt/homebrew/bin/python3')?'/opt/homebrew/bin/python3':'python3')};
+ const run=(...args)=>execFileSync(process.execPath,['scripts/install-photo-frame-cache.mjs','--runtime='+dir,...args],{env,encoding:'utf8'});
+ run('--check');assert.equal(await readFile(path.join(dir,'scripts/run-ritual-worker-remote.mjs'),'utf8'),old);
+ run('--no-restart');const patched=await readFile(path.join(dir,'scripts/run-ritual-worker-remote.mjs'),'utf8');
+ assert.ok(patched.includes('Preserve newer runtime fixes'));assert.ok(patched.includes('RITUAL_FRAME_CACHE_DIR'));
+ assert.equal(await readFile(path.join(dir,'worker.env'),'utf8'),'KEEP_THIS_CONFIGURATION');
+ const backups=await readdir(path.join(dir,'.runtime/cache-install-backups'));assert.ok(backups.length);
+ assert.equal(await readFile(path.join(dir,'.runtime/cache-install-backups',backups[0],'scripts/run-ritual-worker-remote.mjs'),'utf8'),old);
+ run('--no-restart');assert.equal(await readFile(path.join(dir,'scripts/run-ritual-worker-remote.mjs'),'utf8'),patched);
+});

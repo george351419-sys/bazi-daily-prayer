@@ -27,3 +27,11 @@ test('mini program and web use identical power release policy',()=>{
  const web=readFileSync(new URL('../public/sync-idle.js',import.meta.url),'utf8').replace('export function ','function ').replace('export class ','class ');
  const mini=readFileSync(new URL('../miniprogram/utils/sync-idle.js',import.meta.url),'utf8');assert.equal(mini,web+'\nmodule.exports={deliveredPackageKey,SyncIdleRelease};\n');
 });
+
+test('verified storage survives legacy binding refresh while BLE-only old evidence cannot',()=>{
+ const s=status();s.pendingUpdate=true;s.preparation={ready:true};const c={paired:true,deviceId:'device'};
+ assert.ok(deliveredPackageKey(s,c));
+ s.preparation.ready=false;assert.equal(deliveredPackageKey(s,c),null);
+ s.deviceReport.stored=false;c.delivered={evidence:'ble-download-complete',targetSha:'sha',deviceId:'device'};
+ assert.equal(deliveredPackageKey(s,c),null);
+});

@@ -1,10 +1,10 @@
 // Only package-specific device evidence can start the post-transfer grace period.
 function deliveredPackageKey(status,connection={}){
  const sha=status?.build?.sha256,device=status?.device?.id;
- if(!connection.paired||connection.deviceId!==device||!sha||status.pendingUpdate||status.build.status!=='published'||connection.generating)return null;
+ if(!connection.paired||connection.deviceId!==device||!sha||status.build.status!=='published'||connection.generating)return null;
  const report=status.deviceReport,receipt=connection.delivered;
- const cloud=report?.targetSha===sha&&(report.stored||report.renderedCurrent);
- const ble=receipt?.evidence==='ble-download-complete'&&receipt.targetSha===sha&&receipt.deviceId===device;
+ const cloud=(!status.pendingUpdate||status.preparation?.ready===true)&&report?.targetSha===sha&&(report.stored||report.renderedCurrent);
+ const ble=!status.pendingUpdate&&receipt?.evidence==='ble-download-complete'&&receipt.targetSha===sha&&receipt.deviceId===device;
  if(!cloud&&!ble)return null;
  return JSON.stringify([device,sha,status.plan?.revision,status.plan?.artworkIds]);
 }
