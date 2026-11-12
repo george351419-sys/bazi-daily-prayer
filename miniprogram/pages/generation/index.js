@@ -1,4 +1,4 @@
-const {openArtworkExplanation,copyArtworkExplanation}=require('../../utils/artwork-link');
+const {openArtworkExplanation}=require('../../utils/artwork-link');
 const generation=require('../../utils/generation');
 const privacy=require('../../utils/privacy');
 Page({
@@ -23,7 +23,6 @@ Page({
    else wx.showToast({title:/cancel/i.test(message)?'已取消保存':/privacy/i.test(message)?'隐私授权未完成，请重试':'图片暂未保存，请查看原因',icon:'none'});
   }finally{this.setData({savingImage:false});}
  },
- copyExplanation(){return copyArtworkExplanation(this);},
  explanation(){return openArtworkExplanation(this);},
  connectScreen(){wx.switchTab({url:'/pages/network/index'});}
 });

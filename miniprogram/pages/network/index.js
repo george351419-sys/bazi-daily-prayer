@@ -3,7 +3,7 @@ const api=require('../../utils/api');const {preparePhoto,authorize}=require('../
 const {syncPrayerPair,syncGeneratedPrayer}=require('../../utils/ritual-sync');
 Page({
  syncPhotos:true,
- data:{releaseVersion:'1.1.32',editingPassword:false,binding:false,bindingError:'',setupExpanded:false,user:null,error:'',message:'',diagnosticText:'',diagnosticReportId:'',sendingDiagnostic:false,busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false,heartbeatUrl:'',heartbeatText:'',delivered:null},
+ data:{releaseVersion:'1.1.33',editingPassword:false,binding:false,bindingError:'',bindingExpanded:false,setupExpanded:false,user:null,error:'',message:'',diagnosticText:'',diagnosticReportId:'',sendingDiagnostic:false,busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false,heartbeatUrl:'',heartbeatText:'',delivered:null},
  copyDiagnostic(title,payload){this.setData({diagnosticText:payload});wx.setClipboardData({data:payload,success:()=>wx.showToast({title:title+'已复制，下方也可长按选择',icon:'none'}),fail:()=>wx.showToast({title:'复制失败，请长按下方诊断文本',icon:'none'})});},
  diagnostics(){const {bleDiagnostics}=require('../../utils/ble');this.copyDiagnostic('连接诊断',bleDiagnostics());},
  statusDiagnostics(){const snapshot=this.connection.snapshot,payload=JSON.stringify({status:this.data.status,syncState:this.data.syncState,connection:{paired:snapshot.paired,deviceId:snapshot.connectedDeviceId,wifiConnected:snapshot.wifiConnected,receivedAt:snapshot.receivedAt,delivered:this.connection.delivered},heartbeat:this.heartbeatProbe},null,2);this.copyDiagnostic('状态诊断',payload);},
@@ -31,9 +31,10 @@ Page({
  },
  onLoad(){},
  changePassword(){this.setData({editingPassword:true,wifiPassword:''});},
+ toggleBindingPanel(){if(!this.data.syncConfigured||this.data.binding)return;this.setData({bindingExpanded:!this.data.bindingExpanded});},
  toggleSetup(){this.setData({setupExpanded:!this.data.setupExpanded});},
  wish(){wx.switchTab({url:'/pages/mine/index'});},
- async onShow(){this.active=true;observeConnection(this);this.run=(this.run||0)+1;api.tab(this,1);await getApp().ready;if(!this.active)return;this.setData({user:getApp().globalData.user,busy:false});if(this.data.user)this.load();},
+ async onShow(){this.active=true;observeConnection(this);this.run=(this.run||0)+1;api.tab(this,1);await getApp().ready;if(!this.active)return;this.setData({user:getApp().globalData.user,busy:false,bindingExpanded:false});if(this.data.user)this.load();},
  onHide(){clearTimeout(this.syncTimer);this.active=false;this.run++;stopObserving(this);this.photo=null;this.setData({wifiPassword:'',draft:''});},
  onUnload(){this.onHide();},
  async pollSync(){
@@ -76,7 +77,7 @@ Page({
   if(known&&bound?.syncConfigured===true&&bound?.device?.id===known&&bound.device.active)return;
   const key=user.id+':'+this.connection.target+':'+this.connection.client.epoch;
   if(this.bindAttempt===key)return;this.bindAttempt=key;
-  const epoch=this.connection.client.epoch;this.connectionNotice=true;this.setData({binding:true,bindingError:'',error:'',message:''});
+  const epoch=this.connection.client.epoch;this.connectionNotice=true;this.setData({binding:true,bindingExpanded:false,bindingError:'',error:'',message:''});
   let timer=null;
   const work=(async()=>{
    const id=known||await this.connection.resolveIdentity(api.request);
