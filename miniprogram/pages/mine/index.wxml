@@ -1,5 +1,4 @@
 <view class="page">
- <view wx:if="{{user&&syncState&&(syncState.phase==='stored'||syncState.phase==='rendered')}}" class="paper complete-banner"><text class="complete-badge">{{syncState.phase==='rendered'?'✓ 新内容已在画屏刷新':'✓ 内容已保存 · 现在可以进入画面'}}</text><text class="note">{{syncState.phase==='rendered'?'设备回报时间 '+syncLastSeen+'。':'请在画屏上选择「画面」并按确认键查看；设备回报刷新后，小程序会自动更新状态。'}}</text></view>
  <text class="kicker">A WISH OF YOUR OWN / 01</text>
  <text class="title">许愿池</text>
  <text class="subtitle">选一份祈愿，挑一种画风，让心愿入画。</text>
@@ -11,8 +10,10 @@
   <view wx:for="{{groups}}" wx:key="name" class="wish-group"><text class="label">{{item.name}}</text><text wx:for="{{item.items}}" wx:for-item="wish" wx:key="id" class="pill {{wish.selected?'selected':''}}" data-id="{{wish.id}}" bindtap="wish">{{wish.label}}</text></view>
  </view>
  <view class="paper">
-  <text class="section-title">选择画面风格</text>
+  <button class="text-button wide" bindtap="toggleStyle">选择画面风格 · {{profile.artStyle==='folk'?'民俗风':profile.artStyle==='spirit'?'灵兽风':'可爱风'}} {{styleOpen?'收起':'展开'}}</button>
+  <view wx:if="{{styleOpen}}">
   <view wx:for="{{artStyles}}" wx:key="id" class="art-style-row"><button class="choice {{styleSelected&&profile.artStyle===item.id?'selected':''}}" data-field="artStyle" data-value="{{item.id}}" bindtap="choose" disabled="{{busy}}"><text>{{item.label}}</text><text class="note">{{item.description}}</text></button><button class="text-button" data-id="{{item.id}}" bindtap="previewArtStyle">查看示例</button></view>
+  </view>
  </view>
  <view class="paper">
   <button class="text-button" bindtap="toggleBirthday">个性化设置 · 生日纪念（选填） {{birthdayOpen?'收起':'展开'}}</button>

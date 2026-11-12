@@ -6,7 +6,8 @@ const WISH_GROUPS=[{"name":"生活丰足","items":[{"id":"W01","label":"生活�
 const fresh=()=>({gender:'female',birthDate:'',birthTime:'',calendar:'solar',leap:false,city:'',wishes:[],artStyle:'cute'});
 const restoredProfile=value=>{const result=fresh();for(const key of Object.keys(result))if(value&&value[key]!==undefined)result[key]=value[key];result.wishes=Array.isArray(result.wishes)?result.wishes.slice():[];if(!['cute','folk','spirit'].includes(result.artStyle))result.artStyle='cute';return result;};
 Page({
- data:{artStyles:[{id:'cute',label:'可爱风',description:'Q版神仙，圆润喜庆'},{id:'spirit',label:'灵兽风',description:'问问兽演绎，保留神像配饰'},{id:'folk',label:'民俗风',description:'传统神像，庄重亲切'}],birthdayOpen:false,loginOpen:false,user:null,error:'',message:'',busy:false,authMode:'wechat',username:'',password:'',nicknameDraft:'',agreed:false,profile:fresh(),groups:WISH_GROUPS,today:new Date(Date.now()+8*3600000).toISOString().slice(0,10),profileCollapsed:false,styleSelected:false,privacyOpen:false,generation:'',generationPhase:'',generatedImage:'',profileSaved:false,jobReady:false,wechatEnabled:false},
+ data:{artStyles:[{id:'cute',label:'可爱风',description:'Q版神仙，圆润喜庆'},{id:'spirit',label:'灵兽风',description:'问问兽演绎，保留神像配饰'},{id:'folk',label:'民俗风',description:'传统神像，庄重亲切'}],styleOpen:false,birthdayOpen:false,loginOpen:false,user:null,error:'',message:'',busy:false,authMode:'wechat',username:'',password:'',nicknameDraft:'',agreed:false,profile:fresh(),groups:WISH_GROUPS,today:new Date(Date.now()+8*3600000).toISOString().slice(0,10),profileCollapsed:false,styleSelected:true,privacyOpen:false,generation:'',generationPhase:'',generatedImage:'',profileSaved:false,jobReady:false,wechatEnabled:false},
+ toggleStyle(){this.setData({styleOpen:!this.data.styleOpen});},
  previewArtStyle(e){const id=e.currentTarget.dataset.id;if(!['folk','cute','spirit'].includes(id))return;wx.previewImage({current:'/assets/prayer-styles/'+id+'.jpg',urls:['/assets/prayer-styles/'+id+'.jpg']});},
  async onShow(){
   this.active=true;observeConnection(this);this.groups=WISH_GROUPS;this.decorate();
@@ -29,7 +30,7 @@ Page({
   const owner=user?.id||'guest',changed=this.profileOwner!==undefined&&this.profileOwner!==owner;
   const keep=!!this.profileEdited&&(!changed||(this.profileOwner==='guest'&&preserveGuest));
   const profile=restoredProfile(keep?(this.draft||this.data.profile):user&&saved?saved:changed?fresh():this.draft||this.data.profile);
-  const styleSelected=keep?this.data.styleSelected:!!(user&&saved)||(!changed&&this.data.styleSelected);
+  const styleSelected=true;
   if(!keep){this.draft=null;this.profileEdited=false;}
   this.profileOwner=owner;this.setData({profile,styleSelected,profileSaved:!!(user&&saved&&!keep)});this.decorate();
  },
@@ -117,7 +118,7 @@ Page({
  companion(){wx.switchTab({url:'/pages/today/index'});},
  async logout(){
   this.setData({busy:true,error:''});
-  try{await getApp().logout();this.draft=null;this.profileEdited=false;this.profileOwner='guest';this.job=null;this.setData({user:null,status:null,syncState:null,profileSaved:false,profileCollapsed:false,styleSelected:false,generatedImage:'',generation:'',generationPhase:'',agreed:false,profile:fresh(),nicknameDraft:'',message:'已退出登录。',authMode:'wechat'});this.decorate();}
+  try{await getApp().logout();this.draft=null;this.profileEdited=false;this.profileOwner='guest';this.job=null;this.setData({user:null,status:null,syncState:null,profileSaved:false,profileCollapsed:false,styleSelected:true,generatedImage:'',generation:'',generationPhase:'',agreed:false,profile:fresh(),nicknameDraft:'',message:'已退出登录。',authMode:'wechat'});this.decorate();}
   catch(e){api.error(this,e);}
   finally{this.setData({busy:false});}
  },

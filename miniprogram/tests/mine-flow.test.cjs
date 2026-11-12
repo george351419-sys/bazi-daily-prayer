@@ -14,7 +14,7 @@ test('guest can choose wishes, preview styles and expand optional birthday witho
  wish('W20');style('spirit');page.toggleBirthday();assert.equal(page.data.birthdayOpen,true);assert.equal(page.data.profile.artStyle,'spirit');assert.deepEqual(calls,[]);
 });
 test('generation prompts voluntary login only after wish and style selection; cancellation retains draft across tabs',async()=>{
- const {page,calls,navigation,wish,style}=setup();await page.onShow();await page.generate();assert.match(page.data.error,/祈愿/);wish('W20');await page.generate();assert.match(page.data.error,/画面风格/);style('spirit');await page.generate();assert.equal(page.data.loginOpen,true);assert.deepEqual(calls,[]);assert.deepEqual(navigation,[]);
+ const {page,calls,navigation,wish,style}=setup();await page.onShow();await page.generate();assert.match(page.data.error,/祈愿/);assert.equal(page.data.styleOpen,false);assert.equal(page.data.profile.artStyle,'cute');assert.equal(page.data.styleSelected,true);wish('W20');await page.generate();assert.equal(page.data.loginOpen,true);style('spirit');await page.generate();assert.equal(page.data.loginOpen,true);assert.deepEqual(calls,[]);assert.deepEqual(navigation,[]);
  page.cancelLogin();page.onHide();await page.onShow();assert.equal(page.data.loginOpen,false);assert.equal(page.data.profile.artStyle,'spirit');assert.deepEqual(Array.from(page.data.profile.wishes),['W20']);assert.deepEqual(calls,[]);
 });
 test('successful voluntary login continues generation without replacing the draft with saved account preferences',async()=>{

@@ -83,7 +83,7 @@
   <button wx:if="{{syncState.action!=='connect'&&syncState.action!=='wifi'&&(!paired||!wifiConnected||!syncConfigured)&&syncState.phase!=='stored'&&syncState.phase!=='rendered'&&syncState.phase!=='user-confirmed'}}" class="secondary spaced wide" bindtap="connectScreen">{{!paired?'连接画屏蓝牙与 Wi-Fi':!wifiConnected?'配置画屏 Wi-Fi':'绑定画屏并同步'}}</button>
  </view>
  <view wx:if="{{user}}" class="paper presentation-settings">
-  <button class="text-button wide" bindtap="togglePresentation">画屏呈现设置 {{settingsExpanded?'收起':'展开'}}</button>
+  <button class="text-button wide" bindtap="togglePresentation">管理我的画屏 {{settingsExpanded?'收起':'展开'}}</button>
   <view wx:if="{{settingsExpanded}}">
    <radio-group class="pill-row" bindchange="presentationContent">
     <label class="pill {{settingsContentMode==='prayer'?'selected':''}}"><radio value="prayer" checked="{{settingsContentMode==='prayer'}}" hidden/>祈福图</label>

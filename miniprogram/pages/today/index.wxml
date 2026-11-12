@@ -5,6 +5,8 @@
  <view class="loading" wx:if="{{loading}}">正在载入今日内容…</view>
  <view class="error" role="alert">{{error}}</view>
 
+ <text class="section-title">每天一页</text>
+ <button wx:if="{{!sample&&image&&artworkId}}" class="text-button" bindtap="explanation" loading="{{openingExplanation}}" disabled="{{openingExplanation}}">查看祈福图解读</button>
  <view class="artwork {{status.displayPlan.contentMode==='photo'?'photo':''}}">
   <image wx:if="{{image}}" src="{{image}}" mode="aspectFit" class="painting"/>
   <view wx:elif="{{!sample}}" class="blank">今天的画作尚未就绪<text class="note">可前往许愿池生成今日祈福画。</text></view>
@@ -12,17 +14,24 @@
    <view class="art-title">今日祈愿</view>
    <view class="seal">愿</view>
   </block>
-  <view class="art-action" wx:if="{{sample}}"><text class="action-label">此刻 · 一件小事</text><text class="action-text">放松肩膀，慢慢呼吸片刻</text></view>
  </view>
 
  <view class="row"><text class="badge">{{sample?'示例画面':'今日画作'}}</text><button class="text-button" bindtap="refresh" disabled="{{loading}}">刷新内容</button></view>
  <view wx:if="{{sample}}" class="notice">这是一张示例画。你可以自由欣赏；前往许愿池选择自己的祈愿和画风。</view>
  <text wx:if="{{!sample&&image}}" class="section-title">{{artworkTitle}}</text>
- <button wx:if="{{!sample&&image&&artworkId}}" class="secondary spaced wide" bindtap="explanation" loading="{{openingExplanation}}" disabled="{{openingExplanation}}">查看这幅画的网页说明</button>
- <button wx:if="{{image&&artworkId}}" class="text-button spaced wide" bindtap="copyExplanation" disabled="{{openingExplanation}}">复制网页说明链接</button>
- <view class="paper companion-section"><text class="section-title">画中寄语</text><text class="companion-lead">把今天的心愿放进画里，也留一点时间给自己。愿你在每一次观看时，记起自己珍惜的人和事。</text></view>
- <view class="paper companion-section"><text class="section-title">此刻的小休息</text><text class="companion-lead">放松肩膀，慢慢呼吸片刻。动作以身体舒适为准。</text></view>
- <view class="stack spaced"><button wx:if="{{sample}}" class="primary" bindtap="open">选择我的祈愿</button><button wx:else class="primary" bindtap="open">管理我的画屏</button></view>
+ <text class="note painting-message">把今天的心愿放进画里，也留一点时间给自己。愿你每一次观看，都记起自己珍惜的人和事。</text>
+ <view class="paper companion-section">
+  <text class="section-title">页间一刻</text><text class="note">{{actionSlot}} · 北京时间</text>
+  <block wx:if="{{currentAction}}"><text class="companion-lead">{{currentAction.text}}</text><text class="label">为什么这样建议</text><text class="note">{{currentAction.detail}}</text><button class="text-button spaced" bindtap="nextAction" disabled="{{actionOptions.length<2}}">下一条 {{actionIndex+1}} / {{actionOptions.length}}</button></block>
+  <text wx:else class="note">此刻以安静休息为宜，早上 07:00 起再查看时辰微行动。</text>
+ </view>
+ <view class="paper companion-section">
+  <text class="section-title">翻一页</text><text class="note">搜索答案之书中的一句建议，看看它带来的另一种思路。</text>
+  <input class="field" placeholder="搜索建议、关键词或编号，例如 OB005" value="{{answerQuery}}" bindinput="searchAnswers" maxlength="120"/>
+  <text wx:if="{{answerQuery}}" class="note">找到 {{answerItems.length}} 条建议</text>
+  <view wx:for="{{answerItems}}" wx:key="id" class="answer-row"><button class="answer-toggle" data-id="{{item.id}}" bindtap="expandAnswer"><text class="answer-id">{{item.id}}</text><text>{{item.text}}</text><text class="answer-arrow">{{answerOpened===item.id?'−':'+'}}</text></button><text wx:if="{{answerOpened===item.id}}" class="answer-detail">{{item.phone_detail}}</text></view>
+  <text wx:if="{{answerQuery&&!answerItems.length}}" class="note">没有找到，试试更短的关键词。</text>
+ </view>
 </view>
 
 <privacy-consent/>
