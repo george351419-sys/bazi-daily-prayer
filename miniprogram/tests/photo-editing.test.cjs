@@ -50,3 +50,16 @@ test('a delayed initial settings response cannot overwrite edits made while it w
  wait.resolve({plan:{contentMode:'photo',artworkIds:['old'],showActions:true},syncConfigured:true});await pending;
  assert.deepEqual(Array.from(page.data.photoItems,x=>x.id),['new']);
 });
+
+test('after saving photos, returning from the connection tab keeps sync progress visible',async()=>{
+ const {page}=setup();assert.equal(page.data.showSyncProgress,false);
+ await page.savePhoto();assert.equal(page.data.showSyncProgress,true);
+ page.onHide();await page.onShow();
+ assert.equal(page.data.showSyncProgress,true,'tab navigation must retain the explicitly started photo sync');
+ assert.equal(page.data.status.plan.contentMode,'photo');assert.equal(page.data.syncState.phase,'waiting');
+ page.removePhoto(event('old'));assert.equal(page.data.showSyncProgress,false,'new edits wait for another save');
+});
+test('account changes reset another user’s visible photo sync session',async()=>{
+ const {page}=setup();page.data.showSyncProgress=true;page.draftOwner='another-user';
+ await page.onShow();assert.equal(page.data.showSyncProgress,false);
+});

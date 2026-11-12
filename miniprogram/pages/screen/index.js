@@ -13,7 +13,7 @@ Page({
   bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',connectedDeviceId:''
  },
  onLoad(){this.photoSelection=[];},
- async onShow(){this.active=true;observeConnection(this);if(this.pickingPhotos){api.tab(this,3);return;}this.run=(this.run||0)+1;api.tab(this,3);await getApp().ready;if(!this.active)return;const user=getApp().globalData.user;if(this.draftOwner!==user?.id){this.photoSelection=[];this.setData({photosDirty:false,catalog:[],photoItems:[],availablePhotos:[]});}this.draftOwner=user?.id;this.setData({user,busy:false,message:'',error:'',showSyncProgress:false,settingsExpanded:false});if(this.data.user)await this.load();},
+ async onShow(){this.active=true;observeConnection(this);if(this.pickingPhotos){api.tab(this,3);return;}this.run=(this.run||0)+1;api.tab(this,3);await getApp().ready;if(!this.active)return;const user=getApp().globalData.user;if(this.draftOwner!==user?.id){this.photoSelection=[];this.setData({photosDirty:false,showSyncProgress:false,catalog:[],photoItems:[],availablePhotos:[]});}this.draftOwner=user?.id;this.setData({user,busy:false,message:'',error:'',settingsExpanded:false});if(this.data.user)await this.load();},
  onHide(){clearTimeout(this.syncTimer);stopObserving(this);if(this.pickingPhotos)return;this.active=false;this.run++;stopObserving(this);this.photo=null;this.setData({wifiPassword:'',draft:''});},
  onUnload(){this.pickingPhotos=false;this.onHide();},
  async pollSync(){
