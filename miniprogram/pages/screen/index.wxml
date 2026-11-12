@@ -40,7 +40,7 @@
    <view class="row">
     <view>
      <text class="kicker">02 / ROTATION</text>
-     <text class="section-title">每日轮播</text>
+     <text class="section-title">每日轮播</text><text wx:if="{{photosDirty}}" class="note">轮播有未保存的修改，请点击下方「保存并更新内容」。</text>
     </view>
     <text class="badge">{{photoSelection.length}} / {{maxPhotos}}</text>
    </view>

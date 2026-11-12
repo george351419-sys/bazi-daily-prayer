@@ -62,3 +62,10 @@ test('companion transfer publisher cannot overwrite photo progress with remember
  context.update({syncConfigured:true,plan:{contentMode:'photo',artworkIds:['photo']},preparation:{ready:false,stage:'queued'}});
  assert.equal(events.at(-1).detail.state.phase,'preparing');
 });
+
+test('Web refresh preserves removals that have not yet been saved',async()=>{
+ const h=await harness();h.find('移除').onclick();await h.api.refresh();await h.flush();
+ assert.equal(all(h.root).filter(e=>e.tagName==='article').length,0);
+ assert.ok(h.find('轮播有未保存的修改，请点击下方「保存并更新内容」。'));
+ h.api.reset();
+});
