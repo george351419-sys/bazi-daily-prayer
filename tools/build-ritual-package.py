@@ -102,13 +102,12 @@ def main():
   if encoder_root is None:raise ValueError('FrameFilm prayer-service encoder not found; pass --encoder-root')
   sys.path.insert(0,str(encoder_root))
   from prayer_device.core import _encoder, profile_screen, ARK_PROFILE
-  from ritual_frame_cache import cached_frame, encoder_fingerprint
+  from ritual_frame_cache import cached_frame, encoder_fingerprint, center_photo_frame
   fingerprint=encoder_fingerprint(encoder_root)
   films=[];cache_hits=0
   def convert_frame(f):
    with Image.open(f) as original:
-    image=ImageOps.exif_transpose(original).convert('RGBA');canvas=Image.new('RGBA',image.size,'white');canvas.alpha_composite(image);canvas=ImageOps.fit(canvas.convert('RGB'),(480,720),method=Image.Resampling.LANCZOS)
-    frame=Image.new('RGB',(480,720),'white');frame.paste(canvas,((480-canvas.width)//2,(720-canvas.height)//2))
+    frame=center_photo_frame(original)
     film,_=_encoder().convert_for_device(frame.rotate(180),'pro',{'dither_type':'floyd_steinberg','dither_strength':80},screen_profile=profile_screen(ARK_PROFILE));return film
   for f in args.images:
    film,hit=cached_frame(f,args.cache_dir if plan.get('contentMode')=='photo' else None,fingerprint,convert_frame);films.append(film);cache_hits+=int(hit)

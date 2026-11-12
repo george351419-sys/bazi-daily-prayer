@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from ritual_frame_cache import cached_frame, encoder_fingerprint, FRAME_BYTES
+from ritual_frame_cache import cached_frame, encoder_fingerprint, FRAME_BYTES, center_photo_frame
 
 class FrameCacheTests(unittest.TestCase):
     def setUp(self):
@@ -44,5 +44,32 @@ class FrameCacheTests(unittest.TestCase):
         converter.parent.mkdir(parents=True); converter.write_text('algorithm1')
         before=encoder_fingerprint(root); converter.write_text('algorithm2')
         self.assertNotEqual(before, encoder_fingerprint(root))
+
+class CenterCropTests(unittest.TestCase):
+    def test_wide_image_keeps_horizontal_middle(self):
+        from PIL import Image, ImageDraw
+        image=Image.new('RGB',(1440,720),'red')
+        draw=ImageDraw.Draw(image);draw.rectangle((480,0,959,719),fill='green');draw.rectangle((960,0,1439,719),fill='blue')
+        frame=center_photo_frame(image)
+        self.assertEqual(frame.size,(480,720));self.assertEqual(frame.getpixel((240,360)),(0,128,0))
+        self.assertEqual(frame.getpixel((20,360)),(0,128,0));self.assertEqual(frame.getpixel((459,360)),(0,128,0))
+    def test_tall_image_keeps_vertical_middle(self):
+        from PIL import Image, ImageDraw
+        image=Image.new('RGB',(480,2160),'red')
+        draw=ImageDraw.Draw(image);draw.rectangle((0,720,479,1439),fill='green');draw.rectangle((0,1440,479,2159),fill='blue')
+        frame=center_photo_frame(image)
+        self.assertEqual(frame.getpixel((240,20)),(0,128,0));self.assertEqual(frame.getpixel((240,699)),(0,128,0))
+    def test_camera_orientation_is_applied_before_center_crop(self):
+        from PIL import Image, ImageDraw
+        image=Image.new('RGB',(480,2160),'red')
+        ImageDraw.Draw(image).rectangle((0,720,479,1439),fill='green')
+        image.getexif()[274]=6
+        frame=center_photo_frame(image)
+        self.assertEqual(frame.getpixel((240,360)),(0,128,0))
+    def test_transparency_is_white_and_portrait_keeps_full_image(self):
+        from PIL import Image
+        image=Image.new('RGBA',(480,720),(255,0,0,0));image.putpixel((240,360),(255,0,0,255))
+        frame=center_photo_frame(image)
+        self.assertEqual(frame.getpixel((0,0)),(255,255,255));self.assertEqual(frame.getpixel((240,360)),(255,0,0))
 
 if __name__ == '__main__': unittest.main()

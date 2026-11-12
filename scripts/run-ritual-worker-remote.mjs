@@ -48,7 +48,7 @@ async function processAccount(accountId,deviceId){
  }
  if(records.length!==2)throw new Error('Ritual plan artwork is missing');
  const actionDays=records.map((record,index)=>personalizeActionOptions(record.mapping)[index]);
- const manifest={...plan,actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-balanced-v4':'prayer-overlay-balanced-v4',artworkIds:records.map(record=>record.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((record,index)=>({date:record.date,artworkId:record.id,actions:actionDays[index]}))};
+ const manifest={...plan,...(plan.contentMode==='photo'?{photoRenderVersion:'center-cover-v2'}:{}),actionVariants:5,artworkLayout:!plan.showActions?'full-frame-v2':plan.contentMode==='photo'?'photo-overlay-balanced-v4':'prayer-overlay-balanced-v4',artworkIds:records.map(record=>record.id),startsAt,anchor:plan.mode==='test'?'first_connection':'absolute',days:records.map((record,index)=>({date:record.date,artworkId:record.id,actions:actionDays[index]}))};
  const signature=createHash('sha256').update(JSON.stringify(manifest)).digest('hex');
  if(deviceId&&ritualPublication(prior)?.deviceId===deviceId&&ritualPublication(prior)?.bindingId===bindingId&&ritualPublication(prior)?.signature===signature){if(prior.status!=='published')await saveBuild(accountId,{...prior,status:'published',nextAttemptAt:null});return;}
  try{

@@ -4,6 +4,9 @@ async function authorize(){if(wx.requirePrivacyAuthorize)await call('requirePriv
 async function processPhoto(page,input){
  const info=await call('getImageInfo',{src:input});
  const scale=Math.min(1,1440/Math.max(info.width,info.height)),width=Math.max(1,Math.round(info.width*scale)),height=Math.max(1,Math.round(info.height*scale));
+ // Keep layout coordinates and backing pixels equal before native export.
+ // A fixed square CSS canvas paired with a non-square bitmap can export an offset region.
+ await new Promise(resolve=>page.setData({photoCanvasWidth:width,photoCanvasHeight:height},resolve));
  // 2D Canvas redraw removes the original EXIF and applies the decoded orientation.
  const canvas=await new Promise((resolve,reject)=>page.createSelectorQuery().select('#photo-canvas').fields({node:true,size:true}).exec(items=>items[0]&&items[0].node?resolve(items[0].node):reject(new Error('照片画布尚未准备好，请重试'))));
  canvas.width=width;canvas.height=height;

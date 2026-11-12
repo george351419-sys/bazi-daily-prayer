@@ -12,7 +12,7 @@
 
 Worker 默认缓存目录：运行目录 `.runtime/ritual-frame-cache/<accountId>`。可通过 `RITUAL_FRAME_CACHE_DIR` 指定私人持久目录，不要放到 public、dist 或共享静态目录。
 
-Web/后台需经 GitHub main 推送触发 EdgeOne 构建。Worker 更新命令：先运行 `node scripts/install-photo-frame-cache.mjs --check`，再运行 `node scripts/install-photo-frame-cache.mjs`。安装器仅更新两个 Python 编译文件，并给现有 Worker 脚本加入缓存参数；保留其余运行时修复及 worker.env，自动备份后重启。小程序使用 `/Users/bessie/Desktop/命理唐卡/daily-prayer-web/miniprogram` 编译并上传 1.1.22，保留原目录中其他已完成的连接修复。
+Web/后台需经 GitHub main 推送触发 EdgeOne 构建。Worker 更新命令：先运行 `node scripts/install-photo-frame-cache.mjs --check`，再运行 `node scripts/install-photo-frame-cache.mjs`。安装器仅更新两个 Python 编译文件，并给现有 Worker 脚本加入缓存参数；保留其余运行时修复及 worker.env，自动备份后重启。小程序使用 `/Users/bessie/Desktop/命理唐卡/daily-prayer-web/miniprogram` 编译并上传 1.1.24，保留原目录中其他已完成的连接修复。
 
 ## 完成后断连
 
@@ -27,3 +27,7 @@ Web 和小程序使用一致的 SyncIdleRelease 判据。只有当前设备、�
 代码/模拟测试覆盖缓存命中、顺序调整、新图片、算法变化、损坏回退、缓存与无缓存内容包逐字节一致、保存幂等、30 秒释放、取消/延后及不自动重连。
 
 真实手机蓝牙、小程序后台调度、画屏 Wi-Fi 休眠、电流与续航仍须实体设备验收，不能以构建或单测替代。
+
+## 居中取景（center-cover-v2）
+
+上传保留完整原图，微信 Canvas 的 CSS 尺寸与像素尺寸、导出区域保持一致。Worker 先处理拍摄方向，再以 centering=(0.5, 0.5) 等比例铺满 480×720；横图左右对称裁切，长图上下对称裁切。新缓存 recipe 与 photoRenderVersion 使旧转换结果和旧内容包自动重建。

@@ -81,7 +81,7 @@
    <text class="note">保存成功代表账户计划已更新；画框实际显示以设备领取和回执为准。</text>
   </view>
  </view>
- <canvas type="2d" id="photo-canvas" class="photo-canvas"></canvas>
+ <canvas type="2d" id="photo-canvas" class="photo-canvas" style="width:{{photoCanvasWidth||1440}}px;height:{{photoCanvasHeight||1440}}px;"></canvas>
 </view>
 
 <privacy-consent/>

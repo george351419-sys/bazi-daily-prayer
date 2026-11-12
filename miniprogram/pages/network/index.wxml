@@ -12,7 +12,7 @@
    <input class="field" value="{{photoTitle}}" data-field="photoTitle" bindinput="input" placeholder="例如：一家人的周末" maxlength="60"/>
    <button class="secondary spaced" bindtap="choosePhoto" disabled="{{busy}}">选择照片</button>
    <image wx:if="{{draft}}" class="photo-preview" src="{{draft}}" mode="aspectFit"/>
-   <canvas type="2d" id="photo-canvas" class="photo-canvas"></canvas>
+   <canvas type="2d" id="photo-canvas" class="photo-canvas" style="width:{{photoCanvasWidth||1440}}px;height:{{photoCanvasHeight||1440}}px;"></canvas>
    <button class="secondary spaced" bindtap="upload" disabled="{{busy||!draft}}">上传到账户</button>
   </block>
   <text wx:if="{{contentMode!=='photo'}}" class="note">画屏可以分别设定「今日画面」与「明日画面」。两幅必须不同，否则画屏轮播时看不出变化。</text>

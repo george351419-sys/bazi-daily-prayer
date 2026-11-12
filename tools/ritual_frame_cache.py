@@ -5,8 +5,17 @@ import tempfile
 from pathlib import Path
 
 # Bump whenever resize, alpha composition, rotation, palette or dithering changes.
-FRAME_RECIPE = 'ark-photo-480x720-white-exif-lanczos-rotate180-floyd80-v1'
+FRAME_RECIPE = 'ark-photo-center-cover-v2-480x720-white-exif-lanczos-rotate180-floyd80'
 FRAME_BYTES = 172832
+
+def center_photo_frame(original):
+    """Apply camera orientation first, then cover the screen around both midpoints."""
+    from PIL import Image, ImageOps
+    image = ImageOps.exif_transpose(original).convert('RGBA')
+    canvas = Image.new('RGBA', image.size, 'white')
+    canvas.alpha_composite(image)
+    return ImageOps.fit(canvas.convert('RGB'), (480, 720),
+                        method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
 
 def encoder_fingerprint(root):
     digest = hashlib.sha256(FRAME_RECIPE.encode())

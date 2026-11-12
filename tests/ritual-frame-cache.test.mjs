@@ -22,4 +22,20 @@ test('cached conversion produces exactly the same device package as uncached con
  assert.equal(stats(first).hits,1,'same photo for two days is converted once');assert.equal(stats(second).hits,2);
  assert.deepEqual(await readFile(path.join(dir,'first.bin')),await readFile(path.join(dir,'uncached.bin')));
  assert.deepEqual(await readFile(path.join(dir,'second.bin')),await readFile(path.join(dir,'uncached.bin')));
+ // Check actual device bytes too: middle bands must survive both horizontal and vertical cropping.
+ await exec(python,['-c',`from PIL import Image, ImageDraw
+import sys
+from pathlib import Path
+root=Path(sys.argv[1])
+for name,size,box in [('wide',(1440,720),(480,0,959,719)),('tall',(480,2160),(0,720,479,1439))]:
+ image=Image.new('RGB',size,(255,0,0)); ImageDraw.Draw(image).rectangle(box,fill=(0,255,0)); image.save(root/(name+'.png'))
+`,dir]);
+ const cropArgs=args.slice();const imageIndex=cropArgs.indexOf('--images');cropArgs[imageIndex+1]=path.join(dir,'wide.png');cropArgs[imageIndex+2]=path.join(dir,'tall.png');
+ await exec(python,[...cropArgs,'--cache-dir',path.join(dir,'cache'),'--out',path.join(dir,'cropped.bin')],{timeout:120000});
+ const cropped=await readFile(path.join(dir,'cropped.bin'));
+ for(let day=0;day<2;day++)for(const [x,y] of [[20,20],[240,360],[459,699]]){
+  const pixel=x*720+719-y,packed=cropped[64+day*172832+32+Math.floor(pixel/2)];
+  assert.equal(pixel%2?packed&15:packed>>4,5,'device frame must contain the green middle, not the red corner');
+ }
+
 });
