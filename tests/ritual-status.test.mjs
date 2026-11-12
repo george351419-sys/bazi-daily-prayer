@@ -121,6 +121,13 @@ test('a formally bound device that reports the current package stored is shown a
  cloud('reports/'+device,{targetSha:'c'.repeat(64),stored:true,lastSeen:new Date(now).toISOString()});
  const before=await ritualStatus(c,account,now);
  assert.equal(before.deviceReport.stored,true,'正式绑定后设备回报已存当前包应判为已存储');
+ await repo.put('ritual-preparation/'+account.id,{status:'queued',artworkId:'new-image'});
+ const waiting=await ritualStatus(c,account,now);
+ assert.equal(waiting.preparation.ready,false);assert.equal(waiting.deviceReport.stored,false);
+ await repo.delete('ritual-preparation/'+account.id);
+ await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:{...pub,artworkIds:[ids[1],ids[0]]},sha256:'c'.repeat(64)}});
+ assert.equal((await ritualStatus(c,account,now)).deviceReport.stored,false);
+ await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:pub,sha256:'c'.repeat(64)}});
  // 重连 / 自动认主翻新 bindingId（bindRitualDevice 每次生成全新 bindingId）
  const secondBinding=(await bindRitualDevice(c,account,device)).binding;
  assert.notEqual(secondBinding.bindingId,firstBinding.bindingId);
