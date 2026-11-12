@@ -57,10 +57,6 @@
       {
         "value": "pages/answers",
         "type": "folder"
-      },
-      {
-        "value": "utils/content.js",
-        "type": "file"
       }
     ],
     "include": []
