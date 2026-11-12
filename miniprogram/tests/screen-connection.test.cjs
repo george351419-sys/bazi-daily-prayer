@@ -119,3 +119,32 @@ test('saving a new photo plan cancels automatic release until new package receip
  c.acceptStatus({...status,pendingUpdate:true});c.setContentSaving(false);
  assert.equal([...env.timers.values()].some(timer=>timer.ms===30000),false);
 });
+
+test('connection and custom panels share the photo plan instead of a prayer-only placeholder',async()=>{
+ const env=session(),c=await connected(env),s=ready();s.plan={contentMode:'photo',artworkIds:['p'],revision:'photos'};s.plannedDays=[{artworkId:'p',title:'我的照片'}];
+ c.acceptStatus(s);
+ const page=()=>({active:true,syncPhotos:true,data:{status:ready()},setData(patch){Object.assign(this.data,patch);}});
+ const network=page(),custom=page();env.observeConnection(network);env.observeConnection(custom);
+ assert.notEqual(network.data.syncState.phase,'photo');assert.equal(network.data.syncContentTitle,'当前同步：自定义照片');assert.equal(network.data.status,s);assert.deepEqual(network.data.syncState,custom.data.syncState);assert.equal(network.data.syncContentDetail,custom.data.syncContentDetail);
+ c.acceptStatus({...s,plan:{contentMode:'prayer',artworkIds:['today','tomorrow'],revision:'prayers'},plannedDays:[]});
+ assert.equal(network.data.syncContentTitle,'当前同步：祈福图');assert.deepEqual(network.data.syncState,custom.data.syncState);
+ env.stopObserving(network);env.stopObserving(custom);
+});
+test('a returning page uses the shared latest plan rather than its old saved page snapshot',async()=>{
+ const env=session(),c=await connected(env),old=ready();const custom={active:true,syncPhotos:true,data:{status:old},setData(patch){Object.assign(this.data,patch);}};
+ env.observeConnection(custom);custom.active=false;env.stopObserving(custom);
+ const next={...old,plan:{contentMode:'photo',artworkIds:['new-photo'],revision:'new'},preparation:{ready:false,stage:'encoding'},pendingUpdate:true};c.acceptStatus(next);
+ custom.active=true;env.observeConnection(custom);assert.equal(custom.data.status,next);assert.equal(custom.data.syncContentTitle,'当前同步：自定义照片');assert.equal(custom.data.syncState.phase,'preparing');env.stopObserving(custom);
+});
+test('submitting settings and failed refreshes produce one shared state on both panels',async()=>{
+ const env=session(),c=await connected(env);c.acceptStatus(ready());
+ c.setContentSaving(true);assert.equal(c.planView().syncState.phase,'preparing');assert.equal(c.planView().syncContentTitle,'正在保存新的画屏计划');
+ c.setContentSaving(false);c.setStatusUnavailable();assert.equal(c.planView().syncState.phase,'unavailable');c.acceptStatus(ready());assert.notEqual(c.planView().syncState.phase,'unavailable');
+});
+
+test('a delayed older plan cannot replace the shared current mode or content',async()=>{
+ const env=session(),c=await connected(env),s=ready();
+ c.acceptStatus({...s,plan:{contentMode:'photo',artworkIds:['new-photo'],updatedAt:'2026-11-12T14:00:00Z'}});
+ assert.equal(c.acceptStatus({...s,plan:{contentMode:'prayer',artworkIds:['old','older'],updatedAt:'2026-11-12T13:00:00Z'}}),false);
+ assert.equal(c.planView().syncContentTitle,'当前同步：自定义照片');assert.deepEqual(c.current.plan.artworkIds,['new-photo']);
+});

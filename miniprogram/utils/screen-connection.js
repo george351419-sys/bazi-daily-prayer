@@ -1,7 +1,7 @@
 const {SyncIdleRelease}=require('./sync-idle');
 // One connection for the mini program, shared across tab pages.
 const {ArkBLE}=require('./ble');
-const {transferStatus,withLiveDownload,withConnection}=require('./transfer-status');
+const {transferStatus,receiptTime,withLiveDownload,withConnection}=require('./transfer-status');
 const DELIVERY_KEY='prayer-mini-delivered-v1';
 // 小程序没有 localStorage：用 wx.setStorageSync 持久化；无 wx 的测试环境退回内存。
 const memory=new Map();
@@ -36,7 +36,7 @@ class ScreenConnection{
   });
  }
  emit(){this.idleRelease?.update();for(const listener of this.listeners)listener(this.snapshot);}
- subscribe(listener){this.listeners.add(listener);listener(this.snapshot);return ()=>this.listeners.delete(listener);}
+ subscribe(listener){this.syncAccount();this.listeners.add(listener);listener(this.snapshot);return ()=>this.listeners.delete(listener);}
  // 送达确认只接受两种真实证据：BLE 观测到设备回报下载完成，或用户亲眼看到新画后手动标记。
  // 按 deviceId + 内容哈希隔离；换设备或换内容自动失效；绝不把"设备在线时长"当作送达。
  loadDelivered(){try{const saved=JSON.parse(store.get(DELIVERY_KEY)||'null');if(saved&&/^[a-f0-9]{12}$/.test(saved.deviceId||'')&&/^[a-f0-9]{64}$/.test(saved.targetSha||''))return saved;}catch{}return null;}
@@ -57,19 +57,35 @@ class ScreenConnection{
   const current=artworkId||status?.plan?.artworkIds?.[0]||null;
   const flag=isGenerating??generationFlag();
   // 生成新画期间只吃"新画生成中"，不吃任何旧画的下载进度与完成态。
-  const target=artworkId===null?null:current;
+  const target=artworkId||null;
   const base=flag?transferStatus(status,target,true):withLiveDownload(transferStatus(status,target),status,this.live);
   return withConnection(base,status,{...this.snapshot,deviceId:this.hardwareId,syncRequestedAt:this.syncRequestedAt,requestedSha:this.requestedSha,delivered:this.delivered},Date.now(),current);
  }
+ syncAccount(){
+  let owner;try{owner=getApp().globalData.user?.id||null;}catch{return;}
+  if(this.statusOwner!==owner){this.statusOwner=owner;this.current=null;this.statusUnavailable=false;}
+ }
+ planView(fallback){
+  const status=this.current||fallback||null,plan=status?.plan,ids=plan?.artworkIds||[];
+  const titles=ids.map(id=>(status?.plannedDays||[]).find(item=>item.artworkId===id)?.title).filter(Boolean);
+  const pending=this.contentSaving;
+  const syncState=pending?{phase:'preparing',title:'正在保存并准备画屏内容',detail:'保存后会继续显示同步进度与连接引导。',step:0,percent:null}:this.statusUnavailable?{phase:'unavailable',title:'同步状态暂不可用',detail:'正在重新读取设备回报，请稍候。',step:0,percent:null}:this.stateFor(status,null);
+  return {status,syncState,syncLastSeen:receiptTime(status?.deviceReport?.lastSeen),syncContentTitle:pending?'正在保存新的画屏计划':plan?'当前同步：'+(plan.contentMode==='photo'?'自定义照片':'祈福图'):'尚未设置画屏内容',syncContentDetail:pending?'':plan?ids.length+' 张'+(plan.contentMode==='photo'?'轮播照片':'祈福画')+(titles.length?' · '+titles.join(' / '):''):''};
+ }
+ setStatusUnavailable(){this.statusUnavailable=true;this.emit();}
  acceptStatus(status){
-  this.current=status;this.idleRelease.update();
+  this.syncAccount();
+  const incoming=Date.parse(status?.plan?.updatedAt||''),known=Date.parse(this.current?.plan?.updatedAt||'');
+  if(Number.isFinite(incoming)&&Number.isFinite(known)&&incoming<known)return false;
+  this.current=status;this.statusUnavailable=false;this.idleRelease.update();
   // 换了内容包、换了画屏，或计划换成了另一幅画：旧送达确认立即失效，
   // 否则旧"✓ 本次同步已完成"会冒充新内容已完成。
   const planned=status?.plan?.artworkIds?.[0]||null;
   if(this.delivered&&((status?.build?.sha256&&this.delivered.targetSha!==status.build.sha256)||(status?.device?.id&&this.delivered.deviceId!==status.device.id)||(planned&&this.delivered.artworkId&&this.delivered.artworkId!==planned)))this.clearDelivered();
+  this.emit();
   void this.syncPublished().catch(error=>this.notice('自动检查同步暂未成功：'+error.message));
  }
- setContentSaving(value){this.contentSaving=value;this.idleRelease.update();}
+ setContentSaving(value){this.contentSaving=value;this.idleRelease.update();this.emit();}
  notice(bleText){this.snapshot={...this.snapshot,bleText};this.emit();}
  async scan(){this.idleRelease.cancel();this.allowed=false;clearTimeout(this.retryTimer);this.retryTimer=null;this.live=null;this.hardwareId='';await this.client.scan();}
  async connect(id){
@@ -140,7 +156,7 @@ function observeConnection(page){
  if(page.stopConnection)page.stopConnection();
  page.stopConnection=connection.subscribe(snapshot=>{
   if(!page.active)return;
-  const data={...snapshot};const changed=page.data.paired!==snapshot.paired||page.data.wifiConnected!==snapshot.wifiConnected;if(changed||page.connectionNotice){data.message='';data.error='';page.connectionNotice=false;}if(!snapshot.paired){data.binding=false;data.bindingError='';}if(snapshot.savedSSID&&!page.data.ssid)data.ssid=snapshot.savedSSID;if(page.data.status&&!page.preparingPair&&!page.prepareFailure&&!page.savingContent)data.syncState=connection.stateFor(page.data.status,page.syncPhotos?null:page.generatedArtworkId);
+  const data={...snapshot};const changed=page.data.paired!==snapshot.paired||page.data.wifiConnected!==snapshot.wifiConnected;if(changed||page.connectionNotice){data.message='';data.error='';page.connectionNotice=false;}if(!snapshot.paired){data.binding=false;data.bindingError='';}if(snapshot.savedSSID&&!page.data.ssid)data.ssid=snapshot.savedSSID;if(page.syncPhotos&&!page.savingContent)Object.assign(data,connection.planView(page.data.user?.id===connection.statusOwner?page.data.status:null));else if(page.data.status&&!page.preparingPair&&!page.prepareFailure&&!page.savingContent)data.syncState=connection.stateFor(page.data.status,page.generatedArtworkId);
   page.setData(data);
  });
  return connection;
