@@ -1,0 +1,11 @@
+{
+  "version": "3.2.5-ritual.9",
+  "file": "frame_film_ark-3.2.5-ritual.9.bin",
+  "bytes": 1930304,
+  "sha256": "10467b40600edda91011dcf021650bf21908d3bda4585678e630ee909bd0f33f",
+  "elfSha256": "8b0d9eb16b1a06b5f473cc017f3c13c52a671ad5b79ad330a33053c0a9463e46",
+  "partitionLayoutChanged": false,
+  "physicalScreenVerified": false,
+  "sourceFile": "frame_film_ark-3.2.5-ritual.9-source.tar.gz",
+  "sourceSha256": "07e7ab8c638a61ee232d662144a7ad569aad2e3a39fb0eac3573e5687b8f8146"
+}
