@@ -8,6 +8,13 @@ test('another explicit click with identical input creates B, while reopening tha
  await g.start(p,{requestId:'click-A'});assert.equal(g.current().record.id,'art1');await g.start(p,{requestId:'click-A'});assert.equal(count,1);
  await g.start(p,{requestId:'click-B'});assert.equal(count,2);assert.equal(g.current().record.id,'art2');assert.equal(app.globalData.pendingPrayerArtwork.id,'art2');await g.start(p,{requestId:'click-B'});assert.equal(count,2);
 });
-test('generating a prayer explicitly activates B instead of silently accepting photo mode',async()=>{
- const calls=[],app={globalData:{user:{id:'u'}}},ctx={module:{exports:{}},getApp:()=>app,Set,JSON,Error,require:()=>({request:async(url,body)=>{calls.push({url,body});if(url.endsWith('/profile'))return {profile:body};if(url==='/api/analyze')return {id:'job',token:'token'};if(url.includes('/image'))return {id:'B',image:'B'};return {status:'photo'};},image:async p=>p})};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../utils/generation.js'),'utf8'),ctx);const g=ctx.module.exports;await g.start({artStyle:'cute'},{requestId:'B'});const prepare=calls.find(c=>c.url==='/api/account/ritual/prepare');assert.equal(prepare.body.activatePrayer,true);assert.equal(prepare.body.artworkId,'B');assert.match(g.current().preparationError,/照片模式/);
+test('photo mode waits for explicit choice, then activates B and offers connection',async()=>{
+ const calls=[],app={globalData:{user:{id:'u'}}};let rejectSwitch=false;
+ const ctx={module:{exports:{}},getApp:()=>app,Set,JSON,Error,require:()=>({request:async(url,body)=>{calls.push({url,body});if(url.endsWith('/profile'))return {profile:body};if(url==='/api/analyze')return {id:'job',token:'token'};if(url.includes('/image'))return {id:'B',image:'B'};if(url==='/api/account/ritual')return {plan:{contentMode:'photo'}};return body.activatePrayer&&!rejectSwitch?{status:'queued'}:{status:'photo'};},image:async p=>p})};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../utils/generation.js'),'utf8'),ctx);const g=ctx.module.exports;await g.start({artStyle:'cute'},{requestId:'B'});
+ assert.equal(calls.some(c=>c.body?.activatePrayer),false);assert.equal(g.current().requiresSwitch,true);assert.equal(app.globalData.pendingPrayerArtwork,undefined);
+ rejectSwitch=true;assert.equal(await g.activatePrayer(),false);assert.equal(g.current().requiresSwitch,true);assert.equal(app.globalData.pendingPrayerArtwork,undefined);
+ rejectSwitch=false;assert.equal(await g.activatePrayer(),true);assert.equal(g.current().requiresSwitch,false);assert.equal(app.globalData.pendingPrayerArtwork.id,'B');
+ await g.refreshMode();assert.equal(g.current().requiresSwitch,false,'confirmed queued switch still offers connection');
+ app.globalData.pendingPrayerArtwork=null;await g.refreshMode();assert.equal(g.current().requiresSwitch,true,'manual switch back to photos requires a new explicit choice');
 });

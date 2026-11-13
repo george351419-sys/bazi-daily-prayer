@@ -2,9 +2,9 @@ const {openArtworkExplanation}=require('../../utils/artwork-link');
 const generation=require('../../utils/generation');
 const privacy=require('../../utils/privacy');
 Page({
- data:{phase:'analyzing',text:'正在准备今日造像…',image:'',error:'',preparing:false,savingImage:false,saveError:''},
+ data:{phase:'analyzing',text:'正在准备今日造像…',image:'',error:'',preparing:false,requiresSwitch:null,savingImage:false,saveError:''},
  onLoad(){const profile=getApp().globalData.generationProfile;if(!profile){wx.navigateBack();return;}void generation.start(profile,{requestId:getApp().globalData.generationRequestId||null});},
- onShow(){this.stop=generation.subscribe(task=>{if(task.userId===getApp().globalData.user?.id){const {phase,text,image,error,preparing,preparation,preparationError,imageError}=task;this.setData({phase,text,image,error,preparing,preparation,preparationError,imageError,artworkId:task.record?.id||''});}});},
+ onShow(){this.stop=generation.subscribe(task=>{if(task.userId===getApp().globalData.user?.id){const {phase,text,image,error,preparing,preparation,preparationError,imageError,requiresSwitch}=task;this.setData({phase,text,image,error,preparing,preparation,preparationError,imageError,requiresSwitch,artworkId:task.record?.id||''});}});void generation.refreshMode();},
  onHide(){this.stop?.();this.stop=null;},onUnload(){this.onHide();},
  retry(){void generation.start(getApp().globalData.generationProfile,{requestId:getApp().globalData.generationRequestId||null});},
  reloadImage(){void generation.reloadImage();},retryPreparation(){void generation.retryPreparation();},
@@ -24,5 +24,6 @@ Page({
   }finally{this.setData({savingImage:false});}
  },
  explanation(){return openArtworkExplanation(this);},
- connectScreen(){wx.switchTab({url:'/pages/network/index'});}
+ async switchToPrayer(){await generation.activatePrayer();},
+ async connectScreen(){if(await generation.refreshMode()===false)return;if(generation.current()?.requiresSwitch)return;wx.switchTab({url:'/pages/network/index'});}
 });
