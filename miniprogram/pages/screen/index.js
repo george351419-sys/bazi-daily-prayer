@@ -21,6 +21,7 @@ Page({
   try{const status=await api.request('/api/account/ritual');if(!this.active||run!==this.run||version!==(this.contentVersion||0))return;this.connection.acceptStatus(status);this.setData(this.connection.planView?this.connection.planView():{status,syncState:this.connection.stateFor(status,null),syncLastSeen:receiptTime(status.deviceReport?.lastSeen)});}catch(e){if(this.active&&run===this.run&&version===(this.contentVersion||0)){this.connection.setStatusUnavailable?.();this.setData({syncState:{phase:'unavailable',title:'同步状态暂不可用',detail:'正在重新读取设备回报，请稍候。',step:0}});}}
   if(this.active&&run===this.run)this.syncTimer=setTimeout(()=>this.pollSync(),this.data.syncState?.phase==='rendered'?30000:2000);
  },
+ async recoverSync(){if(this.data.checkingSync||this.data.busy||this.data.binding)return;this.setData({checkingSync:true,error:''});try{await this.connection.recoverSync();this.setData({message:'画屏已使用保存的 Wi-Fi 重新联网，等待后台确认新内容；无需重新上传图片。'});void this.pollSync();}catch(e){api.error(this,e);}finally{this.setData({checkingSync:false});}},
  async syncNow(){if(this.data.checkingSync||this.data.busy||this.data.binding)return;if(!this.data.paired){api.error(this,new Error('请先连接附近画屏蓝牙。'));return;}this.setData({checkingSync:true,error:''});try{await this.ble.syncNow();this.setData({message:'已确认画屏联网，等待设备下一次自动检查；本次操作不会主动断开 Wi-Fi。'});await this.pollSync();}catch(e){api.error(this,e);}finally{this.setData({checkingSync:false});}},
  async load(){
   const run=this.run;

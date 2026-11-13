@@ -91,7 +91,7 @@ class ArkBLE{
   trace('identity:begin');
   const epoch=this.epoch,original=await this.readHeartbeatURL(),normal=HEARTBEAT_NORMAL;
   const priorChallenge=original.startsWith(normal+'?link=')&&/^[a-f0-9]{32}&device_id=$/.test(original.slice((normal+'?link=').length));if(original&&original!==normal&&!priorChallenge)throw new Error('画屏使用了其他云端地址，请先核对设备配置。');
-  const challenge=await request('/api/account/ritual/device',{beginPairing:true});
+  const challenge=await request('/api/account/ritual/device',{beginPairing:true},{timeout:10000});
   if(!/^[a-f0-9]{32}$/.test(challenge.nonce||'')||challenge.heartbeatURL!==normal+'?link='+challenge.nonce+'&device_id=')throw new Error('设备识别服务回复无效。');
   let changed=false;
   try{
@@ -99,7 +99,7 @@ class ArkBLE{
    const end=Date.now()+60000;
    while(Date.now()<end){
     if(epoch!==this.epoch||!this.id)throw new Error('蓝牙连接已断开，请重新连接画屏。');
-    const result=await request('/api/account/ritual/device',{pairingNonce:challenge.nonce});
+    const result=await request('/api/account/ritual/device',{pairingNonce:challenge.nonce},{timeout:10000});
     if(result.status==='identified'&&/^[a-f0-9]{12}$/.test(result.deviceId||''))return result.deviceId;
     await pause(2000);
    }
@@ -140,6 +140,17 @@ class ArkBLE{
   // ritual.6 reconnects the Wi-Fi radio on 0x38, even when it is online.
   this.status=null;await this.write(0x3a,[],this.epoch);
   if(this.status!==true)await this.resumeWifi();
+ }
+ async recoverSync(){
+  if(!this.id)throw new Error('请先连接画屏蓝牙。');
+  const epoch=this.epoch,probe=await this.restoreHeartbeatURL(epoch);
+  if(!['clean','restored'].includes(probe.result))throw new Error('未能确认画屏心跳地址，请先读取设备心跳地址并发送诊断。');
+  if(this.ensureCloudAPI)await this.ensureCloudAPI();
+  trace('sync:recover-network');this.status=null;await this.resumeWifi();
+  const end=Date.now()+30000;
+  while(this.status!==true&&Date.now()<end){if(epoch!==this.epoch||!this.id)throw new Error('蓝牙连接已改变，请重试。');await this.write(0x3a,[],epoch);if(this.status!==true)await pause(700);}
+  if(this.status!==true)throw new Error('画屏尚未确认重新联网，请检查 Wi-Fi 后重试。');
+  trace('sync:recovery-online');this.state('画屏已重新联网，正在等待新内容的云端回报。',true);
  }
  async syncNow(){if(!this.id)throw new Error('请先连接画屏蓝牙。');await this.resumeWifi();if(!this.id)throw new Error('蓝牙已断开');this.state('已请求检查云端更新；等待内容保存回执后，可在画屏选择“画面”并按确认键进入。需要 ritual.6 固件。',true);}
  async disconnect(){if(this.identityRead){this.identityRead.reject(new Error('蓝牙已断开'));this.identityRead=null;}this.status=null;this.epoch++;if(this.downloadRead){this.downloadRead.reject(new Error('蓝牙已断开'));this.downloadRead=null;}await this.stopScan();const id=this.id||this.attemptId;this.id=null;this.attemptId=null;if(id)await call('closeBLEConnection',{deviceId:id}).catch(()=>{});if(wx.offBLECharacteristicValueChange)wx.offBLECharacteristicValueChange(this.onValue);if(wx.offBLEConnectionStateChange)wx.offBLEConnectionStateChange(this.onConnection);this.listening=false;await call('closeBluetoothAdapter',{}).catch(()=>{});this.state('蓝牙未连接。',false);}

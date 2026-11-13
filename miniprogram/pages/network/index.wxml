@@ -8,6 +8,8 @@
   <progress wx:if="{{syncState.percent!==null&&syncState.percent!==undefined}}" percent="{{syncState.percent}}" show-info stroke-width="4"/>
   <view class="sync-steps"><text class="{{syncState.step>=1?'complete':''}}">① 内容就绪</text><text class="{{syncState.step>=2?'complete':''}}">② 下载中</text><text class="{{syncState.step>=3?'complete':''}}">{{syncState.phase==='stored'||syncState.phase==='rendered'||syncState.phase==='user-confirmed'?'③ 内容包已保存':'③ 已保存'}}</text><text class="{{syncState.step>=4?'complete':''}}">{{syncState.phase==='rendered'?'④ 画屏已回报刷新':syncState.phase==='user-confirmed'?'④ 你已确认画面':syncState.phase==='stored'?'④ 现在可以进入画面':'④ 等待画面刷新'}}</text></view>
   <button class="secondary spaced" bindtap="syncNow" wx:if="{{syncState.action==='check'}}" disabled="{{!paired||busy}}">重新检查同步</button>
+  <button wx:if="{{paired&&status.build.status==='published'&&!status.deviceReport.stored&&!status.deviceReport.renderedCurrent}}" class="secondary spaced" bindtap="recoverSync" disabled="{{busy||binding||checkingSync}}" loading="{{checkingSync}}">恢复画屏联网并重试</button>
+  <text wx:if="{{paired&&status.build.status==='published'&&!status.deviceReport.stored&&!status.deviceReport.renderedCurrent}}" class="note">若长时间没有进展，可用已保存的 Wi-Fi 重连一次；不会清除照片或重新配网。</text>
   <button class="text-button spaced" bindtap="toggleDelivered" wx:if="{{paired}}" disabled="{{busy}}">{{delivered?'已手动标记看到新画 · 点击撤销':'我已在画屏看到新画（可选标记）'}}</button>
  </view>
  <view wx:if="{{user}}" class="paper binding-panel">

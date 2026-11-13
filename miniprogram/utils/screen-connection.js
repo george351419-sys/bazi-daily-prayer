@@ -123,6 +123,10 @@ class ScreenConnection{
  }
  async configure(ssid,password){return this.serial(async()=>{const result=await this.client.configure(ssid,password);this.snapshot={...this.snapshot,savedSSID:ssid};this.emit();return result;});}
  async syncNow(){return this.serial(async()=>{const result=await this.client.syncNow();if(this.client.status===true){this.syncRequestedAt=Date.now();this.requestedSha=this.current?.build?.sha256;this.emit();}return result;});}
+ async recoverSync(){
+  if(this.busy)throw new Error('画屏正在处理连接操作，请稍候再恢复联网。');
+  return this.serial(async()=>{await this.client.recoverSync();this.syncSha=null;this.live=null;this.syncRequestedAt=Date.now();this.requestedSha=this.current?.build?.sha256;this.emit();});
+ }
  async syncPublished(){
   const s=this.current,sha=s&&s.build&&s.build.sha256;
   if(this.awaitingPrayerPlan()||this.busy||!this.foreground||!this.client.id||this.client.status!==true||!sha||sha===this.syncSha||s.pendingUpdate||s.build.status!=='published'||!s.device||s.device.id!==this.hardwareId)return;
