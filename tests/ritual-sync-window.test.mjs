@@ -10,6 +10,12 @@ test('pending preparation schedules seven minutes from task start, then bounded 
 });
 test('current publication clears pending while old publication cannot',()=>{
  const plan={revision:'new'};
- assert.equal(ritualSyncWindow({status:'complete'},plan,{status:'published',publication:{manifest:{revision:'new'}}}).sync_wait_pending,false);
+ assert.equal(ritualSyncWindow({status:'complete'},plan,{status:'published',sha256:'new-sha',publication:{manifest:{revision:'new'}}},Date.now(),'new-sha').sync_wait_pending,false);
  assert.equal(ritualSyncWindow({status:'complete'},plan,{status:'published',publication:{manifest:{revision:'old'}}}).sync_wait_pending,true);
+});
+
+test('published content remains pending until this exact package is stored',()=>{
+ const plan={revision:'new'},build={status:'published',sha256:'new-sha',publication:{manifest:{revision:'new'}}};
+ assert.equal(ritualSyncWindow({status:'complete'},plan,build,Date.now(),'old-sha').sync_wait_pending,true);
+ assert.equal(ritualSyncWindow({status:'complete'},plan,build,Date.now(),'new-sha').sync_wait_pending,false);
 });
