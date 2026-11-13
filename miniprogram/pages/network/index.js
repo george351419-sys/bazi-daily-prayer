@@ -1,9 +1,28 @@
+const {prayerPreview}=require('../../utils/prayer-preview');
 const {transferStatus,receiptTime}=require('../../utils/transfer-status');
 const api=require('../../utils/api');const {preparePhoto,authorize}=require('../../utils/photos');const {observeConnection,stopObserving}=require('../../utils/screen-connection');
 const {syncPrayerPair,syncGeneratedPrayer}=require('../../utils/ritual-sync');
 Page({
  syncPhotos:true,
- data:{releaseVersion:'1.1.38',editingPassword:false,binding:false,bindingError:'',bindingExpanded:false,setupExpanded:false,user:null,error:'',message:'',diagnosticText:'',diagnosticReportId:'',sendingDiagnostic:false,busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false,heartbeatUrl:'',heartbeatText:'',delivered:null},
+ data:{releaseVersion:'1.1.39',diagnosticsExpanded:false,previewExpanded:false,previewDay:0,previewImage:'',previewDate:'',previewLoading:false,previewError:'',editingPassword:false,binding:false,bindingError:'',bindingExpanded:false,setupExpanded:false,user:null,error:'',message:'',diagnosticText:'',diagnosticReportId:'',sendingDiagnostic:false,busy:false,contentMode:'prayer',showActions:true,mode:'test',catalog:[],artworks:[],titles:[],choices:[0,0],cursor:null,photoTitle:'',draft:'',bleDevices:[],bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,ssid:'',wifiPassword:'',syncConfigured:false,status:null,connectedDeviceId:'',preparing:false,heartbeatUrl:'',heartbeatText:'',delivered:null},
+ toggleDiagnostics(){this.setData({diagnosticsExpanded:!this.data.diagnosticsExpanded});},
+ togglePreview(){const previewExpanded=!this.data.previewExpanded;this.setData({previewExpanded});if(previewExpanded)void this.loadPrayerPreview(true);else{this.previewRun=(this.previewRun||0)+1;this.setData({previewLoading:false});}},
+ selectPreviewDay(e){const day=Number(e.currentTarget.dataset.day);if(day!==0&&day!==1)return;this.setData({previewDay:day});void this.loadPrayerPreview(!this.previewCatalog);},
+ refreshPreview(){void this.loadPrayerPreview(true);},
+ async loadPrayerPreview(refresh=false){
+  const run=this.previewRun=(this.previewRun||0)+1,userId=this.data.user?.id,day=this.data.previewDay;
+  const owns=()=>this.active&&this.data.previewExpanded&&run===this.previewRun&&getApp().globalData.user?.id===userId;
+  this.setData({previewLoading:true,previewError:'',previewImage:'',previewDate:prayerPreview(null,[],day).date});
+  try{
+   if(refresh){const gallery=await api.request('/api/account/artworks');if(!owns())return;this.previewCatalog=gallery.items||[];}
+   const value=prayerPreview(this.connection?.current||this.data.status,this.previewCatalog||this.data.catalog,day);if(!owns())return;
+   this.setData({previewDate:value.date});if(!value.artwork)return;
+   this.previewImages=this.previewImages||new Map();let image=this.previewImages.get(value.artwork.image);
+   if(!image){image=await api.image(value.artwork.image);if(!owns())return;this.previewImages.set(value.artwork.image,image);}
+   if(owns())this.setData({previewImage:image});
+  }catch(e){if(owns())this.setData({previewError:e.message||'画作暂未载入，请重试。'});}
+  finally{if(owns())this.setData({previewLoading:false});}
+ },
  copyDiagnostic(title,payload){this.setData({diagnosticText:payload});wx.setClipboardData({data:payload,success:()=>wx.showToast({title:title+'已复制，下方也可长按选择',icon:'none'}),fail:()=>wx.showToast({title:'复制失败，请长按下方诊断文本',icon:'none'})});},
  diagnostics(){const {bleDiagnostics}=require('../../utils/ble');this.copyDiagnostic('连接诊断',bleDiagnostics());},
  statusDiagnostics(){const snapshot=this.connection.snapshot,payload=JSON.stringify({status:this.data.status,syncState:this.data.syncState,connection:{paired:snapshot.paired,deviceId:snapshot.connectedDeviceId,wifiConnected:snapshot.wifiConnected,receivedAt:snapshot.receivedAt,delivered:this.connection.delivered},heartbeat:this.heartbeatProbe},null,2);this.copyDiagnostic('状态诊断',payload);},
@@ -34,8 +53,8 @@ Page({
  toggleBindingPanel(){if(!this.data.syncConfigured||this.data.binding)return;this.setData({bindingExpanded:!this.data.bindingExpanded});},
  toggleSetup(){this.setData({setupExpanded:!this.data.setupExpanded});},
  wish(){wx.switchTab({url:'/pages/mine/index'});},
- async onShow(){this.active=true;observeConnection(this);this.run=(this.run||0)+1;api.tab(this,1);await getApp().ready;if(!this.active)return;this.setData({user:getApp().globalData.user,busy:false,bindingExpanded:false});if(this.data.user)this.load();},
- onHide(){clearTimeout(this.syncTimer);this.active=false;this.run++;stopObserving(this);this.photo=null;this.setData({wifiPassword:'',draft:''});},
+ async onShow(){this.active=true;observeConnection(this);this.run=(this.run||0)+1;api.tab(this,1);await getApp().ready;if(!this.active)return;const user=getApp().globalData.user;if(this.previewOwner!==user?.id){this.previewOwner=user?.id;this.previewCatalog=null;this.previewImages=null;this.setData({previewExpanded:false,previewImage:'',previewError:''});}this.setData({user,busy:false,bindingExpanded:false});if(this.data.user)this.load();},
+ onHide(){this.previewRun=(this.previewRun||0)+1;this.setData({previewLoading:false});clearTimeout(this.syncTimer);this.active=false;this.run++;stopObserving(this);this.photo=null;this.setData({wifiPassword:'',draft:''});},
  onUnload(){this.onHide();},
  async pollSync(){
   clearTimeout(this.syncTimer);if(!this.active||!this.data.user)return;const run=this.run;
