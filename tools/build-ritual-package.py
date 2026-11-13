@@ -43,6 +43,44 @@ def text_bitmap(lines,size,font_path,action=False):
  im=Image.new('1',size,0);d=ImageDraw.Draw(im)
  for text,font,x,y,_,_ in text_layout(lines,size,font_path,action):d.text((x,y),text,font=font,fill=1)
  return im.tobytes()
+def packed_answer(raw,slot_size=6300):
+ # Bounded PackBits: control high bit=repeat, low 7 bits=count-1.
+ encoded=bytearray();i=0
+ while i<len(raw):
+  run=1
+  while i+run<len(raw) and raw[i+run]==raw[i] and run<128:run+=1
+  if run>=3:
+   encoded.extend((128+run-1,raw[i]));i+=run;continue
+  start=i;i+=run
+  while i<len(raw) and i-start<128:
+   run=1
+   while i+run<len(raw) and raw[i+run]==raw[i] and run<3:run+=1
+   if run>=3:break
+   i+=min(run,128-(i-start))
+  encoded.append(i-start-1);encoded.extend(raw[start:i])
+ if len(encoded)>slot_size-4:raise ValueError('Answer exceeds lossless slot capacity')
+ return struct.pack('<I',len(encoded))+encoded+bytes(slot_size-4-len(encoded))
+
+def answer_bitmap(answer,font_path):
+ # A: no heading, centered answer followed by its original interpretation.
+ im=Image.new('1',(480,320),0);d=ImageDraw.Draw(im)
+ for text,px,top,bottom in [(answer['text'],42,10,142),(answer['phone_detail'],22,194,310)]:
+  rows=text_layout([(text,px)],(432,bottom-top),font_path)
+  chunks=[row[0] for row in rows];f=ImageFont.truetype(font_path,px)
+  closing='，。！？；：、）》】」』…'
+  for i in range(1,len(chunks)):
+   while chunks[i] and chunks[i][0] in closing:
+    if d.textlength(chunks[i-1]+chunks[i][0],font=f)<=392:
+     chunks[i-1]+=chunks[i][0];chunks[i]=chunks[i][1:]
+    else:
+     chunks[i]=chunks[i-1][-1]+chunks[i];chunks[i-1]=chunks[i-1][:-1]
+  rows=text_layout([('\n'.join(chunks),px)],(432,bottom-top),font_path)
+  for text,font,x,y,_,_ in rows:
+   box=d.textbbox((0,0),text,font=font)
+   d.text(((480-(box[2]-box[0]))/2-box[0],top+y),text,font=font,fill=1)
+ d.line((218,168,262,168),fill=1,width=2)
+ return im.tobytes()
+
 def portrait(film):
  if len(film)!=FRAME or struct.unpack_from('<IHH',film)!=(172800,720,480) or film[8:16]!=bytes([6,0,0,0,0,0,0,0]) or film[16:32]!=bytes([0,255,252,224,3,28]+[0]*10):raise ValueError('Only validated Ark v1 six-colour Film is supported')
  body=film[32:];im=Image.new('RGB',(480,720));pix=im.load()
