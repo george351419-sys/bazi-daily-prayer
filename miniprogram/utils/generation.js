@@ -7,12 +7,13 @@ function current(){return task&&task.userId===getApp().globalData.user?.id?task:
 // 生成新画期间：后端 plan/build/deviceReport 还是上一幅画的快照，完成态必须压住，
 // 否则上一幅的"传输完成"会串台到正在生成的新画上（与网页端 prayer:generating 同款机制）。
 function setGenerating(value){try{getApp().globalData.generating=!!value;}catch{}}
-async function start(profile,{requestId=null}={}){
+function profileKey(profile){const result={};for(const key of Object.keys(profile).sort())result[key]=key==='wishes'&&Array.isArray(profile[key])?[...new Set(profile[key])].sort():profile[key];return JSON.stringify(result);}
+async function start(profile,{requestId=null,force=false}={}){
  const userId=getApp().globalData.user?.id;if(!userId)throw new Error('请先登录账户。');
- const key=JSON.stringify(profile);
- if(task?.userId===userId&&task.key===key&&(task.running||(task.phase==='complete'&&task.requestId===requestId)))return;
- const previous=task?.userId===userId&&task.key===key&&task.requestId===requestId?task:null;
- task={userId,key,requestId,profile,running:true,phase:'analyzing',text:'正在整理祈愿与画风…',image:'',error:'',job:previous?.job||null};publish({});
+ const key=profileKey(profile),date=new Date(Date.now()+8*3600000).toISOString().slice(0,10);
+ if(task?.userId===userId&&task.key===key&&task.date===date&&(task.running||(!force&&task.phase==='complete')))return;
+ const previous=!force&&task?.userId===userId&&task.key===key&&task.date===date?task:null;
+ task={userId,key,date,requestId,profile,running:true,phase:'analyzing',text:'正在整理祈愿与画风…',image:'',error:'',job:previous?.job||null};publish({});
  setGenerating(true);
  const runToken={};task.runToken=runToken;
  const own=()=>getApp().globalData.user?.id===userId&&task?.runToken===runToken;

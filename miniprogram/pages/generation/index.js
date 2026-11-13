@@ -3,10 +3,11 @@ const generation=require('../../utils/generation');
 const privacy=require('../../utils/privacy');
 Page({
  data:{phase:'analyzing',text:'正在准备今日造像…',image:'',error:'',preparing:false,requiresSwitch:null,savingImage:false,saveError:''},
- onLoad(){const profile=getApp().globalData.generationProfile;if(!profile){wx.navigateBack();return;}void generation.start(profile,{requestId:getApp().globalData.generationRequestId||null});},
+ onLoad(){const profile=getApp().globalData.generationProfile;if(!profile){wx.navigateBack();return;}void generation.start(profile);},
  onShow(){this.stop=generation.subscribe(task=>{if(task.userId===getApp().globalData.user?.id){const {phase,text,image,error,preparing,preparation,preparationError,imageError,requiresSwitch}=task;this.setData({phase,text,image,error,preparing,preparation,preparationError,imageError,requiresSwitch,artworkId:task.record?.id||''});}});void generation.refreshMode();},
  onHide(){this.stop?.();this.stop=null;},onUnload(){this.onHide();},
- retry(){void generation.start(getApp().globalData.generationProfile,{requestId:getApp().globalData.generationRequestId||null});},
+ retry(){void generation.start(getApp().globalData.generationProfile);},
+ regenerate(){const profile=generation.current()?.profile||getApp().globalData.generationProfile;if(profile)void generation.start(profile,{force:true});},
  reloadImage(){void generation.reloadImage();},retryPreparation(){void generation.retryPreparation();},
  async saveWallpaper(){
   if(!this.data.image||this.data.savingImage)return;
