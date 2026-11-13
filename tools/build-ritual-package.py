@@ -65,7 +65,8 @@ def encode(im,header):
 def build(plan,films,answers,font):
  if plan['mode'] not in ('test','daily') or len(films)!=2:raise ValueError('Two days required')
  start=int(datetime.datetime.fromisoformat(plan['startsAt'].replace('Z','+00:00')).timestamp())
- if len(plan['days'])!=2 or any(len(d['actions'])!=8 for d in plan['days']):raise ValueError('16 actions required')
+ slots=9 if plan.get('actionSlots')==9 else 8
+ if len(plan['days'])!=2 or any(len(d['actions'])!=slots for d in plan['days']):raise ValueError('Action slot count mismatch')
  photo=plan.get('contentMode','prayer')=='photo';show_actions=plan.get('showActions',True)
  variants=5 if plan.get('actionVariants')==5 else 1
  frames=[]
@@ -83,9 +84,12 @@ def build(plan,films,answers,font):
     if len(options)<variants:raise ValueError('Five action options required')
     a=options[variant]
     strips.append(text_bitmap([(a['branch']+'时 · '+a['title']+((' '+str(variant+1)+'/5') if variants==5 else ''),20),(a['text'],30)],(480,128),font,action=True))
- answer_bits=[text_bitmap([(a['id']+' · 答案之书',18),(a['text'],32)],(480,80),font) for a in answers]
- offset1=64;offset2=offset1+2*FRAME;offset3=offset2+16*variants*STRIP;length=offset3+len(answers)*ANSWER
- header=struct.pack('<8s8I24x',MAGIC,length,start,int(plan['mode']=='test'),len(answers),offset1,offset2,offset3,3 if variants==5 else (2 if photo or not show_actions else 1))
+ rich=plan.get('answerLayout') in ('centered-reading-v1','centered-reading-v2')
+ if slots==9 and (not rich or variants!=5):raise ValueError('Nine slots require rich answers and five variants')
+ answer_size=5500 if slots==9 else 6300 if rich else ANSWER
+ answer_bits=[packed_answer(answer_bitmap(a,font),answer_size) if rich else text_bitmap([(a['id']+' · 答案之书',18),(a['text'],32)],(480,80),font) for a in answers]
+ offset1=64;offset2=offset1+2*FRAME;offset3=offset2+2*slots*variants*STRIP;length=offset3+len(answers)*answer_size
+ header=struct.pack('<8s8I24x',MAGIC,length,start,int(plan['mode']=='test'),len(answers),offset1,offset2,offset3,5 if slots==9 else 4 if rich else 3 if variants==5 else (2 if photo or not show_actions else 1))
  header=bytearray(header);struct.pack_into('<I',header,60,(2|int(not show_actions)) if photo or not show_actions else 0);header[44:60]=hashlib.sha256(json.dumps(plan,sort_keys=True).encode()).digest()[:16]
  if plan.get('anchor','first_connection')=='first_connection' and plan['mode']=='test':
   struct.pack_into('<I',header,12,0);struct.pack_into('<I',header,40,1)
