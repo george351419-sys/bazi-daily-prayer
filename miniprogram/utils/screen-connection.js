@@ -17,7 +17,7 @@ class ScreenConnection{
   this.listeners=new Set();this.snapshot={bleText:'先唤醒画屏，再搜索蓝牙设备。',paired:false,bleDevices:[],connectedDeviceId:'',receivedAt:0,delivered:null};
   this.foreground=true;this.allowed=false;this.attempts=0;this.busy=false;this.live=null;this.current=null;this.syncSha=null;this.syncRequestedAt=null;this.requestedSha=null;
   this.delivered=this.loadDelivered();
-  this.idleRelease=new SyncIdleRelease({setTimer:setTimeout,clearTimer:clearTimeout,read:()=>({status:this.current,connection:{...this.snapshot,deviceId:this.hardwareId,delivered:this.delivered,generating:generationFlag(),busy:this.busy,blocked:this.recovering||this.contentSaving}}),release:async()=>{await this.disconnect();this.notice('内容已保存，已自动断开蓝牙以节省电量；查看画面无需保持连接。');}});
+  this.idleRelease=new SyncIdleRelease({setTimer:setTimeout,clearTimer:clearTimeout,read:()=>({status:this.current,connection:{...this.snapshot,deviceId:this.hardwareId,delivered:this.delivered,generating:generationFlag()||this.awaitingPrayerPlan(),busy:this.busy,blocked:this.recovering||this.contentSaving}}),release:async()=>{await this.disconnect();this.notice('内容已保存，已自动断开蓝牙以节省电量；查看画面无需保持连接。');}});
   this.client=new ArkBLE((bleText,paired)=>{
    paired=!!paired&&!!this.client?.id;
    const lost=this.snapshot.paired&&!paired;
@@ -51,13 +51,16 @@ class ScreenConnection{
   if(status.device&&status.device.id&&status.device.id!==deviceId)return;
   this.markDelivered(sha,deviceId,'ble-download-complete',status.plan?.artworkIds?.[0]||null);
  }
+ awaitingPrayerPlan(){try{const app=getApp(),p=app.globalData.pendingPrayerArtwork;return !!(p?.userId===app.globalData.user?.id&&p?.id&&(!p.date||p.date===new Date(Date.now()+8*3600000).toISOString().slice(0,10))&&this.current?.plan?.contentMode!=='photo'&&!this.current?.plan?.artworkIds?.includes(p.id));}catch{return false;}}
  stateFor(status,artworkId,isGenerating){
   // 送达确认锁定到"当前这幅画"：网页端用 plan.artworkIds[0] 标识当前画作，
   // 小程序端沿用同一判据，换生辰/愿望重新生成后上一幅的确认不得回灌。
-  const current=artworkId||status?.plan?.artworkIds?.[0]||null;
+  let current=artworkId||status?.plan?.artworkIds?.[0]||null;
   const flag=isGenerating??generationFlag();
   // 生成新画期间只吃"新画生成中"，不吃任何旧画的下载进度与完成态。
-  const target=artworkId||null;
+  let pending;try{const app=getApp();pending=app.globalData.pendingPrayerArtwork;if(pending?.userId!==app.globalData.user?.id||(pending?.date&&pending.date!==new Date(Date.now()+8*3600000).toISOString().slice(0,10)))pending=null;}catch{}
+  const target=artworkId||(status?.plan?.contentMode!=='photo'?pending?.id:null)||null;
+  current=target||current;
   const base=flag?transferStatus(status,target,true):withLiveDownload(transferStatus(status,target),status,this.live);
   return withConnection(base,status,{...this.snapshot,deviceId:this.hardwareId,syncRequestedAt:this.syncRequestedAt,requestedSha:this.requestedSha,delivered:this.delivered},Date.now(),current);
  }
@@ -77,7 +80,8 @@ class ScreenConnection{
   this.syncAccount();
   const incoming=Date.parse(status?.plan?.updatedAt||''),known=Date.parse(this.current?.plan?.updatedAt||'');
   if(Number.isFinite(incoming)&&Number.isFinite(known)&&incoming<known)return false;
-  this.current=status;this.statusUnavailable=false;this.idleRelease.update();
+  this.current=status;this.statusUnavailable=false;
+  try{const app=getApp(),pending=app.globalData.pendingPrayerArtwork;if(pending?.userId===app.globalData.user?.id&&status?.plan?.artworkIds?.includes(pending.id))app.globalData.pendingPrayerArtwork=null;}catch{}this.idleRelease.update();
   // 换了内容包、换了画屏，或计划换成了另一幅画：旧送达确认立即失效，
   // 否则旧"✓ 本次同步已完成"会冒充新内容已完成。
   const planned=status?.plan?.artworkIds?.[0]||null;
@@ -120,7 +124,7 @@ class ScreenConnection{
  async syncNow(){return this.serial(async()=>{const result=await this.client.syncNow();if(this.client.status===true){this.syncRequestedAt=Date.now();this.requestedSha=this.current?.build?.sha256;this.emit();}return result;});}
  async syncPublished(){
   const s=this.current,sha=s&&s.build&&s.build.sha256;
-  if(this.busy||!this.foreground||!this.client.id||this.client.status!==true||!sha||sha===this.syncSha||s.pendingUpdate||s.build.status!=='published'||!s.device||s.device.id!==this.hardwareId)return;
+  if(this.awaitingPrayerPlan()||this.busy||!this.foreground||!this.client.id||this.client.status!==true||!sha||sha===this.syncSha||s.pendingUpdate||s.build.status!=='published'||!s.device||s.device.id!==this.hardwareId)return;
   await this.syncNow();if(this.client.status===true)this.syncSha=sha;
  }
  async poll(){

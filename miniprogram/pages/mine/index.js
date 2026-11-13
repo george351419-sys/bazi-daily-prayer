@@ -102,6 +102,7 @@ Page({
   if(!await this.confirmPrivacy())return;
   this.pendingGeneration=false;
   getApp().globalData.generationProfile=profile;
+  getApp().globalData.generationRequestId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
   wx.navigateTo({url:'/pages/generation/index'});
  },
  clearBirthday(){this.markProfileEdited();this.setData({'profile.birthDate':'','profile.birthTime':'','profile.city':''});},

@@ -8,3 +8,8 @@ test('companion fetches only today image and renders no two-day plan',async()=>{
  page.active=true;page.connection={acceptStatus(){}};page.setData=p=>Object.assign(page.data,p);await page.refresh();assert.deepEqual(paths,['today-image']);assert.equal(page.data.image,'/tmp/today.jpg');assert.equal(page.data.artworkTitle,'生活富足');
  const template=fs.readFileSync(require('node:path').join(__dirname,'../pages/today/index.wxml'),'utf8');assert.doesNotMatch(template,/day-previews|status.notice|status.deviceReport|\{\{progress\}\}/);
 });
+
+test('new B previews before its background plan replaces A',async()=>{
+ let page;const paths=[],today=shanghaiDate(),status={plan:{contentMode:'prayer'},planDays:[{date:today,artworkId:'A',image:'image-A'}]},app={ready:Promise.resolve(),globalData:{user:{id:'u'},pendingPrayerArtwork:{userId:'u',id:'B',date:today,image:'image-B',title:'新图'}}};
+ vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../pages/today/index.js'),'utf8'),{Page:p=>page=p,require:id=>id.endsWith('/companion')?require('../utils/companion'):id.includes('today-artwork')?{shanghaiDate,todayArtwork}:id.includes('screen-connection')?{}:{request:async()=>status,image:async p=>{paths.push(p);return 'local-B';}},getApp:()=>app,setTimeout:()=>1,clearTimeout(){}});page.active=true;page.connection={acceptStatus(){}};page.setData=p=>Object.assign(page.data,p);await page.refresh();assert.deepEqual(paths,['image-B']);assert.equal(page.data.artworkId,'B');
+});

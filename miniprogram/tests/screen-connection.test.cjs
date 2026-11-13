@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-function session(){
+function session(app){
  const timers=new Map(),intervals=new Map();let sequence=0;
  class BLE{
   constructor(state,found,download){this.state=state;this.found=found;this.download=download;this.commands=[];this.epoch=0;this.lastContactAt=0;}
@@ -11,7 +11,7 @@ function session(){
   async configure(){this.commands.push('configure');}
   async disconnect(){this.id=null;this.lastContactAt=0;this.state('蓝牙未连接',false);}
  }
- const context={module:{exports:{}},require:name=>name==='./ble'?{ArkBLE:BLE}:name==='./sync-progress'?require('../utils/sync-progress'):name==='./sync-idle'?require('../utils/sync-idle'):require('../utils/transfer-status'),Date,Set,Error,console,setTimeout:(fn,ms)=>{const id=++sequence;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++sequence;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id)};
+ const context={getApp:()=>app||{globalData:{}},module:{exports:{}},require:name=>name==='./ble'?{ArkBLE:BLE}:name==='./sync-progress'?require('../utils/sync-progress'):name==='./sync-idle'?require('../utils/sync-idle'):require('../utils/transfer-status'),Date,Set,Error,console,setTimeout:(fn,ms)=>{const id=++sequence;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++sequence;intervals.set(id,{fn,ms});return id;},clearInterval:id=>intervals.delete(id)};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../utils/screen-connection.js'),'utf8'),context);
  return {...context.module.exports,timers,intervals};
 }
@@ -147,4 +147,10 @@ test('a delayed older plan cannot replace the shared current mode or content',as
  c.acceptStatus({...s,plan:{contentMode:'photo',artworkIds:['new-photo'],updatedAt:'2026-11-12T14:00:00Z'}});
  assert.equal(c.acceptStatus({...s,plan:{contentMode:'prayer',artworkIds:['old','older'],updatedAt:'2026-11-12T13:00:00Z'}}),false);
  assert.equal(c.planView().syncContentTitle,'当前同步：自定义照片');assert.deepEqual(c.current.plan.artworkIds,['new-photo']);
+});
+
+test('A receipt cannot complete B while B is waiting for its plan, and it cannot release Bluetooth',async()=>{
+ const app={globalData:{user:{id:'u'},pendingPrayerArtwork:{userId:'u',id:'B'}}},env=session(app),c=await connected(env),s=ready();s.preparation={ready:true};s.deviceReport.stored=true;
+ c.acceptStatus(s);assert.equal(c.stateFor(s).phase,'preparing');assert.equal(c.awaitingPrayerPlan(),true);assert.equal(c.idleRelease.key,null);assert.equal(c.client.commands.includes('check-sync'),false);
+ const b={...s,plan:{...s.plan,artworkIds:['B','tomorrow']},pendingUpdate:true,preparation:{ready:false,stage:'queued'}};c.acceptStatus(b);assert.equal(app.globalData.pendingPrayerArtwork,null);assert.equal(c.stateFor(b).phase,'preparing');
 });

@@ -17,8 +17,9 @@ Page({
    const app=getApp();await app.ready;if(!own())return;
    const user=app.globalData.user;
    if(!user){this.updateActions(null);this.artworkImageKey='';this.setData({user,sample:true,status:null,image:'/assets/prayer-example.jpg',loading:false,artworkTitle:'',artworkId:''});return;}
-   const status=await api.request('/api/account/ritual');if(!own())return;this.connection.acceptStatus(status);
-   let artwork=todayArtwork(status,today);
+   let status=await api.request('/api/account/ritual');if(!own())return;if(this.connection.acceptStatus(status)===false)status=this.connection.current||status;
+   const pending=app.globalData.pendingPrayerArtwork;
+   let artwork=status.plan?.contentMode!=='photo'&&pending?.userId===user.id&&pending.date===today?pending:todayArtwork(status,today);
    if(!artwork){const gallery=await api.request('/api/account/artworks');if(!own())return;artwork=(gallery.items||[]).find(item=>item.date===today&&item.status==='complete'&&item.source!=='upload'&&item.image)||null;}
    this.updateActions(status,artwork);
    const imagePath=artwork?.image||'',cached=imagePath===this.artworkImageKey?this.data.image:'';
