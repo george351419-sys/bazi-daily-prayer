@@ -94,7 +94,7 @@ test('BLE upgrade validates image, uses bounded chunks and processing barriers b
  const p=peripheral(),updates=[],client=new ArkNetwork({bluetooth:p.bluetooth,onOta:s=>updates.push(s),delay:async()=>{}});await client.connect();const b=otaImage();
  assert.equal(await client.startBleOta(b,imageHash(b)),true);
  assert.equal(p.writes[0][1],0x33);const channels=p.writes.slice(1).map(b=>b[1]);assert.equal(channels[0],0x56);assert.equal(channels[1],0x10);assert.equal(channels[2],0x42);assert.equal(channels.at(-2),0x42);assert.equal(channels.at(-1),0x13);
- assert.equal(channels.filter(c=>c===0x11).length,10);assert.equal(channels.filter(c=>c===0x42).length,3);
+ assert.equal(channels.filter(c=>c===0x11).length,10);assert.equal(channels.filter(c=>c===0x42).length,4);
  const data=p.writes.filter(b=>b[1]===0x11).flatMap(b=>b.slice(3,-1));assert.deepEqual(data,[...b]);assert.equal(updates.at(-1).progress,100);client.disconnect();
 });
 test('corrupt downloaded firmware cannot start a BLE write',async()=>{const p=peripheral(),client=new ArkNetwork({bluetooth:p.bluetooth,delay:async()=>{}});await client.connect();await assert.rejects(client.startBleOta(otaImage(),'a'.repeat(64)),/校验失败/);assert.equal(p.writes.some(b=>b[1]===0x10),false);client.disconnect();});
@@ -247,4 +247,17 @@ test('写入成功即刷新在线接触证据，静默设备不回包也能续�
  assert.equal(client.lastContactAt,2500,'校验失败的包不得刷新证据');
  t=11000;client.receive(packet(0x3a,[1]));
  assert.equal(client.lastContactAt,11000,'有效回包同样刷新接触证据');
+});
+
+test('processing barrier waits for write completion even when notification arrives first',async()=>{
+ const client=new ArkNetwork({delay:async()=>{}});client.epoch=1;let release;
+ client.write=async channel=>{client.pendingResponses.get(channel).resolve(new Uint8Array(5));await new Promise(resolve=>release=resolve);};
+ let finished=false;const pending=client.request(0x42).then(()=>finished=true);await Promise.resolve();await Promise.resolve();assert.equal(finished,false);release();await pending;assert.equal(finished,true);
+});
+test('a write failure after an early barrier reply still rejects the barrier',async()=>{
+ const client=new ArkNetwork({delay:async()=>{}});client.write=async channel=>{client.pendingResponses.get(channel).resolve(new Uint8Array(5));throw Error('write did not settle');};await assert.rejects(client.request(0x42),/did not settle/);
+});
+
+test('an early reply cannot hide a stuck barrier write timeout',async()=>{
+ const client=new ArkNetwork({delay:async()=>{}});client.write=async channel=>{client.pendingResponses.get(channel).resolve(new Uint8Array(5));await new Promise(()=>{});};await assert.rejects(client.request(0x42,[],10),/超时/);assert.equal(client.pendingResponses.size,0);
 });

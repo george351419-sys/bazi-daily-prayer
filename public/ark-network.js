@@ -58,7 +58,7 @@ export class ArkNetwork {
    }
    const {characteristic}=opened;
    if(epoch!==this.epoch){device.gatt.disconnect();return;}
-   device.addEventListener('gattserverdisconnected',this.lost=()=>{this.trace('native:disconnected');if(epoch===this.epoch)this.disconnect('蓝牙已断开。正在尝试恢复连接；若画屏已休眠，请按键唤醒，无需重新填写 Wi-Fi。');});
+   device.addEventListener('gattserverdisconnected',this.lost=()=>{this.trace('native:disconnected');if(epoch===this.epoch)this.disconnect('蓝牙连接已断开，本次操作尚未确认完成，请查看下方升级诊断。');});
    this.characteristic=characteristic;this.listener=event=>{if(epoch===this.epoch&&this.characteristic===characteristic)this.receive(new Uint8Array(event.target.value.buffer,event.target.value.byteOffset,event.target.value.byteLength));};
    characteristic.addEventListener('characteristicvaluechanged',this.listener);this.trace('notify:start');await characteristic.startNotifications();this.trace('notify:ready');
    if(epoch!==this.epoch)return;
@@ -90,7 +90,7 @@ export class ArkNetwork {
  async write(channel,data,epoch=this.epoch,pace=200){
   if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙已断开，请重新连接。');
   const command=channel.toString(16).padStart(2,'0');this.trace('write:'+command+':start');
-  const prior=this.bleWrite||Promise.resolve();const write=prior.catch(()=>{}).then(()=>{if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙已断开，请重新连接。');return this.characteristic.writeValue(packet(channel,data));});this.bleWrite=write;await write;await this.delay(pace);
+  const prior=this.bleWrite||Promise.resolve();const write=prior.catch(()=>{}).then(()=>{if(epoch!==this.epoch||!this.characteristic)throw new Error('蓝牙已断开，请重新连接。');const bytes=packet(channel,data);return this.characteristic.properties?.write&&typeof this.characteristic.writeValueWithResponse==='function'?this.characteristic.writeValueWithResponse(bytes):this.characteristic.writeValue(bytes);});this.bleWrite=write;await write;await this.delay(pace);
   this.trace('write:'+command+':done');
   if(epoch!==this.epoch)throw new Error('蓝牙已断开，请重新连接。');
   // 写入成功同样证明链路存活（部分设备只在状态变化时上报 0x3a，不会每次查询都 notify）。
@@ -252,14 +252,21 @@ export class ArkNetwork {
   });
  }
  async request(channel,payload=[],timeout=5000){
-  const epoch=this.epoch;
-  return new Promise((resolve,reject)=>{
-   if(this.pendingResponses.has(channel))return reject(new Error('画屏命令仍在处理中。'));
-   const timer=setTimeout(()=>{this.pendingResponses.delete(channel);reject(new Error('画屏未返回命令结果。'));},timeout);
-   this.pendingResponses.set(channel,{resolve:value=>{clearTimeout(timer);resolve(value);},reject:error=>{clearTimeout(timer);reject(error);}});
-   this.write(channel,payload,epoch).catch(error=>{this.pendingResponses.delete(channel);clearTimeout(timer);reject(error);});
+  const epoch=this.epoch;let entry,timer,expire;
+  const deadline=new Promise((_,reject)=>expire=reject);
+  if(this.pendingResponses.has(channel))throw new Error('画屏命令仍在处理中。');
+  const reply=new Promise((resolve,reject)=>{
+   entry={resolve,reject};this.pendingResponses.set(channel,entry);
+   timer=setTimeout(()=>{if(this.pendingResponses.get(channel)===entry)this.pendingResponses.delete(channel);const error=new Error('画屏命令写入或回报等待超时。');reject(error);expire(error);},timeout);
   });
+  try{
+   // A reply can arrive before writeValue and its pacing delay have settled.
+   // Await both so processing barriers cannot release the next OTA batch early.
+   const [,result]=await Promise.race([Promise.all([this.write(channel,payload,epoch),reply]),deadline]);return result;
+  }catch(error){entry.reject(error);throw error;}
+  finally{clearTimeout(timer);if(this.pendingResponses.get(channel)===entry)this.pendingResponses.delete(channel);}
  }
+
  async readBuildInfo(){
   const data=await this.request(0x56);
   if(data.length<39||data[0]!==1)throw new Error('设备升级能力信息不完整，请重新连接并读取版本。');
@@ -274,20 +281,21 @@ export class ArkNetwork {
   if(bytes.length<288||bytes[0]!==0xe9||view.getUint16(12,true)!==9||view.getUint32(32,true)!==0xabcd5432||new TextDecoder().decode(bytes.slice(80,112)).replace(/\0.*$/,'')!=='frame_film_ark')throw new Error('固件不是有效的 ESP32-S3 Ark 应用镜像。');
   const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',bytes));
   if(Array.from(digest).map(n=>n.toString(16).padStart(2,'0')).join('')!==sha256)throw new Error('固件 SHA-256 校验失败，未写入画屏。');
+  let sent=0;this.trace('ota:ble:begin:'+bytes.length);
   const epoch=this.epoch,head=new Uint8Array(4);new DataView(head.buffer).setUint32(0,bytes.length);
   const barrier=async()=>{const result=await this.request(0x42,[],15000);if(result.length!==5)throw new Error('未收到画屏固件处理确认，已停止发送。');};
   try{
   await this.write(0x10,head,epoch);await barrier();
   let chunks=0;
   for(let offset=0;offset<bytes.length;offset+=192){
-   await this.write(0x11,bytes.slice(offset,offset+192),epoch,12);chunks++;
-   if(chunks%8===0)await barrier();
-   const sent=Math.min(offset+192,bytes.length);this.onOta({transport:'ble',state:2,progress:Math.floor(sent*100/bytes.length),received:sent,total:bytes.length});
+   await this.write(0x11,bytes.slice(offset,offset+192),epoch,35);chunks++;
+   if(chunks%4===0)await barrier();
+   sent=Math.min(offset+192,bytes.length);this.onOta({transport:'ble',state:2,progress:Math.floor(sent*100/bytes.length),received:sent,total:bytes.length});
   }
-  if(chunks%8!==0)await barrier();
-  }catch(error){throw new Error('蓝牙升级传输已停止：'+error.message+'。请重启画屏后重新连接再试；未发送固件提交命令。');}
+  if(chunks%4!==0)await barrier();
+  }catch(error){this.trace('ota:ble:failed:'+sent+'/'+bytes.length);throw new Error('蓝牙升级传输已停止（已发送 '+sent+'/'+bytes.length+' 字节）：'+error.message+'。请重启画屏后重新连接再试；未发送固件提交命令。');}
   // Only a complete, drained transfer may request validation and reboot. Never commit on failure.
-  try{await this.write(0x13,[],epoch);}catch(error){if(this.characteristic)throw error;}
+  this.trace('ota:ble:commit');try{await this.write(0x13,[],epoch);}catch(error){if(this.characteristic)throw error;}
   return true;
  }
  async startWifiOta(url,size,sha256){
@@ -313,6 +321,7 @@ export class ArkNetwork {
   throw new Error('等待固件下载完成超时。');
  }
  disconnect(message='蓝牙未连接。请先唤醒画屏，再连接。'){
+  this.bleWrite=null;
   if(this.identityRead){this.identityRead.reject(new Error('蓝牙已断开'));this.identityRead=null;}this.epoch++;if(this.waiting){this.waiting.reject(new Error('蓝牙已断开'));this.waiting=null;}
   if(this.ssidRead){this.ssidRead.reject(new Error('蓝牙已断开'));this.ssidRead=null;}
   for(const pending of this.pendingResponses.values())pending.reject(new Error('蓝牙已断开'));this.pendingResponses.clear();
