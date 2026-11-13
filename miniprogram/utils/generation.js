@@ -26,11 +26,11 @@ async function start(profile,{requestId=null}={}){
   setGenerating(false);
   // Start both immediately. Loading tomorrow must never delay showing today's picture.
   void api.image(record.image||('/api/account/artworks/'+record.id+'/image')).then(image=>{if(own())publish({image,text:'今日造像已完成。'});}).catch(()=>{if(own())publish({imageError:true,text:'今日造像已保存，图片暂未载入，请点击重新载入。'});});
-  try{const result=await api.request('/api/account/ritual/prepare',{background:true});if(result.status==='idle')throw new Error('后台任务尚未确认，请重试提交。');if(own())publish({preparing:false,preparation:result.status==='photo'?'画屏当前保留自定义作品轮播。':'后台任务已保存，正在准备明日画作、两天微行动与画屏数据。'});}
+  try{const result=await api.request('/api/account/ritual/prepare',{background:true,activatePrayer:true,artworkId:record.id});if(result.status==='photo')throw new Error('当前仍是照片模式，切换祈福图尚未成功，请更新后端后重试准备内容。');if(result.status==='idle')throw new Error('后台任务尚未确认，请重试提交。');if(own())publish({preparing:false,preparation:'新祈福图已设为同步目标，后台正在准备画屏内容。'});}
   catch(e){if(own())publish({preparing:false,preparationError:e.message});}
  }catch(e){if(own())publish({phase:'failed',error:e.message,text:'本次生成暂未完成，请重试。'});}
  finally{if(own())publish({running:false});if(own())setGenerating(false);}
 }
 async function reloadImage(){const t=current();if(!t?.record)return;try{const image=await api.image(t.record.image||('/api/account/artworks/'+t.record.id+'/image'));if(task===t)publish({image,imageError:false,text:'今日造像已完成。'});}catch(e){if(task===t)publish({error:e.message});}}
-async function retryPreparation(){const t=current();if(!t||t.preparing)return;publish({preparing:true,preparationError:''});try{await api.request('/api/jobs/'+t.record.id+'/image',{jobToken:t.record.token,prepareNext:true});if(task?.runToken===t.runToken)publish({preparation:'两日内容计划已保存，后台继续准备画屏数据。'});}catch(e){if(task?.runToken===t.runToken)publish({preparationError:e.message});}finally{if(task?.runToken===t.runToken)publish({preparing:false});}}
+async function retryPreparation(){const t=current();if(!t||t.preparing)return;publish({preparing:true,preparationError:''});try{await api.request('/api/jobs/'+t.record.id+'/image',{jobToken:t.record.token,prepareNext:true});if(task?.runToken!==t.runToken)return;const result=await api.request('/api/account/ritual/prepare',{background:true,activatePrayer:true,artworkId:t.record.id});if(['photo','idle'].includes(result.status))throw new Error('新祈福图计划尚未提交，请重试。');if(task?.runToken===t.runToken)publish({preparation:'两日内容计划已保存，后台继续准备画屏数据。'});}catch(e){if(task?.runToken===t.runToken)publish({preparationError:e.message});}finally{if(task?.runToken===t.runToken)publish({preparing:false});}}
 module.exports={start,subscribe,current,reloadImage,retryPreparation};

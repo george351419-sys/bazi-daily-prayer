@@ -154,3 +154,6 @@ test('A receipt cannot complete B while B is waiting for its plan, and it cannot
  c.acceptStatus(s);assert.equal(c.stateFor(s).phase,'preparing');assert.equal(c.awaitingPrayerPlan(),true);assert.equal(c.idleRelease.key,null);assert.equal(c.client.commands.includes('check-sync'),false);
  const b={...s,plan:{...s.plan,artworkIds:['B','tomorrow']},pendingUpdate:true,preparation:{ready:false,stage:'queued'}};c.acceptStatus(b);assert.equal(app.globalData.pendingPrayerArtwork,null);assert.equal(c.stateFor(b).phase,'preparing');
 });
+test('stored photo receipt cannot complete requested prayer B; an explicit photo save cancels B',async()=>{
+ const app={globalData:{user:{id:'u'},pendingPrayerArtwork:{userId:'u',id:'B'}}},env=session(app),c=await connected(env),s=ready();s.plan.contentMode='photo';s.preparation={ready:true};s.deviceReport.stored=true;c.acceptStatus(s);assert.equal(c.stateFor(s).phase,'preparing');assert.match(c.stateFor(s).title,/切换/);assert.equal(c.awaitingPrayerPlan(),true);assert.equal(c.idleRelease.key,null);c.setContentSaving(true);assert.equal(app.globalData.pendingPrayerArtwork,null);
+});

@@ -51,7 +51,7 @@ class ScreenConnection{
   if(status.device&&status.device.id&&status.device.id!==deviceId)return;
   this.markDelivered(sha,deviceId,'ble-download-complete',status.plan?.artworkIds?.[0]||null);
  }
- awaitingPrayerPlan(){try{const app=getApp(),p=app.globalData.pendingPrayerArtwork;return !!(p?.userId===app.globalData.user?.id&&p?.id&&(!p.date||p.date===new Date(Date.now()+8*3600000).toISOString().slice(0,10))&&this.current?.plan?.contentMode!=='photo'&&!this.current?.plan?.artworkIds?.includes(p.id));}catch{return false;}}
+ awaitingPrayerPlan(){try{const app=getApp(),p=app.globalData.pendingPrayerArtwork;return !!(p?.userId===app.globalData.user?.id&&p?.id&&(!p.date||p.date===new Date(Date.now()+8*3600000).toISOString().slice(0,10))&&!this.current?.plan?.artworkIds?.includes(p.id));}catch{return false;}}
  stateFor(status,artworkId,isGenerating){
   // 送达确认锁定到"当前这幅画"：网页端用 plan.artworkIds[0] 标识当前画作，
   // 小程序端沿用同一判据，换生辰/愿望重新生成后上一幅的确认不得回灌。
@@ -61,7 +61,8 @@ class ScreenConnection{
   let pending;try{const app=getApp();pending=app.globalData.pendingPrayerArtwork;if(pending?.userId!==app.globalData.user?.id||(pending?.date&&pending.date!==new Date(Date.now()+8*3600000).toISOString().slice(0,10)))pending=null;}catch{}
   const target=artworkId||(status?.plan?.contentMode!=='photo'?pending?.id:null)||null;
   current=target||current;
-  const base=flag?transferStatus(status,target,true):withLiveDownload(transferStatus(status,target),status,this.live);
+  const switching=pending&&status?.plan?.contentMode==='photo';
+  const base=switching&&!flag?{phase:'preparing',title:'正在切换为新生成的祈福图',detail:'照片计划尚未切换完成，后台正在准备新图；旧照片的存储回执不代表新图已同步。',preparation:true,step:0,percent:null}:flag?transferStatus(status,target,true):withLiveDownload(transferStatus(status,target),status,this.live);
   return withConnection(base,status,{...this.snapshot,deviceId:this.hardwareId,syncRequestedAt:this.syncRequestedAt,requestedSha:this.requestedSha,delivered:this.delivered},Date.now(),current);
  }
  syncAccount(){
@@ -89,7 +90,7 @@ class ScreenConnection{
   this.emit();
   void this.syncPublished().catch(error=>this.notice('自动检查同步暂未成功：'+error.message));
  }
- setContentSaving(value){this.contentSaving=value;this.idleRelease.update();this.emit();}
+ setContentSaving(value){if(value){try{getApp().globalData.pendingPrayerArtwork=null;}catch{}}this.contentSaving=value;this.idleRelease.update();this.emit();}
  notice(bleText){this.snapshot={...this.snapshot,bleText};this.emit();}
  async scan(){this.idleRelease.cancel();this.allowed=false;clearTimeout(this.retryTimer);this.retryTimer=null;this.live=null;this.hardwareId='';await this.client.scan();}
  async connect(id){

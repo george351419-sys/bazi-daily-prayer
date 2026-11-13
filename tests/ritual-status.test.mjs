@@ -219,3 +219,25 @@ test('published-format retry retains its failure stage, timestamps and revision 
  const {transferStatus}=await import('../public/transfer-status.js');assert.match(transferStatus(result).title,/发布失败/);
  const next=(await configureRitual(c,account,{mode:'test',artworkIds:ids.slice(2)}));assert.equal(next.build.failure,null);assert.equal(transferStatus(next).phase,'preparing');
 });
+
+test('explicit B activation replaces a stored photo plan and invalidates its successful receipt',async t=>{
+ const {enqueueRitualPreparation,advanceRitualPreparation}=await import('../lib/ritual-preparation.mjs');
+ const {transferStatus}=await import('../public/transfer-status.js');
+ const {c,repo,account,device,ids,cloud}=await setup(t),photo=await repo.get('artworks/'+account.id+'/'+ids[0]);await saveArtwork(c,account,{...photo,source:'upload'});
+ const plan=(await configureRitual(c,account,{contentMode:'photo',artworkIds:[photo.id]})).plan;
+ const pair=[photo.id,photo.id],sha='9'.repeat(64);await repo.put('ritual-build/'+account.id,{status:'published',publication:{manifest:manifest(plan,pair),sha256:sha}});cloud('reports/'+device,{targetSha:sha,stored:true,lastSeen:new Date().toISOString()});
+ assert.equal((await ritualStatus(c,account)).deviceReport.stored,true);
+ const profile={gender:'female',birthDate:'1990-01-01',birthTime:'12:00',calendar:'solar',wishes:['W02'],artStyle:'cute'};await saveProfile(c,account,profile);
+ const now=Date.now(),date=new Date(now+7*3600000).toISOString().slice(0,10),next=new Date(Date.parse(date+'T00:00:00Z')+86400000).toISOString().slice(0,10),sig=profileSignature(validateInput(profile,date));
+ const b={id:newArtworkId(),userId:account.id,date,createdAt:new Date(now).toISOString(),profileSignature:sig,status:'complete',image:{key:'B'},mapping:{title:'新祈福图',primary_element:'火',secondary_element:'木',art_style:'cute'}};
+ await saveArtwork(c,account,b);await saveArtwork(c,account,{...b,id:newArtworkId(),date:next,source:'ritual-pair'});
+ assert.equal((await enqueueRitualPreparation(c,account,b)).status,'photo','passive completion preserves photo choice');
+ await enqueueRitualPreparation(c,account,b,{activatePrayer:true});
+ const waiting=await ritualStatus(c,account);assert.equal(waiting.preparation.ready,false);assert.equal(waiting.deviceReport.stored,false);assert.equal(transferStatus(waiting).phase,'preparing');
+ assert.equal((await advanceRitualPreparation(c,account)).status,'complete');
+ const updated=await ritualStatus(c,account);assert.equal(updated.plan.contentMode,'prayer');assert.equal(updated.plan.artworkIds[0],b.id);assert.notEqual(updated.plan.revision,plan.revision);assert.equal(updated.deviceReport.stored,false);
+ // A subsequent explicit photo choice wins over a pending activation, even for the same B.
+ const photoPlan=(await configureRitual(c,account,{contentMode:'photo',artworkIds:[photo.id]})).plan;
+ await enqueueRitualPreparation(c,account,b,{activatePrayer:true});await repo.put('ritual/'+account.id,{...photoPlan,revision:'newer-photo-choice'});
+ assert.equal((await advanceRitualPreparation(c,account)).status,'superseded');assert.equal((await ritualStatus(c,account)).plan.contentMode,'photo');
+});
