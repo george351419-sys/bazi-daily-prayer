@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       IMAGE_REPOSITORY: ${{ inputs.image_repository }}
     steps:
@@ -22,7 +22,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Test cloud execution and receipt evidence
-        run: node --test tests/ritual-cloud-tick.test.mjs tests/ritual-worker-alerts.test.mjs tests/ritual-daily-rollover.test.mjs tests/ritual-worker-bridge.test.mjs tests/ritual-worker-state.test.mjs tests/ritual-background-pair.test.mjs tests/ritual-status.test.mjs
+        run: node --test tests/ritual-image-push.test.mjs tests/ritual-cloud-tick.test.mjs tests/ritual-worker-alerts.test.mjs tests/ritual-daily-rollover.test.mjs tests/ritual-worker-bridge.test.mjs tests/ritual-worker-state.test.mjs tests/ritual-background-pair.test.mjs tests/ritual-status.test.mjs
       - name: Validate private registry repository
         id: registry
         run: |
@@ -33,22 +33,56 @@ jobs:
           const host=value.split("/")[0];
           if(!(host.endsWith(".tencentcloudcr.com")||host.endsWith(".ccs.tencentyun.com")))throw Error("Use Tencent TCR");
           appendFileSync(process.env.GITHUB_OUTPUT,"host="+host+"\n");'
+      - name: Limit upload concurrency for the TCR connection
+        run: |
+          sudo python3 - <<'PYTHON'
+          import json
+          from pathlib import Path
+          config=Path('/etc/docker/daemon.json')
+          settings=json.loads(config.read_text()) if config.exists() else {}
+          settings['max-concurrent-uploads']=1
+          config.write_text(json.dumps(settings))
+          PYTHON
+          sudo systemctl restart docker
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ${{ steps.registry.outputs.host }}
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
-      - name: Build x86 image with real compiler preflight and push
-        id: image
+      - name: Build and load validated x86 image (no registry upload)
+        id: build
+        timeout-minutes: 15
         uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/ritual-scf/Dockerfile
           platforms: linux/amd64
-          push: true
+          load: true
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           provenance: false
           tags: ${{ inputs.image_repository }}:${{ github.sha }}
+      - name: Push validated image to Tencent TCR with bounded retries
+        id: image
+        timeout-minutes: 18
+        env:
+          IMAGE_TAG: ${{ inputs.image_repository }}:${{ github.sha }}
+        run: bash scripts/push-ritual-image.sh
+      - name: Save validated image when registry upload fails
+        if: failure() && steps.build.outcome == 'success' && steps.image.outcome == 'failure'
+        env:
+          IMAGE_TAG: ${{ inputs.image_repository }}:${{ github.sha }}
+        run: docker save "$IMAGE_TAG" | gzip -1 > "$RUNNER_TEMP/ritual-scf-image.tar.gz"
+      - name: Retain image for a one-time upload from another network
+        if: failure() && steps.build.outcome == 'success' && steps.image.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ritual-scf-image-${{ github.sha }}
+          path: ${{ runner.temp }}/ritual-scf-image.tar.gz
+          retention-days: 3
+          compression-level: 0
       - name: Record immutable image for SCF console
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
