@@ -39,11 +39,11 @@ async function processAccount(accountId,deviceId){
  if(pendingPublications.has(accountId)){const pending=pendingPublications.get(accountId);await saveBuild(accountId,pending.build,pending.revision);pendingPublications.delete(accountId);return;}
  let state=await snapshot(accountId),plan=state.plan,prior=state.build,tmp,preparedForRetry=null,committedBuild=null,failureStage='images';
  deviceId=state.deviceId;const bindingId=state.bindingId||null;
- if(state.preparation&&!['complete','superseded'].includes(state.preparation.status)){
+ if(plan?.mode==='daily'&&plan.contentMode==='prayer'||state.preparation&&!['complete','superseded'].includes(state.preparation.status)){
   for(let step=0;step<3;step++){
    const progress=await (await call('/api/internal/ritual-worker/accounts/'+accountId+'/preparation',{method:'POST',body:{}})).json();
    console.log(JSON.stringify({at:new Date().toISOString(),event:'preparation-progress',accountId,status:progress.status,step}));
-   if(['waiting','busy'].includes(progress.status))return;
+   if(['waiting','busy','missing_current_day','profile_changed'].includes(progress.status))return;
    if(['complete','superseded','idle'].includes(progress.status))break;
   }
   state=await snapshot(accountId);plan=state.plan;prior=state.build;
