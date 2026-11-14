@@ -1,8 +1,8 @@
 import {cachedRitualPackage,uploadCachedRitualPackage,resetRitualUpload,ritualFailure} from '../lib/ritual-package-cache.mjs';
-import {compactRitualBuild,legacyPhotoIds,stagedRitualBuild,processRitualAccounts} from '../lib/ritual-worker-state.mjs';
+import {compactRitualBuild,legacyPhotoIds,stagedRitualBuild,processRitualAccounts,resumePreparedRitual} from '../lib/ritual-worker-state.mjs';
 import {normalizeArtStyle} from '../lib/art-styles.mjs';
 // Long-running remote worker for an HTTPS site connected to the same account store.
-import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,rm,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
@@ -17,6 +17,7 @@ import {ritualWorkerSignature} from '../lib/ritual-worker-bridge.mjs';
 import {personalizeActionOptions} from '../lib/action-personalization.mjs';
 
 const c={...process.env},origin=c.RITUAL_PUBLIC_ORIGIN||c.ARK_PUBLIC_ORIGIN,exec=promisify(execFile),root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+async function heartbeat(){if(c.RITUAL_STATE_DIR){await mkdir(c.RITUAL_STATE_DIR,{recursive:true,mode:0o700});await writeFile(path.join(c.RITUAL_STATE_DIR,'heartbeat.json'),JSON.stringify({at:new Date().toISOString()}),{mode:0o600});}}
 if(origin!=='https://playmath.cn'||!c.SESSION_SECRET||typeof c.SESSION_SECRET!=='string'||c.SESSION_SECRET.length<20)throw new Error('Configure RITUAL_PUBLIC_ORIGIN=https://playmath.cn and the production SESSION_SECRET');
 
 async function call(pathname,{method='GET',body}={}){
@@ -34,13 +35,14 @@ async function saveBuild(accountId,state,revision){
  }
 }
 
-const pendingPublications=new Map();
+const pendingPublications=new Map();let tickFailed=false;
 async function processAccount(accountId,deviceId){
  if(pendingPublications.has(accountId)){const pending=pendingPublications.get(accountId);await saveBuild(accountId,pending.build,pending.revision);pendingPublications.delete(accountId);return;}
+ await heartbeat();
  let state=await snapshot(accountId),plan=state.plan,prior=state.build,tmp,preparedForRetry=null,committedBuild=null,failureStage='images';
  deviceId=state.deviceId;const bindingId=state.bindingId||null;
  if(plan?.mode==='daily'&&plan.contentMode==='prayer'||state.preparation&&!['complete','superseded'].includes(state.preparation.status)){
-  for(let step=0;step<3;step++){
+  for(let step=0;step<(c.RITUAL_SINGLE_PREPARATION_STEP==='1'?1:3);step++){
    const progress=await (await call('/api/internal/ritual-worker/accounts/'+accountId+'/preparation',{method:'POST',body:{}})).json();
    console.log(JSON.stringify({at:new Date().toISOString(),event:'preparation-progress',accountId,status:progress.status,step}));
    if(['waiting','busy','missing_current_day','profile_changed'].includes(progress.status))return;
@@ -70,7 +72,7 @@ async function processAccount(accountId,deviceId){
  console.log(JSON.stringify({at:new Date().toISOString(),event:'publication-decision',accountId,deviceId,bindingId,revision:plan.revision,signature,priorStatus:prior?.status,priorDevice:ritualPublication(prior)?.deviceId,priorBinding:ritualPublication(prior)?.bindingId,priorSignature:ritualPublication(prior)?.signature}));
  if(deviceId&&ritualPublication(prior)?.deviceId===deviceId&&ritualPublication(prior)?.bindingId===bindingId&&ritualPublication(prior)?.signature===signature){if(prior.status!=='published')await saveBuild(accountId,{...prior,status:'published',nextAttemptAt:null});return;}
  try{
-  let prepared=prior?.prepared?.signature===signature?prior.prepared:null;preparedForRetry=prepared;
+  let prepared=resumePreparedRitual(prior,signature,manifest);preparedForRetry=prepared;
   const progress=async(stage,counts=null)=>{
    const result=await saveBuild(accountId,{...prior,status:'preparing',stage,progress:counts,attemptedRevision:plan.revision,stageUpdatedAt:new Date().toISOString()},plan.revision);
    if(result.superseded)throw new Error('Ritual plan superseded');
@@ -84,7 +86,7 @@ async function processAccount(accountId,deviceId){
    await writeFile(path.join(tmp,'answers.json'),JSON.stringify({answers}),{mode:0o600});
    for(let index=0;index<2;index++){await image(accountId,records[index].id,path.join(tmp,`day-${index}.png`));await progress('images',{completed:index+1,total:2});}
    failureStage='encoding';await progress('encoding');
-   await exec(c.PRAYER_TEST_PYTHON||'/opt/homebrew/bin/python3',[path.join(root,'tools/build-ritual-package.py'),'--plan',path.join(tmp,'plan.json'),'--images',path.join(tmp,'day-0.png'),path.join(tmp,'day-1.png'),'--answers',path.join(tmp,'answers.json'),...(plan.contentMode==='photo'?['--cache-dir',path.join(c.RITUAL_FRAME_CACHE_DIR||path.join(root,'.runtime','ritual-frame-cache'),accountId)]:[]),'--out',path.join(tmp,'ritual.bin'),...(c.RITUAL_FONT?['--font',c.RITUAL_FONT]:[])],{timeout:120000,maxBuffer:100000});
+   await exec(c.PRAYER_TEST_PYTHON||'/opt/homebrew/bin/python3',[path.join(root,'tools/build-ritual-package.py'),...(c.RITUAL_ENCODER_ROOT?['--encoder-root',c.RITUAL_ENCODER_ROOT]:[]),'--plan',path.join(tmp,'plan.json'),'--images',path.join(tmp,'day-0.png'),path.join(tmp,'day-1.png'),'--answers',path.join(tmp,'answers.json'),...(plan.contentMode==='photo'?['--cache-dir',path.join(c.RITUAL_FRAME_CACHE_DIR||path.join(root,'.runtime','ritual-frame-cache'),accountId)]:[]),'--out',path.join(tmp,'ritual.bin'),...(c.RITUAL_FONT?['--font',c.RITUAL_FONT]:[])],{timeout:120000,maxBuffer:100000});
    return readFile(path.join(tmp,'ritual.bin'));
    });
    failureStage='uploading';const staged=await uploadCachedRitualPackage(c,cacheDir,signature,bytes,{onProgress:counts=>progress('uploading',counts)});
@@ -104,6 +106,7 @@ async function processAccount(accountId,deviceId){
   if(saved.superseded)return;
   console.log('Two-day ritual package published for '+accountId+'; awaiting device receipt.');
  }catch(error){
+  tickFailed=true;
   if(committedBuild){pendingPublications.set(accountId,{build:committedBuild,revision:plan.revision});console.error(JSON.stringify({at:new Date().toISOString(),event:'commit-succeeded-state-save-failed',accountId,sha256:committedBuild.sha256,error:error.message}));return;}
   const missingChunks=error.httpStatus===409&&failureStage==='publishing';
   if(missingChunks){preparedForRetry=null;await resetRitualUpload(path.join(c.RITUAL_PACKAGE_CACHE_DIR||path.join(root,'.runtime','ritual-package-cache'),accountId),signature);}
@@ -115,12 +118,16 @@ async function processAccount(accountId,deviceId){
 }
 
 let stop=false;const abort=new AbortController();for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{stop=true;abort.abort();});
-const onlyAccount=process.argv.find(arg=>arg.startsWith('--account='))?.slice('--account='.length);
+const onlyAccount=process.argv.find(arg=>arg.startsWith('--account='))?.slice('--account='.length)||c.RITUAL_WORKER_ACCOUNT;
+if(onlyAccount&&!/^[a-f0-9]{32}$/.test(onlyAccount))throw new Error('Invalid RITUAL_WORKER_ACCOUNT');
 do{
+ await heartbeat();
  try{
   const listing=await (await call('/api/internal/ritual-worker/links')).json();
-  await processRitualAccounts(Object.entries(listing.work||listing.links).filter(([id])=>!onlyAccount||id===onlyAccount),processAccount,(error,accountId)=>console.error(JSON.stringify({at:new Date().toISOString(),event:'account-deferred',accountId,error:error.message})),{concurrency:3});
- }catch(error){console.error('Ritual worker bridge unavailable: '+(error?.message||String(error)));}
+  await processRitualAccounts(Object.entries(listing.work||listing.links).filter(([id])=>!onlyAccount||id===onlyAccount),processAccount,(error,accountId)=>{tickFailed=true;console.error(JSON.stringify({at:new Date().toISOString(),event:'account-deferred',accountId,error:error.message}));},{concurrency:3});
+ }catch(error){tickFailed=true;console.error('Ritual worker bridge unavailable: '+(error?.message||String(error)));}
  if(stop||process.argv.includes('--once'))break;
  try{await delay(15000,undefined,{signal:abort.signal});}catch{}
 }while(!stop);
+
+if(c.RITUAL_WORKER_STRICT_EXIT==='1'&&tickFailed)process.exitCode=1;

@@ -66,3 +66,7 @@ console.log('Function entries reference content-addressed server bundles.');
 for(const [file,relative]of [['artwork-view.js','../../.edgeone-build/'+versioned.handler],['artwork-view/image.js','../../../.edgeone-build/'+versioned.handler],['diagnostic-reports/[id].js','../../../.edgeone-build/'+versioned.handler],['account/artworks/[id]/view-link.js','../../../../../.edgeone-build/'+versioned.handler]]){
  const output='cloud-functions/api/'+file;await mkdir(path.dirname(output),{recursive:true});await writeFile(output,`import handler from '${relative}';\nexport default async function onRequest(context){return handler(context); }\n`);
 }
+
+// Authenticated persistent scheduler cursor and monitor incident ledger.
+await mkdir('cloud-functions/api/internal/ritual-worker/state',{recursive:true});
+await writeFile('cloud-functions/api/internal/ritual-worker/state/[name].js',`import handler from '../../../../../.edgeone-build/${versioned.handler}';\nexport default async function onRequest(context){return handler(context); }\n`);
